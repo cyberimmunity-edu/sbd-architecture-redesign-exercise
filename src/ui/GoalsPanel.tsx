@@ -3,7 +3,8 @@
 /**
  * Панель целей — Ф-19: список целей со светофором и составом связанных
  * функций. В v0.01.01 размещается в левой панели под пулом карточек
- * (раздел 5.1 v0.01.01).
+ * (раздел 5.1 v0.01.01). Предположения безопасности и признак ПЛО (*)
+ * у целей — v0.01.05; левая панель раздвижная — текст помещается целиком.
  */
 
 import { useMemo } from 'react';
@@ -36,6 +37,26 @@ export function GoalsPanel() {
         </span>
       </div>
       <ScrollArea className="min-h-0 flex-1">
+        {/* Предположения безопасности (v0.01.05): принимаются как данность
+            при формулировании целей; выводятся над списком целей. */}
+        {(project.security.assumptions ?? []).length > 0 && (
+          <div className="px-4 pt-1 pb-1" data-testid="assumptions-panel">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {ru.goals.assumptionsTitle}
+            </h3>
+            <ul className="mt-1.5 space-y-1.5">
+              {(project.security.assumptions ?? []).map((assumption) => (
+                <li
+                  key={assumption.id}
+                  className="rounded border border-dashed border-border bg-muted/40 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground"
+                  title={assumption.text}
+                >
+                  {assumption.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="space-y-2 px-4 pb-4">
           {project.security.goals.length === 0 && (
             <p className="text-xs italic text-muted-foreground">{ru.goals.empty}</p>
@@ -48,8 +69,18 @@ export function GoalsPanel() {
               <div key={goal.id} className="rounded border border-border bg-card px-2.5 py-2">
                 <div className="flex items-center gap-2">
                   <StatusDot status={goalStatuses.get(goal.id) ?? 'red'} />
+                  {/* ПЛО — при любых обстоятельствах (v0.01.05). */}
+                  {goal.unconditional && (
+                    <span
+                      className="shrink-0 rounded border border-current px-1 text-[10px] font-semibold leading-4"
+                      title={ru.goals.unconditionalHint}
+                      data-testid={`goal-plo-${goal.id}`}
+                    >
+                      {ru.goals.unconditionalBadge}
+                    </span>
+                  )}
                   <span
-                    className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
+                    className="min-w-0 flex-1 text-xs font-medium text-foreground"
                     title={goal.description ?? goal.name}
                   >
                     {goal.name}

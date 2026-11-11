@@ -28,7 +28,9 @@ async function dropCard(page: import('@playwright/test').Page, cardId: string, b
 }
 
 test('v0.01.04: заголовок страницы показывает актуальную версию', async ({ page }) => {
-  await expect(page).toHaveTitle(/Конструктор СКИБ — v0\.01\.04/);
+  // Версия проверяется по единому источнику APP_VERSION (см. src/engine/types.ts):
+  // при выпуске новой версии строка обновляется вместе с APP_VERSION.
+  await expect(page).toHaveTitle(/Конструктор СКИБ — v0\.01\.05/);
   // Бейдж версии в верхней панели — тот же единый источник APP_VERSION.
   await expect(page.locator('.react-flow')).toBeVisible();
 });

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  computeEdgeFans,
   computeRoutePath,
   expandRect,
   polylineMidpoint,
@@ -215,7 +216,7 @@ describe('polylineToRoundedPath', () => {
     expect(polylineToRoundedPath([{ x: 1, y: 2 }])).toBe('');
   });
 
-  it('две точки — прямая линия M/L', () => {
+  it('две точки — прямая линия M/L (срез Чейкина не меняет её)', () => {
     const d = polylineToRoundedPath([
       { x: 0, y: 0 },
       { x: 100, y: 0 },
@@ -223,7 +224,7 @@ describe('polylineToRoundedPath', () => {
     expect(d).toBe('M 0 0 L 100 0');
   });
 
-  it('ломаная с углом содержит квадратичную кривую и сохраняет концы', () => {
+  it('ломаная с углом содержит кубическую кривую и сохраняет концы (v0.01.05)', () => {
     const points = [
       { x: 0, y: 0 },
       { x: 200, y: 0 },
@@ -232,7 +233,77 @@ describe('polylineToRoundedPath', () => {
     const d = polylineToRoundedPath(points);
     expect(d.startsWith('M 0 0')).toBe(true);
     expect(d.endsWith('L 200 150')).toBe(true);
-    expect(d).toContain('Q');
+    expect(d).toContain('C');
+  });
+
+  it('форма детерминирована и сглажена: лестница из трёх углов даёт кривые, а не изломы', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 200, y: 100 },
+    ];
+    const first = polylineToRoundedPath(points);
+    expect(first).toBe(polylineToRoundedPath(points));
+    expect(first).toContain('C');
+  });
+});
+
+describe('computeEdgeFans (развязка портов, v0.01.05)', () => {
+  const positions = {
+    a: { x: 0, y: 100 },
+    b: { x: 400, y: 50 },
+    c: { x: 400, y: 150 },
+    d: { x: 400, y: 250 },
+    e: { x: 800, y: 100 },
+  };
+
+  it('стрелки с общим портом расходятся веером: верхняя цель — верхний слот', () => {
+    const edges = [
+      { id: 'e1', from: 'a', to: 'c' },
+      { id: 'e2', from: 'a', to: 'b' },
+      { id: 'e3', from: 'a', to: 'd' },
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    // Порядок по вертикали приёмников: b (50) — верхний слот, d (250) — нижний.
+    expect(fans.get('e2')).toEqual({ sourceFan: -9, targetFan: 0 });
+    expect(fans.get('e1')).toEqual({ sourceFan: 0, targetFan: 0 });
+    expect(fans.get('e3')).toEqual({ sourceFan: 9, targetFan: 0 });
+  });
+
+  it('стрелки с общим приёмником разводятся у входа по вертикали источников', () => {
+    const edges = [
+      { id: 'f1', from: 'b', to: 'e' },
+      { id: 'f2', from: 'd', to: 'e' },
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    expect(fans.get('f1')).toEqual({ sourceFan: 0, targetFan: -4.5 });
+    expect(fans.get('f2')).toEqual({ sourceFan: 0, targetFan: 4.5 });
+  });
+
+  it('одиночные стрелки и пары узлов без общих портов не сдвигаются', () => {
+    const edges = [
+      { id: 'g1', from: 'a', to: 'e' },
+      { id: 'g2', from: 'b', to: 'c' },
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    expect(fans.get('g1')).toEqual({ sourceFan: 0, targetFan: 0 });
+    expect(fans.get('g2')).toEqual({ sourceFan: 0, targetFan: 0 });
+  });
+
+  it('сдвиг ограничен maxOffset и детерминирован', () => {
+    const edges = Array.from({ length: 9 }, (_, i) => ({
+      id: `h${i + 1}`,
+      from: 'a',
+      to: `t${i + 1}`,
+    }));
+    const manyPositions: Record<string, { x: number; y: number }> = { a: { x: 0, y: 0 } };
+    for (let i = 0; i < 9; i += 1) manyPositions[`t${i + 1}`] = { x: 400, y: i * 10 };
+    const fans = computeEdgeFans(edges, manyPositions);
+    const values = [...fans.values()].map((f) => f.sourceFan);
+    expect(Math.min(...values)).toBe(-30);
+    expect(Math.max(...values)).toBe(30);
+    expect(computeEdgeFans(edges, manyPositions)).toEqual(fans);
   });
 });
 

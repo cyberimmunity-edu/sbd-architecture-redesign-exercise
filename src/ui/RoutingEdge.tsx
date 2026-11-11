@@ -1,12 +1,15 @@
 'use client';
 
 /**
- * Стрелка с обходом доменов — v0.01.04. Форма рассчитывается в
+ * Стрелка с обходом доменов — v0.01.05. Форма рассчитывается в
  * src/engine/edgeRouting.ts: решётка A* вокруг прямоугольников доменов
- * (кроме соединяемых) с упрощением по прямой видимости, скруглением
- * углов и горизонтальными «усиками» у портов — стрелки идут между
- * доменами по свободным сторонам, а не сквозь них. Цвет, толщина и
- * маркер задаются из Canvas.tsx как прежде (целостность потоков).
+ * (кроме соединяемых) с упрощением по прямой видимости, сглаживанием
+ * (срез углов Чейкина + кубические кривые) и горизонтальными «усиками»
+ * у портов — стрелки идут между доменами по свободным сторонам, а не
+ * сквозь них. Вертикальная развязка портов (v0.01.05): стрелки с общим
+ * портом расходятся веером (sourceFan/targetFan), параллельные стрелки
+ * одной пары доменов — перпендикулярным сдвигом (shift). Цвет, толщина
+ * и маркер задаются из Canvas.tsx как прежде (целостность потоков).
  * Подпись — на плашке в середине пути (EdgeLabelRenderer): фон --popover,
  * контур цвета стрелки; у приглушённой стрелки подпись гаснет так же,
  * как путь (см. .skib-edge--dim в globals.css).
@@ -46,6 +49,11 @@ export interface RoutingEdgeData extends Record<string, unknown> {
    * встречные и параллельные потоки не сливались. Для одиночной — 0.
    */
   shift?: number;
+  /** Вертикальная развязка у порта источника (v0.01.05), px: стрелки
+   *  с общим портом расходятся веером. Для одиночной — 0. */
+  sourceFan?: number;
+  /** Вертикальная развязка у порта приёмника (v0.01.05), px. */
+  targetFan?: number;
 }
 
 /** Габариты всех доменов канвы: препятствия и соединяемые блоки. */
@@ -98,8 +106,12 @@ export const RoutingEdge = memo(function RoutingEdge({
       // Перпендикулярный сдвиг параллельных стрелок одной пары — порты
       // остаются на местах, разводится форма (0 у одиночной стрелки).
       const shift = typeof routed.shift === 'number' ? routed.shift : 0;
-      let from = { x: sourceX, y: sourceY };
-      let to = { x: targetX, y: targetY };
+      // Вертикальная развязка общих портов (v0.01.05): старт/финал стрелки
+      // смещаются вдоль границы домена, чтобы линии не сливались в пучок.
+      const sourceFan = typeof routed.sourceFan === 'number' ? routed.sourceFan : 0;
+      const targetFan = typeof routed.targetFan === 'number' ? routed.targetFan : 0;
+      let from = { x: sourceX, y: sourceY + sourceFan };
+      let to = { x: targetX, y: targetY + targetFan };
       if (shift !== 0) {
         const dx = to.x - from.x;
         const dy = to.y - from.y;
@@ -119,7 +131,7 @@ export const RoutingEdge = memo(function RoutingEdge({
         selfRects,
       });
     },
-    [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, obstacles, selfRects, routed.shift],
+    [sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, obstacles, selfRects, routed.shift, routed.sourceFan, routed.targetFan],
   );
   const path = useMemo(() => polylineToRoundedPath(points), [points]);
   const labelPoint = useMemo(() => polylineMidpoint(points), [points]);

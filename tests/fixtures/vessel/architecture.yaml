@@ -3,33 +3,57 @@ system:
   name: "Безэкипажное судно-доставщик"
   description: "Пример 2: автономная доставка грузов в речной акватории"
 blocks:
+  - id: blk-gps-ins
+    name: "Навигация GPS/INS"
+    cost: 3
+    position: { x: 60, y: 60 }
+  - id: blk-cam
+    name: "Камера (техническое зрение)"
+    cost: 2
+    position: { x: 60, y: 240 }
+  - id: blk-lidar
+    name: "Лидар"
+    cost: 2
+    position: { x: 60, y: 400 }
   - id: blk-nav
     name: "Навигационный вычислитель"
     cost: 4
-    position: { x: 420, y: 120 }
+    position: { x: 400, y: 60 }
+  - id: blk-vision
+    name: "Анализ видеопотока"
+    cost: 3
+    position: { x: 400, y: 240 }
+  - id: blk-ota
+    name: "Подсистема OTA-обновления"
+    cost: 3
+    position: { x: 400, y: 400 }
+  - id: blk-ai
+    name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+    cost: 5
+    position: { x: 760, y: 60 }
   - id: blk-avoid
     name: "Подсистема расхождения"
     cost: 3
-    position: { x: 780, y: 200 }
+    position: { x: 760, y: 240 }
   - id: blk-cargo
-    name: "Контроль груза"
+    name: "Контроль груза и выгрузки"
     cost: 2
-    position: { x: 420, y: 340 }
+    position: { x: 760, y: 420 }
   - id: blk-radio
     name: "Радиосвязь"
     cost: 2
-    position: { x: 60, y: 200 }
+    position: { x: 400, y: 560 }
   - id: ext-shore
     name: "Береговой пост (СУДС)"
     cost: 0
     external: true
     trusted: true
-    position: { x: 1180, y: 120 }
+    position: { x: 1180, y: 60 }
   - id: ext-lock
     name: "Оператор шлюза"
     cost: 0
     external: true
-    position: { x: 1180, y: 340 }
+    position: { x: 1180, y: 380 }
 edges:
   - id: e-shore-radio
     from: ext-shore
@@ -43,10 +67,38 @@ edges:
     from: blk-radio
     to: blk-nav
     label: "очищенные данные"
-  - id: e-nav-avoid
+  - id: e-radio-ota
+    from: blk-radio
+    to: blk-ota
+    label: "пакеты обновлений (OTA)"
+  - id: e-radio-lock
+    from: blk-radio
+    to: ext-lock
+    label: "заявка на шлюзование"
+  - id: e-gps-nav
+    from: blk-gps-ins
+    to: blk-nav
+    label: "навигационное решение"
+  - id: e-cam-vision
+    from: blk-cam
+    to: blk-vision
+    label: "видеопоток"
+  - id: e-lidar-vision
+    from: blk-lidar
+    to: blk-vision
+    label: "облако точек"
+  - id: e-vision-ai
+    from: blk-vision
+    to: blk-ai
+    label: "распознанная обстановка"
+  - id: e-nav-ai
     from: blk-nav
+    to: blk-ai
+    label: "данные курса и позиции"
+  - id: e-ai-avoid
+    from: blk-ai
     to: blk-avoid
-    label: "данные курса"
+    label: "план манёвра"
   - id: e-avoid-nav
     from: blk-avoid
     to: blk-nav
@@ -59,7 +111,11 @@ edges:
     from: blk-cargo
     to: ext-shore
     label: "статус груза"
-  - id: e-radio-lock
-    from: blk-radio
-    to: ext-lock
-    label: "заявка на шлюзование"
+  - id: e-ota-nav
+    from: blk-ota
+    to: blk-nav
+    label: "установленная прошивка"
+  - id: e-ota-ai
+    from: blk-ota
+    to: blk-ai
+    label: "обновление моделей ИИ"

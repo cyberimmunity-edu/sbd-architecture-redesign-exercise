@@ -40,6 +40,11 @@ export function parseSecurityInner(data: unknown): ParseResult<SecuritySpec> {
       id: goal.id,
       name: goal.name,
       description: goal.description,
+      unconditional: goal.unconditional,
+    })),
+    assumptions: raw.assumptions?.map((assumption) => ({
+      id: assumption.id,
+      text: assumption.text,
     })),
     functions: raw.functions.map((fn) => ({
       id: fn.id,
@@ -107,10 +112,19 @@ export function serializeSecurityYaml(security: SecuritySpec): string {
   return dump(
     {
       version: FILE_VERSION,
+      ...(security.assumptions && security.assumptions.length > 0
+        ? {
+            assumptions: security.assumptions.map((a) => ({
+              id: a.id,
+              text: a.text,
+            })),
+          }
+        : {}),
       goals: security.goals.map((g) => ({
         id: g.id,
         name: g.name,
         ...(g.description ? { description: g.description } : {}),
+        ...(g.unconditional ? { unconditional: true } : {}),
       })),
       functions: security.functions.map((fn) => ({
         id: fn.id,

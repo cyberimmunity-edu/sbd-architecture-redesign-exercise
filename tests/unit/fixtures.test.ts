@@ -46,6 +46,7 @@ describe('Фикстуры (раздел 11.4)', () => {
     'e203-empty-goals.yaml': 'E-203',
     'e205-unknown-goal.yaml': 'E-205',
     'e206-bad-weight.yaml': 'E-206',
+    'e208-duplicate-assumption.yaml': 'E-208',
     'e401-bad-state-version.yaml': 'E-401',
   };
 
@@ -123,31 +124,54 @@ describe('Примеры 14.4 ТЗ — единый источник данны�
     expect(trust.external.get('ext-charge')).toBe('red');
   });
 
-  it('Пример 2 (судно): C_системы = 370, картина доверия из 14.4 ТЗ', () => {
+  it('Пример 2 (судно, доработка v0.01.05): C_системы = 943, картина доверия', () => {
     const parsed = parseStateYaml(VESSEL_STATE);
     expect(parsed.errors).toEqual([]);
     const { systemCost, costs } = recalcCosts(parsed.model!);
-    expect(costs.get('blk-radio')!.domainCost).toBe(200);
-    expect(costs.get('blk-avoid')!.domainCost).toBe(60);
-    expect(costs.get('blk-nav')!.domainCost).toBe(80);
-    expect(costs.get('blk-cargo')!.domainCost).toBe(30);
-    expect(systemCost).toBe(370);
+    expect(costs.get('blk-radio')!.domainCost).toBe(250);
+    expect(costs.get('blk-nav')!.domainCost).toBe(480);
+    expect(costs.get('blk-ota')!.domainCost).toBe(68);
+    expect(costs.get('blk-avoid')!.domainCost).toBe(120);
+    expect(costs.get('blk-cargo')!.domainCost).toBe(20);
+    expect(systemCost).toBe(943);
     const trust = computeTrust(parsed.model!);
     expect(trust.internal.get('blk-radio')).toBe('ddbpcd');
-    expect(trust.internal.get('blk-avoid')).toBe('ddb');
-    expect(trust.internal.get('blk-nav')).toBe('ddb');
+    expect(trust.internal.get('blk-nav')).toBe('ddbpcd');
+    expect(trust.internal.get('blk-avoid')).toBe('ddbpcd');
+    expect(trust.internal.get('blk-ota')).toBe('ddb');
     expect(trust.internal.get('blk-cargo')).toBe('ddb');
+    expect(trust.internal.get('blk-ai')).toBe('ndb');
+    expect(trust.internal.get('blk-gps-ins')).toBe('ndb');
     expect(trust.external.get('ext-shore')).toBe('green');
     expect(trust.external.get('ext-lock')).toBe('red');
   });
 
+  it('Пример 2 (судно): 9 целей ПЛО, 2 предположения, 10 механизмов', () => {
+    const parsed = parseSecurityYaml(VESSEL_SECURITY);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.model!.goals).toHaveLength(9);
+    expect(parsed.model!.goals.every((goal) => goal.unconditional === true)).toBe(true);
+    expect(parsed.model!.assumptions).toHaveLength(2);
+    expect(parsed.model!.assumptions![0].id).toBe('asm-shore');
+    expect(parsed.model!.functions).toHaveLength(10);
+    const navIntegrity = parsed.model!.functions.find((fn) => fn.id === 'fn-nav-integrity')!;
+    expect(navIntegrity.implements).toEqual([
+      { goal: 'g-cargo-zone', weight: 'mandatory' },
+      { goal: 'g-move-limits', weight: 'mandatory' },
+    ]);
+  });
+
   it('Примеры без размещений: все внутренние домены НДБ', () => {
-    for (const [demo] of samples) {
+    for (const [demo, internalCount] of [
+      [samples[0][0], 4],
+      [samples[1][0], 10],
+    ] as Array<[typeof samples[number][0], number]>) {
       const parsed = parseStateYaml(demo.state);
       const noAssignments = { ...parsed.model!, assignments: [] };
       const { systemCost } = recalcCosts(noAssignments);
-      expect(systemCost).toBe(4); // 4 внутренних домена по ceil(C_блока × 0.1)
+      expect(systemCost).toBe(internalCount); // ceil(C_блока × 0.1) = 1 на каждый внутренний домен
       const trust = computeTrust(noAssignments);
+      expect(trust.internal.size).toBe(internalCount);
       for (const cls of trust.internal.values()) expect(cls).toBe('ndb');
     }
   });

@@ -25,7 +25,10 @@
  * Стрелки с обходом доменов (v0.01.04): форма стрелок рассчитывается
  * в src/engine/edgeRouting.ts (решётка A* вокруг доменов) — стрелки идут
  * по свободным сторонам, а не сквозь блоки; при перемещении домена
- * форма перестраивается. Связь с таблицей ДВБ (v0.01.04): наведение
+ * форма перестраивается. Читаемость стрелок (v0.01.05): сглаживание формы
+ * (срез углов Чейкина + кубические кривые) и развязка портов — стрелки
+ * с общим портом расходятся веером (computeEdgeFans), чтобы линии
+ * не сливались в неразличимый пучок. Связь с таблицей ДВБ (v0.01.04): наведение
  * на строку в «Расширенном анализе ДВБ» подсвечивает домен на диаграмме
  * и в мини-навигаторе (viewStore.highlightedDomainId); клик по строке —
  * фокус на домене (в центр, с укрупнением) и выбор — FocusController
@@ -61,6 +64,7 @@ import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
 import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
+import { computeEdgeFans } from '../engine/edgeRouting';
 import {
   frameBounds,
   isInsideFrame,
@@ -377,6 +381,13 @@ export function Canvas() {
       const pairKey = [edge.from, edge.to].sort().join('~');
       pairCount.set(pairKey, (pairCount.get(pairKey) ?? 0) + 1);
     }
+    // Развязка портов (v0.01.05): стрелки с общим портом расходятся веером —
+    // вертикальные сдвиги старта/финала по позициям блоков.
+    const positionsMap: Record<string, { x: number; y: number }> = {};
+    for (const block of project.architecture.blocks) {
+      positionsMap[block.id] = block.position ?? { x: 0, y: 0 };
+    }
+    const fans = computeEdgeFans(modelEdges, positionsMap);
     return modelEdges.map((edge) => {
       // Цвет стрелки — целостность потока: зелёная из доверенного источника,
       // красная — низкоцелостный поток (3.5 v0.01.01).
@@ -386,6 +397,8 @@ export function Canvas() {
       pairIndex.set(pairKey, nth + 1);
       // Разводка параллельных стрелок: ±8 px вокруг оси пары.
       const shift = (nth - ((pairCount.get(pairKey) ?? 1) - 1) / 2) * 8;
+      // Развязка портов (v0.01.05): вертикальный сдвиг у общих портов.
+      const fan = fans.get(edge.id);
       const isFocused = focusedEdgeIds?.has(edge.id) ?? false;
       const dimmed = focusedEdgeIds !== null && !isFocused;
       const label = edge.label ?? '';
@@ -401,6 +414,8 @@ export function Canvas() {
           focused: isFocused,
           dimmed,
           shift,
+          sourceFan: fan?.sourceFan ?? 0,
+          targetFan: fan?.targetFan ?? 0,
         } satisfies RoutingEdgeData,
         animated: false,
         style: { stroke: color, strokeWidth: isFocused ? 3 : 2 },
@@ -416,7 +431,7 @@ export function Canvas() {
         className: dimmed ? 'skib-edge skib-edge--dim' : 'skib-edge',
       } as Edge;
     });
-  }, [project.architecture.edges, externalIds, showEdges, focusInternal, collapsedPorts, trust, theme, focusedEdgeIds]);
+  }, [project.architecture.edges, project.architecture.blocks, externalIds, showEdges, focusInternal, collapsedPorts, trust, theme, focusedEdgeIds]);
 
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<CanvasNode>(nodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(edges);

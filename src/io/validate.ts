@@ -115,6 +115,23 @@ export function validateSecurity(security: SecuritySpec): ImportMessage[] {
       );
     }
   }
+  // Предположения безопасности (v0.01.05): уникальные id по шаблону,
+  // непустой текст до MAX_DESC символов.
+  const assumptionIds = new Set<string>();
+  for (let i = 0; i < (security.assumptions ?? []).length; i++) {
+    const assumption = security.assumptions![i];
+    const path = `assumptions[${i}]`;
+    if (assumptionIds.has(assumption.id)) {
+      messages.push(err(ERR.E208, `дубликат id предположения ${assumption.id}`, { path: `${path}.id` }));
+    }
+    assumptionIds.add(assumption.id);
+    pushIdErrors(messages, assumption.id, 'предположения', `${path}.id`);
+    if (assumption.text.length < 1 || assumption.text.length > MAX_DESC) {
+      messages.push(
+        err(ERR.E002, `текст предположения ${assumption.id} должен быть строкой от 1 до ${MAX_DESC} символов`, { path: `${path}.text` }),
+      );
+    }
+  }
   const fnIds = new Set<string>();
   for (let i = 0; i < security.functions.length; i++) {
     const fn = security.functions[i];

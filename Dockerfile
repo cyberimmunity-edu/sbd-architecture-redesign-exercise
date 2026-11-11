@@ -6,7 +6,7 @@
 # на debian-варианте: make docker-build NODE_IMAGE=node:22-slim
 
 # Версия инструмента, отображаемая в интерфейсе (NEXT_PUBLIC_APP_VERSION).
-ARG APP_VERSION=0.01.04
+ARG APP_VERSION=0.01.05
 # Базовый путь публикации для вариантов В1 и В4 (раздел 10.1).
 ARG BASE_PATH=/
 # Базовый образ этапа сборки; по умолчанию Alpine, запасной вариант — Debian slim.

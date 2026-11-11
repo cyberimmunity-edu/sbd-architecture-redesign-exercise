@@ -2,13 +2,16 @@
 
 /**
  * Компоновка окна — раздел 5.1 ТЗ v0.01.01: верхняя панель (48 px),
- * левая панель 320 px (пул карточек + цели безопасности), канва, правая
- * панель 320 px (инспектор + панель расчёта и статуса укрупнённым шрифтом).
+ * левая панель (пул карточек + цели безопасности), канва, правая панель
+ * (инспектор + панель расчёта и статуса укрупнённым шрифтом). Ширины боковых
+ * панелей раздвижные (v0.01.05): react-resizable-panels с запоминанием
+ * ширин в localStorage (autoSaveId «skib-lab-panels-v1», диапазон 16–36 %).
  * Оркестрирует импорт/экспорт файлов, подтверждения замен (Ф-1, Ф-4, Ф-5,
  * Ф-23), горячие клавиши (НФ-10) и диалог декомпозиции (Ф-16).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -353,24 +356,53 @@ export function ToolApp() {
         canRedo={future.length > 0}
         validationStatus={validationStatus}
       />
-      <div className="flex min-h-0 flex-1">
+      {/* Раздвижные панели (v0.01.05): ширину боковых панелей можно менять
+          перетаскиванием разделителя — текст карточек и целей помещается
+          целиком; ширины запоминаются в localStorage (autoSaveId). */}
+      <ResizablePanelGroup
+        direction="horizontal"
+        autoSaveId="skib-lab-panels-v1"
+        className="min-h-0 flex-1"
+      >
         {/* Левая панель: пул карточек + цели безопасности (5.1 v0.01.01). */}
-        <div className="flex w-[320px] shrink-0 flex-col border-r border-border bg-card">
+        <ResizablePanel
+          defaultSize={22}
+          minSize={16}
+          maxSize={36}
+          className="flex flex-col border-r border-border bg-card"
+        >
           <PoolPanel />
           <GoalsPanel />
-        </div>
-        <div className="relative flex min-w-0 flex-1">
-          <ValidationPanel />
-          <Canvas />
-        </div>
+        </ResizablePanel>
+        <ResizableHandle
+          className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+          aria-label={ru.canvas.resizeLeftTitle}
+          title={ru.canvas.resizeLeftTitle}
+        />
+        <ResizablePanel defaultSize={54} minSize={28}>
+          <div className="relative flex h-full w-full">
+            <ValidationPanel />
+            <Canvas />
+          </div>
+        </ResizablePanel>
+        <ResizableHandle
+          className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+          aria-label={ru.canvas.resizeRightTitle}
+          title={ru.canvas.resizeRightTitle}
+        />
         {/* Правая панель: инспектор + расчёт и статус системы + расширенный
             анализ ДВБ (5.1 v0.01.01, v0.01.03). */}
-        <div className="flex w-[340px] shrink-0 flex-col border-l border-border bg-card">
+        <ResizablePanel
+          defaultSize={24}
+          minSize={16}
+          maxSize={36}
+          className="flex flex-col border-l border-border bg-card"
+        >
           <InspectorPanel />
           <SummaryPanel />
           <DvbPanel />
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
       <DecomposeDialog
         key={decomposeBlockId ?? 'closed'}
         blockId={decomposeBlockId}

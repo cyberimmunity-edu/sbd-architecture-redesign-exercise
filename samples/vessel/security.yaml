@@ -1,50 +1,100 @@
 version: 1
+assumptions:
+  - id: asm-shore
+    text: "Аутентичная береговая система является благонадёжной, управляется благонадёжными, авторизованными и подготовленными операторами"
+  - id: asm-firmware
+    text: "Подлинные прошивки выпущены благонадёжными и компетентными разработчиками, а ДВБ прошивок прошла все необходимые проверки, что подтверждается сертификатом безопасности, выпущенным авторизованным центром"
 goals:
-  - id: g-nav
-    name: "Безопасность судоходства"
-    description: "Судно избегает столкновений и посадки на мель"
-  - id: g-comms
-    name: "Достоверность обмена с берегом"
-    description: "Обмен с береговым постом защищён от подмен"
-  - id: g-route
-    name: "Исполнение рейса"
-    description: "Рейс выполняется по согласованному маршруту"
-  - id: g-cargo
-    name: "Целостность грузовых данных"
-    description: "Данные о грузе достоверны у всех участников"
+  - id: g-mission-auth
+    name: "Аутентичные миссии"
+    description: "Выполняются только аутентичные миссии"
+    unconditional: true
+  - id: g-mission-authz
+    name: "Авторизация миссий берегом"
+    description: "Выполняются только миссии, авторизованные береговыми системами"
+    unconditional: true
+  - id: g-cert-safety
+    name: "Сертификат безопасности и штатные СБ"
+    description: "Выполнение миссии осуществляется только с действующим сертификатом безопасности и штатно работающими системами безопасности"
+    unconditional: true
+  - id: g-cargo-zone
+    name: "Авторизованный район выгрузки"
+    description: "Выгрузка осуществляется только в авторизованном районе"
+    unconditional: true
+  - id: g-cmd-authz
+    name: "Авторизация критичных команд"
+    description: "Выполняются только авторизованные критичные команды"
+    unconditional: true
+  - id: g-move-limits
+    name: "Ограничения перемещений"
+    description: "Перемещения выполняются в пределах ограничений, заданных миссией и береговыми системами"
+    unconditional: true
+  - id: g-id-authentic
+    name: "Подлинный идентификатор"
+    description: "В коммуникации с береговыми системами используется только подлинный идентификатор"
+    unconditional: true
+  - id: g-fw-authentic
+    name: "Подлинность прошивок"
+    description: "Для обновления используются только подлинные прошивки"
+    unconditional: true
+  - id: g-safe-distance
+    name: "Безопасная дистанция движения"
+    description: "Движение по маршруту осуществляется только на безопасном расстоянии от других стационарных и подвижных объектов, включая другие суда, инфраструктуру акватории, людей и животных"
+    unconditional: true
 functions:
-  - id: fn-ais
-    name: "Фильтрация AIS-данных"
+  - id: fn-ais-auth
+    name: "Контроль подлинности AIS-данных"
     cost: 2
     implements:
-      - { goal: g-comms, weight: mandatory }
-  - id: fn-auth-shore
-    name: "Аутентификация береговых команд"
+      - { goal: g-mission-auth, weight: mandatory }
+  - id: fn-mission-auth
+    name: "Контроль подлинности миссии"
     cost: 3
     implements:
-      - { goal: g-comms, weight: mandatory }
-  - id: fn-collision
-    name: "Автоматическое расхождение"
+      - { goal: g-mission-authz, weight: mandatory }
+  - id: fn-nav-integrity
+    name: "Комплексирование и контроль целостности навигационных данных"
     cost: 4
     implements:
-      - { goal: g-nav, weight: mandatory }
-  - id: fn-route-check
-    name: "Контроль исполнения рейса"
-    cost: 2
-    implements:
-      - { goal: g-route, weight: mandatory }
-  - id: fn-cargo-seal
-    name: "Электронная пломба"
+      - { goal: g-cargo-zone, weight: mandatory }
+      - { goal: g-move-limits, weight: mandatory }
+  - id: fn-ota-auth
+    name: "Контроль подлинности обновления (прошивки)"
     cost: 3
     implements:
-      - { goal: g-cargo, weight: mandatory }
-  - id: fn-weather
-    name: "Контроль погодных ограничений"
+      - { goal: g-fw-authentic, weight: mandatory }
+  - id: fn-avoid
+    name: "Расчёт манёвра уклонения"
+    cost: 4
+    implements:
+      - { goal: g-safe-distance, weight: mandatory }
+  - id: fn-thruster-power
+    name: "Контроль питания движителей"
+    cost: 4
+    implements:
+      - { goal: g-mission-auth, weight: mandatory }
+      - { goal: g-mission-authz, weight: mandatory }
+      - { goal: g-cert-safety, weight: mandatory }
+      - { goal: g-cmd-authz, weight: mandatory }
+      - { goal: g-move-limits, weight: mandatory }
+  - id: fn-brake
+    name: "Контроль приводов экстренного торможения"
+    cost: 3
+    implements:
+      - { goal: g-safe-distance, weight: mandatory }
+      - { goal: g-move-limits, weight: optional }
+  - id: fn-sign
+    name: "Цифровая подпись исходящих данных"
     cost: 2
     implements:
-      - { goal: g-nav, weight: optional }
-  - id: fn-log
-    name: "Журналирование рейса"
-    cost: 1
+      - { goal: g-id-authentic, weight: mandatory }
+  - id: fn-cmd-auth
+    name: "Контроль подлинности критичных команд"
+    cost: 3
     implements:
-      - { goal: g-cargo, weight: optional }
+      - { goal: g-cmd-authz, weight: mandatory }
+  - id: fn-cargo-power
+    name: "Контроль питания привода выгрузки"
+    cost: 2
+    implements:
+      - { goal: g-cargo-zone, weight: mandatory }

@@ -40,8 +40,19 @@ export const securityInnerSchema = z.looseObject({
       id: z.string(),
       name: z.string(),
       description: z.string().optional(),
+      // ПЛО — цель «при любых обстоятельствах» (v0.01.05).
+      unconditional: z.boolean().optional(),
     }),
   ),
+  // Предположения безопасности (v0.01.05).
+  assumptions: z
+    .array(
+      z.looseObject({
+        id: z.string(),
+        text: z.string(),
+      }),
+    )
+    .optional(),
   functions: z.array(
     z.looseObject({
       id: z.string(),
@@ -98,7 +109,8 @@ export const allowedKeys = {
   },
   security: {
     version: null,
-    goals: { id: null, name: null, description: null },
+    goals: { id: null, name: null, description: null, unconditional: null },
+    assumptions: { id: null, text: null },
     functions: { id: null, name: null, cost: null, implements: { goal: null, weight: null } },
   },
   state: {
@@ -111,7 +123,8 @@ export const allowedKeys = {
     },
     security: {
       version: null,
-      goals: { id: null, name: null, description: null },
+      goals: { id: null, name: null, description: null, unconditional: null },
+      assumptions: { id: null, text: null },
       functions: { id: null, name: null, cost: null, implements: { goal: null, weight: null } },
     },
     assignments: { function: null, block: null },

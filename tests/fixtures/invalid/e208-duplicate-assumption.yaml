@@ -1,0 +1,15 @@
+version: 1
+assumptions:
+  - id: asm-shore
+    text: "Аутентичная береговая система является благонадёжной"
+  - id: asm-shore
+    text: "Повторное предположение с тем же идентификатором"
+goals:
+  - id: g1
+    name: "Цель"
+functions:
+  - id: f1
+    name: "Функция"
+    cost: 1
+    implements:
+      - { goal: g1, weight: mandatory }

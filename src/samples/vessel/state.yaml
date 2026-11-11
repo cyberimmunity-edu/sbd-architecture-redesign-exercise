@@ -1,33 +1,57 @@
 version: 1
 architecture:
   blocks:
+    - id: blk-gps-ins
+      name: "Навигация GPS/INS"
+      cost: 3
+      position: { x: 60, y: 60 }
+    - id: blk-cam
+      name: "Камера (техническое зрение)"
+      cost: 2
+      position: { x: 60, y: 240 }
+    - id: blk-lidar
+      name: "Лидар"
+      cost: 2
+      position: { x: 60, y: 400 }
     - id: blk-nav
       name: "Навигационный вычислитель"
       cost: 4
-      position: { x: 420, y: 120 }
+      position: { x: 400, y: 60 }
+    - id: blk-vision
+      name: "Анализ видеопотока"
+      cost: 3
+      position: { x: 400, y: 240 }
+    - id: blk-ota
+      name: "Подсистема OTA-обновления"
+      cost: 3
+      position: { x: 400, y: 400 }
+    - id: blk-ai
+      name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+      cost: 5
+      position: { x: 760, y: 60 }
     - id: blk-avoid
       name: "Подсистема расхождения"
       cost: 3
-      position: { x: 780, y: 200 }
+      position: { x: 760, y: 240 }
     - id: blk-cargo
-      name: "Контроль груза"
+      name: "Контроль груза и выгрузки"
       cost: 2
-      position: { x: 420, y: 340 }
+      position: { x: 760, y: 420 }
     - id: blk-radio
       name: "Радиосвязь"
       cost: 2
-      position: { x: 60, y: 200 }
+      position: { x: 400, y: 560 }
     - id: ext-shore
       name: "Береговой пост (СУДС)"
       cost: 0
       external: true
       trusted: true
-      position: { x: 1180, y: 120 }
+      position: { x: 1180, y: 60 }
     - id: ext-lock
       name: "Оператор шлюза"
       cost: 0
       external: true
-      position: { x: 1180, y: 340 }
+      position: { x: 1180, y: 380 }
   edges:
     - id: e-shore-radio
       from: ext-shore
@@ -41,10 +65,38 @@ architecture:
       from: blk-radio
       to: blk-nav
       label: "очищенные данные"
-    - id: e-nav-avoid
+    - id: e-radio-ota
+      from: blk-radio
+      to: blk-ota
+      label: "пакеты обновлений (OTA)"
+    - id: e-radio-lock
+      from: blk-radio
+      to: ext-lock
+      label: "заявка на шлюзование"
+    - id: e-gps-nav
+      from: blk-gps-ins
+      to: blk-nav
+      label: "навигационное решение"
+    - id: e-cam-vision
+      from: blk-cam
+      to: blk-vision
+      label: "видеопоток"
+    - id: e-lidar-vision
+      from: blk-lidar
+      to: blk-vision
+      label: "облако точек"
+    - id: e-vision-ai
+      from: blk-vision
+      to: blk-ai
+      label: "распознанная обстановка"
+    - id: e-nav-ai
       from: blk-nav
+      to: blk-ai
+      label: "данные курса и позиции"
+    - id: e-ai-avoid
+      from: blk-ai
       to: blk-avoid
-      label: "данные курса"
+      label: "план манёвра"
     - id: e-avoid-nav
       from: blk-avoid
       to: blk-nav
@@ -57,66 +109,121 @@ architecture:
       from: blk-cargo
       to: ext-shore
       label: "статус груза"
-    - id: e-radio-lock
-      from: blk-radio
-      to: ext-lock
-      label: "заявка на шлюзование"
+    - id: e-ota-nav
+      from: blk-ota
+      to: blk-nav
+      label: "установленная прошивка"
+    - id: e-ota-ai
+      from: blk-ota
+      to: blk-ai
+      label: "обновление моделей ИИ"
 security:
+  assumptions:
+    - id: asm-shore
+      text: "Аутентичная береговая система является благонадёжной, управляется благонадёжными, авторизованными и подготовленными операторами"
+    - id: asm-firmware
+      text: "Подлинные прошивки выпущены благонадёжными и компетентными разработчиками, а ДВБ прошивок прошла все необходимые проверки, что подтверждается сертификатом безопасности, выпущенным авторизованным центром"
   goals:
-    - id: g-nav
-      name: "Безопасность судоходства"
-      description: "Судно избегает столкновений и посадки на мель"
-    - id: g-comms
-      name: "Достоверность обмена с берегом"
-      description: "Обмен с береговым постом защищён от подмен"
-    - id: g-route
-      name: "Исполнение рейса"
-      description: "Рейс выполняется по согласованному маршруту"
-    - id: g-cargo
-      name: "Целостность грузовых данных"
-      description: "Данные о грузе достоверны у всех участников"
+    - id: g-mission-auth
+      name: "Аутентичные миссии"
+      description: "Выполняются только аутентичные миссии"
+      unconditional: true
+    - id: g-mission-authz
+      name: "Авторизация миссий берегом"
+      description: "Выполняются только миссии, авторизованные береговыми системами"
+      unconditional: true
+    - id: g-cert-safety
+      name: "Сертификат безопасности и штатные СБ"
+      description: "Выполнение миссии осуществляется только с действующим сертификатом безопасности и штатно работающими системами безопасности"
+      unconditional: true
+    - id: g-cargo-zone
+      name: "Авторизованный район выгрузки"
+      description: "Выгрузка осуществляется только в авторизованном районе"
+      unconditional: true
+    - id: g-cmd-authz
+      name: "Авторизация критичных команд"
+      description: "Выполняются только авторизованные критичные команды"
+      unconditional: true
+    - id: g-move-limits
+      name: "Ограничения перемещений"
+      description: "Перемещения выполняются в пределах ограничений, заданных миссией и береговыми системами"
+      unconditional: true
+    - id: g-id-authentic
+      name: "Подлинный идентификатор"
+      description: "В коммуникации с береговыми системами используется только подлинный идентификатор"
+      unconditional: true
+    - id: g-fw-authentic
+      name: "Подлинность прошивок"
+      description: "Для обновления используются только подлинные прошивки"
+      unconditional: true
+    - id: g-safe-distance
+      name: "Безопасная дистанция движения"
+      description: "Движение по маршруту осуществляется только на безопасном расстоянии от других стационарных и подвижных объектов, включая другие суда, инфраструктуру акватории, людей и животных"
+      unconditional: true
   functions:
-    - id: fn-ais
-      name: "Фильтрация AIS-данных"
+    - id: fn-ais-auth
+      name: "Контроль подлинности AIS-данных"
       cost: 2
       implements:
-        - { goal: g-comms, weight: mandatory }
-    - id: fn-auth-shore
-      name: "Аутентификация береговых команд"
+        - { goal: g-mission-auth, weight: mandatory }
+    - id: fn-mission-auth
+      name: "Контроль подлинности миссии"
       cost: 3
       implements:
-        - { goal: g-comms, weight: mandatory }
-    - id: fn-collision
-      name: "Автоматическое расхождение"
+        - { goal: g-mission-authz, weight: mandatory }
+    - id: fn-nav-integrity
+      name: "Комплексирование и контроль целостности навигационных данных"
       cost: 4
       implements:
-        - { goal: g-nav, weight: mandatory }
-    - id: fn-route-check
-      name: "Контроль исполнения рейса"
-      cost: 2
-      implements:
-        - { goal: g-route, weight: mandatory }
-    - id: fn-cargo-seal
-      name: "Электронная пломба"
+        - { goal: g-cargo-zone, weight: mandatory }
+        - { goal: g-move-limits, weight: mandatory }
+    - id: fn-ota-auth
+      name: "Контроль подлинности обновления (прошивки)"
       cost: 3
       implements:
-        - { goal: g-cargo, weight: mandatory }
-    - id: fn-weather
-      name: "Контроль погодных ограничений"
+        - { goal: g-fw-authentic, weight: mandatory }
+    - id: fn-avoid
+      name: "Расчёт манёвра уклонения"
+      cost: 4
+      implements:
+        - { goal: g-safe-distance, weight: mandatory }
+    - id: fn-thruster-power
+      name: "Контроль питания движителей"
+      cost: 4
+      implements:
+        - { goal: g-mission-auth, weight: mandatory }
+        - { goal: g-mission-authz, weight: mandatory }
+        - { goal: g-cert-safety, weight: mandatory }
+        - { goal: g-cmd-authz, weight: mandatory }
+        - { goal: g-move-limits, weight: mandatory }
+    - id: fn-brake
+      name: "Контроль приводов экстренного торможения"
+      cost: 3
+      implements:
+        - { goal: g-safe-distance, weight: mandatory }
+        - { goal: g-move-limits, weight: optional }
+    - id: fn-sign
+      name: "Цифровая подпись исходящих данных"
       cost: 2
       implements:
-        - { goal: g-nav, weight: optional }
-    - id: fn-log
-      name: "Журналирование рейса"
-      cost: 1
+        - { goal: g-id-authentic, weight: mandatory }
+    - id: fn-cmd-auth
+      name: "Контроль подлинности критичных команд"
+      cost: 3
       implements:
-        - { goal: g-cargo, weight: optional }
+        - { goal: g-cmd-authz, weight: mandatory }
+    - id: fn-cargo-power
+      name: "Контроль питания привода выгрузки"
+      cost: 2
+      implements:
+        - { goal: g-cargo-zone, weight: mandatory }
 assignments:
-  - { function: fn-ais, block: blk-radio }
-  - { function: fn-auth-shore, block: blk-radio }
-  - { function: fn-collision, block: blk-avoid }
-  - { function: fn-route-check, block: blk-nav }
-  - { function: fn-cargo-seal, block: blk-cargo }
+  - { function: fn-ais-auth, block: blk-radio }
+  - { function: fn-cmd-auth, block: blk-radio }
+  - { function: fn-nav-integrity, block: blk-nav }
+  - { function: fn-ota-auth, block: blk-ota }
+  - { function: fn-avoid, block: blk-avoid }
+  - { function: fn-cargo-power, block: blk-cargo }
 meta:
-  savedAt: "2026-11-10T09:00:00Z"
-  source: "Пример 2: безэкипажное судно-доставщик (14.4 ТЗ)"
+  savedAt: "2026-11-11T09:00:00Z"
+  source: "Пример 2: безэкипажное судно-доставщик (доработка v0.01.05)"

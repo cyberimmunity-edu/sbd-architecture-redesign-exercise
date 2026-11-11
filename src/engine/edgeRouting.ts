@@ -1,5 +1,5 @@
 /**
- * Трассировка стрелок с обходом доменов — v0.01.04.
+ * Трассировка стрелок с обходом доменов — v0.01.05.
  *
  * Штатные кривые Безье React Flow идут по прямой дуге от порта к порту
  * и при плотной раскладке пересекают чужие домены. Здесь форма стрелки
@@ -8,13 +8,20 @@
  *
  * 1. Прямой отрезок «порт → порт» проверяется на пересечение с прямоугольниками
  *    доменов, расширенными на отступ pad; если пересечений нет — стрелка прямая.
- * 2. Иначе вокруг препятствий строится регулярная решётка (клетка ~20 px)
+ * 2. Иначе вокруг препятствий строится регулярная решётка (клетка ~14 px)
  *    и ищется путь поиском A* (8 направлений, без срезания углов),
  *    эвристика — октальное расстояние.
  * 3. Ломаная упрощается «прямой видимостью»: соседние точки сливаются,
  *    пока отрезок между ними не задевает препятствия, — остаются только
- *    повороты. Углы скругляются квадратичными кривыми (polylineToRoundedPath).
- * 4. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
+ *    повороты. Углы скругляются кубическими кривыми Безье после среза
+ *    углов Чейкина (polylineToRoundedPath) — форма выходит плавной,
+ *    без острых изломов и «лестниц».
+ * 4. Стрелки с общим портом расходятся веером (computeEdgeFans):
+ *    вертикальный сдвиг точек старта/финала разводит линии, выходящие
+ *    из одного порта или входящие в один порт; параллельные стрелки одной
+ *    пары доменов дополнительно разводятся перпендикулярным сдвигом
+ *    в Canvas.tsx.
+ * 5. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
  *    стрелке прежнего поведения.
  *
  * Функции чистые и детерминированные: одинаковые входы дают одинаковую
@@ -61,8 +68,16 @@ export const DEFAULT_PAD = 14;
 export const DEFAULT_CELL = 20;
 /** Запас области поиска по умолчанию, px. */
 export const DEFAULT_MARGIN = 140;
-/** Радиус скругления углов по умолчанию, px. */
-export const DEFAULT_CORNER_RADIUS = 12;
+/** Радиус скругления углов по умолчанию, px (v0.01.05: крупнее — плавнее). */
+export const DEFAULT_CORNER_RADIUS = 16;
+/** Шаг среза углов Чейкина (доля смежного отрезка) — v0.01.05. */
+const CHAIKIN_RATIO = 0.25;
+/** Предельный отступ среза угла Чейкина от вершины, px (v0.01.05):
+ *  ограничивает отклонение сглаженной формы внутрь коридора. */
+const CHAIKIN_MAX_CUT = 10;
+/** Отношение контрольных точек кубической кривой к радиусу (v0.01.05):
+ *  классическое приближение четверти окружности — 0.5523. */
+const CUBIC_CONTROL = 0.5523;
 /** Предел числа клеток решётки (защита от тяжёлых пересчётов при drag). */
 const MAX_CELLS = 24000;
 /** Радиус поиска свободной клетки от заблокированной точки, клеток. */
@@ -442,34 +457,145 @@ export function computeRoutePath(
 }
 
 /**
- * SVG-путь по ломаной со скруглёнными углами: «M … L … Q … L …».
- * Радиус скругления уменьшается до половины короткого смежного отрезка.
+ * Срез углов Чейкина (v0.01.05): каждый угол ломаной заменяется парой точек
+ * на смежных отрезках — «лестница» превращается в плавную линию. Концы
+ * ломаной (порты) остаются на местах; отступ среза ограничен (CHAIKIN_MAX_CUT),
+ * чтобы сглаживание не приближало стрелку к доменам заметнее решётки.
  */
-export function polylineToRoundedPath(
-  points: RoutePoint[],
-  radius = DEFAULT_CORNER_RADIUS,
-): string {
-  if (points.length < 2) return '';
-  const fmt = (value: number) => Math.round(value * 100) / 100;
-  const first = points[0];
-  const last = points[points.length - 1];
-  let d = `M ${fmt(first.x)} ${fmt(first.y)}`;
+function chaikinCorners(points: RoutePoint[]): RoutePoint[] {
+  if (points.length < 3) return points.slice();
+  const result: RoutePoint[] = [points[0]];
   for (let i = 1; i < points.length - 1; i += 1) {
     const prev = points[i - 1];
     const cur = points[i];
     const next = points[i + 1];
     const d1 = Math.hypot(cur.x - prev.x, cur.y - prev.y);
     const d2 = Math.hypot(next.x - cur.x, next.y - cur.y);
+    if (d1 < 0.5 || d2 < 0.5) {
+      result.push(cur);
+      continue;
+    }
+    const t1 = Math.min(CHAIKIN_RATIO, CHAIKIN_MAX_CUT / d1);
+    const t2 = Math.min(CHAIKIN_RATIO, CHAIKIN_MAX_CUT / d2);
+    result.push(
+      { x: cur.x - (cur.x - prev.x) * t1, y: cur.y - (cur.y - prev.y) * t1 },
+      { x: cur.x + (next.x - cur.x) * t2, y: cur.y + (next.y - cur.y) * t2 },
+    );
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
+/**
+ * SVG-путь по ломаной со сглаживанием (v0.01.05): сначала углы срезаются
+ * по Чейкину, затем каждый поворот рисуется кубической кривой Безье
+ * с касательными контрольными точками — классическое приближение дуги
+ * окружности (коэффициент 0.5523): «M … L … C … L … C …». Радиус
+ * скругления уменьшается до половины короткого смежного отрезка.
+ */
+export function polylineToRoundedPath(
+  points: RoutePoint[],
+  radius = DEFAULT_CORNER_RADIUS,
+): string {
+  if (points.length < 2) return '';
+  const smooth = chaikinCorners(points);
+  const fmt = (value: number) => Math.round(value * 100) / 100;
+  const first = smooth[0];
+  const last = smooth[smooth.length - 1];
+  let d = `M ${fmt(first.x)} ${fmt(first.y)}`;
+  for (let i = 1; i < smooth.length - 1; i += 1) {
+    const prev = smooth[i - 1];
+    const cur = smooth[i];
+    const next = smooth[i + 1];
+    const d1 = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const d2 = Math.hypot(next.x - cur.x, next.y - cur.y);
     if (d1 < 0.5 || d2 < 0.5) continue;
     const r = Math.min(radius, d1 / 2, d2 / 2);
-    const inX = cur.x - ((cur.x - prev.x) / d1) * r;
-    const inY = cur.y - ((cur.y - prev.y) / d1) * r;
-    const outX = cur.x + ((next.x - cur.x) / d2) * r;
-    const outY = cur.y + ((next.y - cur.y) / d2) * r;
-    d += ` L ${fmt(inX)} ${fmt(inY)} Q ${fmt(cur.x)} ${fmt(cur.y)} ${fmt(outX)} ${fmt(outY)}`;
+    const t1x = (cur.x - prev.x) / d1;
+    const t1y = (cur.y - prev.y) / d1;
+    const t2x = (next.x - cur.x) / d2;
+    const t2y = (next.y - cur.y) / d2;
+    const k = r * CUBIC_CONTROL;
+    d +=
+      ` L ${fmt(cur.x - t1x * r)} ${fmt(cur.y - t1y * r)}` +
+      ` C ${fmt(cur.x - t1x * (r - k))} ${fmt(cur.y - t1y * (r - k))}` +
+      ` ${fmt(cur.x + t2x * (r - k))} ${fmt(cur.y + t2y * (r - k))}` +
+      ` ${fmt(cur.x + t2x * r)} ${fmt(cur.y + t2y * r)}`;
   }
   d += ` L ${fmt(last.x)} ${fmt(last.y)}`;
   return d;
+}
+
+/* ------------------------------------------------------------------ */
+/* Развязка стрелок у общих портов (v0.01.05)                          */
+/* ------------------------------------------------------------------ */
+
+/** Минимальные сведения о стрелке для расчёта развязки портов. */
+export interface FanEdge {
+  id: string;
+  from: string;
+  to: string;
+}
+
+/** Сдвиги стрелки у портов (v0.01.05). */
+export interface EdgeFanOffsets {
+  /** Вертикальный сдвиг точки старта у порта источника, px. */
+  sourceFan: number;
+  /** Вертикальный сдвиг точки финала у порта приёмника, px. */
+  targetFan: number;
+}
+
+/**
+ * Развязка стрелок с общими портами (v0.01.05): у домена один порт слева
+ * и один справа, и все стрелки порта выходят из одной точки, сливаясь
+ * в неразличимый пучок. Стрелки каждого порта упорядочиваются по вертикали
+ * противоположного конца (верхняя цель — верхний слот) и получают
+ * вертикальный сдвиг ±spacing px с ограничением maxOffset.
+ * Чистая и детерминированная функция: одинаковые входы — одинаковые сдвиги.
+ */
+export function computeEdgeFans(
+  edges: FanEdge[],
+  positions: Record<string, { x: number; y: number }>,
+  options?: { spacing?: number; maxOffset?: number },
+): Map<string, EdgeFanOffsets> {
+  const spacing = options?.spacing ?? 9;
+  const maxOffset = options?.maxOffset ?? 30;
+  const fans = new Map<string, EdgeFanOffsets>();
+  for (const edge of edges) fans.set(edge.id, { sourceFan: 0, targetFan: 0 });
+  const positionOf = (id: string) => positions[id] ?? { x: 0, y: 0 };
+
+  const assignFan = (
+    groupKey: (edge: FanEdge) => string,
+    otherKey: (edge: FanEdge) => string,
+    side: 'sourceFan' | 'targetFan',
+  ): void => {
+    const groups = new Map<string, FanEdge[]>();
+    for (const edge of edges) {
+      const key = groupKey(edge);
+      const list = groups.get(key);
+      if (list) list.push(edge);
+      else groups.set(key, [edge]);
+    }
+    for (const list of groups.values()) {
+      if (list.length < 2) continue;
+      const sorted = [...list].sort((a, b) => {
+        const pa = positionOf(otherKey(a));
+        const pb = positionOf(otherKey(b));
+        return pa.y - pb.y || pa.x - pb.x || a.id.localeCompare(b.id);
+      });
+      sorted.forEach((edge, index) => {
+        const raw = (index - (sorted.length - 1) / 2) * spacing;
+        const fan = Math.max(-maxOffset, Math.min(maxOffset, raw));
+        fans.get(edge.id)![side] = fan;
+      });
+    }
+  };
+
+  // Порт источника: стрелки с общим from сортируются по позиции приёмника.
+  assignFan((edge) => edge.from, (edge) => edge.to, 'sourceFan');
+  // Порт приёмника: стрелки с общим to сортируются по позиции источника.
+  assignFan((edge) => edge.to, (edge) => edge.from, 'targetFan');
+  return fans;
 }
 
 /** Середина ломаной по длине — точка размещения подписи стрелки. */

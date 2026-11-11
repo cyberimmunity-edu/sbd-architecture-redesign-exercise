@@ -130,10 +130,19 @@ export function serializeStateYaml(project: Project): string {
       })),
     },
     security: {
+      ...(project.security.assumptions && project.security.assumptions.length > 0
+        ? {
+            assumptions: project.security.assumptions.map((a) => ({
+              id: a.id,
+              text: a.text,
+            })),
+          }
+        : {}),
       goals: project.security.goals.map((g) => ({
         id: g.id,
         name: g.name,
         ...(g.description ? { description: g.description } : {}),
+        ...(g.unconditional ? { unconditional: true } : {}),
       })),
       functions: project.security.functions.map((fn) => ({
         id: fn.id,

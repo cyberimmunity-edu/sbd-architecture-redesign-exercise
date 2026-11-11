@@ -108,6 +108,49 @@ describe('security.yaml (раздел 6.2)', () => {
     expect(result.errors[0].line).toBeGreaterThan(0);
   });
 
+  it('Предположения и ПЛО-цели примера 2 разбираются (v0.01.05)', () => {
+    const text = readFileSync(resolve(FIXTURES, 'vessel/security.yaml'), 'utf8');
+    const result = parseSecurityYaml(text);
+    expect(result.errors).toEqual([]);
+    expect(result.model!.assumptions).toHaveLength(2);
+    expect(result.model!.assumptions![1].id).toBe('asm-firmware');
+    expect(result.model!.goals.every((g) => g.unconditional === true)).toBe(true);
+  });
+
+  it('E-208: дубликат id предположения (фикстура invalid)', () => {
+    const text = readFileSync(resolve(FIXTURES, 'invalid/e208-duplicate-assumption.yaml'), 'utf8');
+    const result = parseSecurityYaml(text);
+    expect(result.errors.some((e) => e.code === 'E-208' && e.message.includes('asm-shore'))).toBe(true);
+  });
+
+  it('E-106: предположение с id вне шаблона; E-002: пустой текст предположения', () => {
+    const result = parseSecurityYaml(
+      [
+        'version: 1',
+        'assumptions:',
+        '  - id: 1bad',
+        '    text: ""',
+        'goals:',
+        '  - id: g1',
+        '    name: "Цель"',
+        'functions:',
+        '  - id: f1',
+        '    name: "Функция"',
+        '    cost: 1',
+      ].join('\n'),
+    );
+    expect(result.errors.some((e) => e.code === 'E-106')).toBe(true);
+    expect(result.errors.some((e) => e.code === 'E-002')).toBe(true);
+  });
+
+  it('Сериализация предположений и ПЛО-целей: round-trip эквивалентен', () => {
+    const text = readFileSync(resolve(FIXTURES, 'vessel/security.yaml'), 'utf8');
+    const first = parseSecurityYaml(text);
+    const second = parseSecurityYaml(serializeSecurityYaml(first.model!));
+    expect(second.errors).toEqual([]);
+    expect(second.model).toEqual(first.model);
+  });
+
   it('Сериализация и повторный разбор эквивалентны', () => {
     const text = readFileSync(resolve(FIXTURES, 'robot/security.yaml'), 'utf8');
     const first = parseSecurityYaml(text);

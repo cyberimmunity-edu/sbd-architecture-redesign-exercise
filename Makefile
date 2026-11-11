@@ -5,7 +5,7 @@
 
 DOCKER ?= docker
 IMAGE  ?= skib-lab
-TAG    ?= 0.01.04
+TAG    ?= 0.01.05
 PORT   ?= 8080
 BASE_PATH ?= /
 # Базовый образ этапа сборки Dockerfile (запасной вариант — node:22-slim).
