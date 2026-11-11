@@ -69,19 +69,15 @@ export function GoalsPanel() {
               <div key={goal.id} className="rounded border border-border bg-card px-2.5 py-2">
                 <div className="flex items-center gap-2">
                   <StatusDot status={goalStatuses.get(goal.id) ?? 'red'} />
-                  {/* ПЛО — при любых обстоятельствах (v0.01.05). */}
-                  {goal.unconditional && (
-                    <span
-                      className="shrink-0 rounded border border-current px-1 text-[10px] font-semibold leading-4"
-                      title={ru.goals.unconditionalHint}
-                      data-testid={`goal-plo-${goal.id}`}
-                    >
-                      {ru.goals.unconditionalBadge}
-                    </span>
-                  )}
+                  {/* ПЛО: значок (*) из коротких формулировок убран (v0.01.08) —
+                      признак остаётся в файлах (unconditional) и в подсказке. */}
                   <span
                     className="min-w-0 flex-1 text-xs font-medium text-foreground"
-                    title={goal.description ?? goal.name}
+                    title={
+                      goal.unconditional
+                        ? `${ru.goals.unconditionalHint}${goal.description ? ` — ${goal.description}` : ''}`
+                        : (goal.description ?? goal.name)
+                    }
                   >
                     {goal.name}
                   </span>

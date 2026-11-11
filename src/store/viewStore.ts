@@ -21,12 +21,16 @@
  */
 
 import { create } from 'zustand';
+import type { SizeMode } from '../engine/sizing';
 
 /** Ключ свёрнутого порта: `${blockId}:in` или `${blockId}:out`. */
 export type PortKey = string;
 
 /** Событие канвы «фокус на домене» (деталь — blockId) — v0.01.04. */
 export const FOCUS_NODE_EVENT = 'skib-focus-node';
+
+/** Цикл режимов размеров доменов (v0.01.08): выкл → стоимость → блок. */
+export const SIZE_MODE_CYCLE: SizeMode[] = ['off', 'cost', 'block'];
 
 export interface ViewState {
   /** Показ стрелок-связей на канве (v0.01.02). */
@@ -37,6 +41,8 @@ export interface ViewState {
   collapsedPorts: Record<PortKey, boolean>;
   /** Домен, подсвеченный из таблиц правой панели (v0.01.04): наведение на строку. */
   highlightedDomainId: string | null;
+  /** Режим автоматических размеров доменов (v0.01.08). */
+  sizeMode: SizeMode;
   toggleShowEdges: () => void;
   toggleFocusInternal: () => void;
   /** Свернуть/развернуть стрелки порта (v0.01.03). */
@@ -45,6 +51,10 @@ export interface ViewState {
   expandAllPorts: () => void;
   /** Установить/снять подсветку домена из таблицы (v0.01.04). */
   setHighlightedDomain: (id: string | null) => void;
+  /** Переключить режим размеров доменов по циклу (v0.01.08). */
+  cycleSizeMode: () => void;
+  /** Задать режим размеров напрямую (v0.01.08). */
+  setSizeMode: (mode: SizeMode) => void;
 }
 
 export const useViewStore = create<ViewState>((set, get) => ({
@@ -52,6 +62,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   focusInternal: false,
   collapsedPorts: {},
   highlightedDomainId: null,
+  sizeMode: 'off',
   toggleShowEdges: () =>
     // Смена режима вида возвращает свёрнутые стрелки (v0.01.03).
     set({ showEdges: !get().showEdges, collapsedPorts: {} }),
@@ -63,4 +74,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
     }),
   expandAllPorts: () => set({ collapsedPorts: {} }),
   setHighlightedDomain: (id) => set({ highlightedDomainId: id }),
+  cycleSizeMode: () => {
+    const current = SIZE_MODE_CYCLE.indexOf(get().sizeMode);
+    const next = SIZE_MODE_CYCLE[(current + 1) % SIZE_MODE_CYCLE.length];
+    set({ sizeMode: next });
+  },
+  setSizeMode: (mode) => set({ sizeMode: mode }),
 }));

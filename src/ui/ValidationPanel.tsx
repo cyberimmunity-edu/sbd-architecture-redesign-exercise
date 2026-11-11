@@ -17,8 +17,14 @@ export function ValidationPanel() {
   const setValidation = useSkibStore((s) => s.setValidation);
 
   if (!validation) return null;
-  const { errors, warnings, file } = validation;
+  const { errors, warnings, file, context } = validation;
   if (errors.length === 0 && warnings.length === 0) return null;
+  // Заголовки: импорт файла или проверка диаграммы кнопкой «Проверить» (v0.01.08).
+  const isDiagram = context === 'diagram';
+  const errorsTitle = isDiagram ? ru.validation.diagramErrorsTitle : ru.validation.errorsTitle;
+  const warningsTitle = isDiagram
+    ? ru.validation.diagramWarningsTitle
+    : ru.validation.warningsTitle;
 
   return (
     <div
@@ -28,7 +34,7 @@ export function ValidationPanel() {
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <span className="text-sm font-semibold text-popover-foreground">
-          {errors.length > 0 ? ru.validation.errorsTitle : ru.validation.warningsTitle}
+          {errors.length > 0 ? errorsTitle : warningsTitle}
         </span>
         <Button
           size="sm"

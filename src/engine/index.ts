@@ -17,3 +17,8 @@ export type { DomainTrustClass, TrustColor, TrustResult, FrameBounds } from './t
 export { decompose } from './decompose';
 export type { DecomposeInput, DecomposeChildSpec, DecomposeEdgeAssignment, DecomposeResult } from './decompose';
 export { canAddDomain, canAddEdge, limitsReport } from './limits';
+export { computeAdvice } from './advisor';
+export type { Advice, AdviceKind } from './advisor';
+export { validateProject } from './audit';
+export { domainSizeFactors, sizeForFactor, SIZE_BASE_WIDTH, SIZE_BASE_HEIGHT, SIZE_MAX_FACTOR } from './sizing';
+export type { SizeMode } from './sizing';

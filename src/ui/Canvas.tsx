@@ -49,10 +49,11 @@
  * (screenToFlowPosition пересчитывает экранные координаты в координаты модели).
  */
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
+  ConnectionMode,
   MiniMap,
   MarkerType,
   Panel,
@@ -61,7 +62,6 @@ import {
   useEdgesState,
   useNodesState,
   useReactFlow,
-  type Connection,
   type Edge,
   type EdgeChange,
   type Node,
@@ -70,7 +70,7 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
-import { Crosshair, Network, Waypoints } from 'lucide-react';
+import { Crosshair, Network, Scaling, Waypoints } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSkibStore } from '../store/projectStore';
 import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
@@ -82,10 +82,14 @@ import {
   computeEdgeFans,
   computeRoutePath,
   createRoutePenalty,
+  edgeRelationGroups,
+  portAnchorY,
   type FanEdge,
+  type RoutePenalty,
   type RoutePoint,
   type RouteRect,
 } from '../engine/edgeRouting';
+import { domainSizeFactors, sizeForFactor } from '../engine/sizing';
 import {
   frameBounds,
   isInsideFrame,
@@ -227,6 +231,9 @@ function CanvasInner() {
   const toggleShowEdges = useViewStore((s) => s.toggleShowEdges);
   const toggleFocusInternal = useViewStore((s) => s.toggleFocusInternal);
   const expandAllPorts = useViewStore((s) => s.expandAllPorts);
+  // Автоматические размеры доменов (v0.01.08): off → cost → block.
+  const sizeMode = useViewStore((s) => s.sizeMode);
+  const cycleSizeMode = useViewStore((s) => s.cycleSizeMode);
   const { toast } = useToast();
   const [theme] = useSkibTheme();
   // Координаты сброса карточки на свободное место канвы (v0.01.06).
@@ -238,6 +245,12 @@ function CanvasInner() {
 
   const { costs, trust } = useMemo(() => recalcCosts(project), [project]);
   const { goalStatuses, domainStatuses } = useMemo(() => recalcCoverage(project), [project]);
+  // Факторы роста узлов для режима «Размеры» (v0.01.08): площадь домена
+  // пропорциональна стоимости или C_блока; на расчёты не влияет.
+  const sizeFactors = useMemo(
+    () => domainSizeFactors(project, costs, sizeMode),
+    [project, costs, sizeMode],
+  );
 
   const goalStatusOf = useCallback(
     (fn: { id: string }): Status[] => {
@@ -340,6 +353,8 @@ function CanvasInner() {
           forceTrusted: !block.external && (block.forceTrusted ?? false),
           functions: block.external ? [] : (functionsByBlock.get(block.id) ?? []),
           portCounts: portCounts.get(block.id) ?? { in: 0, out: 0 },
+          // Автоматические размеры (v0.01.08): габариты только в режимах cost/block.
+          size: sizeMode === 'off' ? undefined : sizeForFactor(sizeFactors.get(block.id) ?? 1),
           goalStatusOf,
           onPlace: placeFunction,
           onUnplace: unplaceFunction,
@@ -366,6 +381,9 @@ function CanvasInner() {
     selection,
     setSelection,
     frame,
+    // Автоматические размеры доменов (v0.01.08).
+    sizeMode,
+    sizeFactors,
   ]);
 
   // Состояние узлов канвы: живёт до трассировки — routing читает актуальные
@@ -407,15 +425,13 @@ function CanvasInner() {
     [project.architecture.edges, externalIds, focusInternal, collapsedPorts],
   );
 
-  // Централизованная трассировка стрелок (v0.01.07): готовые ломаные для
-  // каждой видимой стрелки и стороны портов. Стрелки трассируются
-  // последовательно по идентификаторам; клетки, занятые прежними стрелками,
-  // дорожают (мягкая развязка коридоров — линии расходятся параллельными
-  // дорожками, как splines=true в Graphviz, а не сливаются в пучок).
-  // Встречные стрелки (приёмник левее источника) выходят из левого порта
-  // источника и входят в правый порт приёмника — линии короче и не
-  // оборачиваются вокруг собственного домена. Форма пересчитывается
-  // при перемещении доменов (rfNodes обновляются во время перетаскивания).
+  // Централизованная трассировка стрелок (v0.01.07, доработана в v0.01.08):
+  // готовые ломаные для каждой видимой стрелки и стороны портов.
+  // v0.01.08: якоря портов скользят по высоте к домену-собеседнику
+  // (portAnchorY), коридоры накапливаются только между родственными
+  // стрелками (edgeRelationGroups — общий домен хотя бы по одному концу):
+  // незнакомые линии не отклоняются от чужих трасс; направление стрелки
+  // задаётся жестом соединения (см. handleConnectStart/End).
   const routing = useMemo<{
     paths: Map<string, RoutePoint[]>;
     sides: Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>;
@@ -468,6 +484,20 @@ function CanvasInner() {
       };
     });
     const fans = computeEdgeFans(fanEdges, positionsMap);
+    // Родственные группы (v0.01.08): решётка штрафов — по группе, а не на
+    // весь кадр; коридоры чужих групп не влияют на трассу.
+    const relationGroups = edgeRelationGroups(visible);
+    const groupOf = new Map<string, number>();
+    visible.forEach((edge, index) => groupOf.set(edge.id, relationGroups[index]));
+    const penalties = new Map<number, RoutePenalty>();
+    const penaltyFor = (group: number): RoutePenalty => {
+      let grid = penalties.get(group);
+      if (!grid) {
+        grid = createRoutePenalty([...rects.values()], portPoints);
+        penalties.set(group, grid);
+      }
+      return grid;
+    };
     // Параллельные стрелки одной пары узлов разводятся перпендикулярным
     // сдвигом ±8 px вокруг оси пары.
     const pairIndex = new Map<string, number>();
@@ -476,9 +506,6 @@ function CanvasInner() {
       const pairKey = [edge.from, edge.to].sort().join('~');
       pairCount.set(pairKey, (pairCount.get(pairKey) ?? 0) + 1);
     }
-    // Общая решётка штрафов кадра: узлы и порты с запасом — трассы
-    // не уходят от диаграммы дальше области поиска.
-    const penalty = createRoutePenalty([...rects.values()], portPoints);
     const ordered = [...visible].sort((a, b) => a.id.localeCompare(b.id));
     for (const edge of ordered) {
       const side = sides.get(edge.id);
@@ -488,13 +515,15 @@ function CanvasInner() {
       const targetRect = rects.get(edge.to)!;
       const sourcePort = side.source === 'left' ? sourceRect.x : sourceRect.x + sourceRect.width;
       const targetPort = side.target === 'left' ? targetRect.x : targetRect.x + targetRect.width;
+      // Скользящие якоря (v0.01.08): Y тянется к вертикальному центру
+      // собеседника с зажимом в пределах своего домена; веер — поверх якоря.
       let from: RoutePoint = {
         x: sourcePort,
-        y: sourceRect.y + sourceRect.height / 2 + fan.sourceFan,
+        y: portAnchorY(sourceRect, targetRect, fan.sourceFan),
       };
       let to: RoutePoint = {
         x: targetPort,
-        y: targetRect.y + targetRect.height / 2 + fan.targetFan,
+        y: portAnchorY(targetRect, sourceRect, fan.targetFan),
       };
       const pairKey = [edge.from, edge.to].sort().join('~');
       const nth = pairIndex.get(pairKey) ?? 0;
@@ -513,6 +542,7 @@ function CanvasInner() {
         if (id === edge.from || id === edge.to) selfRects.push(rect);
         else obstacles.push(rect);
       }
+      const penalty = penaltyFor(groupOf.get(edge.id) ?? 0);
       const points = computeRoutePath(from, to, obstacles, {
         // Горизонтальные «усики»: из правого порта — вправо, из левого — влево.
         sourceExit: side.source === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
@@ -624,13 +654,49 @@ function CanvasInner() {
     [onEdgesChange, setSelection],
   );
 
-  const handleConnect = useCallback(
-    (connection: Connection) => {
-      if (connection.source && connection.target) {
-        addEdgeToStore(connection.source, connection.target);
+  // Соединение доменов — направление задаёт жест (v0.01.08): React Flow
+  // больше не решает направление по типу хэндла (стековые точки ввода/вывода
+  // переворачивали стрелку). onConnectStart запоминает узел-старт,
+  // onConnectEnd находит домен под курсором (прилепиться можно к любой
+  // точке домена, не только к точке) и создаёт стрелку старт → цель.
+  const connectStartRef = useRef<string | null>(null);
+  const handleConnect = useCallback(() => {
+    // Намеренно пусто: создание стрелки — только в handleConnectEnd (v0.01.08).
+  }, []);
+  const handleConnectStart = useCallback(
+    (_event: MouseEvent | TouchEvent, params: { nodeId?: string | null }) => {
+      connectStartRef.current = params.nodeId ?? null;
+    },
+    [],
+  );
+  const handleConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const startId = connectStartRef.current;
+      connectStartRef.current = null;
+      if (!startId) return;
+      // Мышь или касание: точка отпускания — последняя изменённая позиция.
+      const point =
+        'changedTouches' in event
+          ? (event.changedTouches[0] ?? event.touches[0] ?? null)
+          : event;
+      if (!point) return;
+      const flowPoint = screenToFlowPosition({ x: point.clientX, y: point.clientY });
+      // Домен под курсором (с допуском 8 px за границу для удобства попадания).
+      for (const node of getNodes()) {
+        if (node.id === '__perimeter' || node.type !== 'domain') continue;
+        const width = node.measured?.width ?? NODE_ESTIMATED_WIDTH;
+        const height = node.measured?.height ?? NODE_ESTIMATED_HEIGHT;
+        const inside =
+          flowPoint.x >= node.position.x - 8 &&
+          flowPoint.x <= node.position.x + width + 8 &&
+          flowPoint.y >= node.position.y - 8 &&
+          flowPoint.y <= node.position.y + height + 8;
+        if (!inside) continue;
+        if (node.id !== startId) addEdgeToStore(startId, node.id);
+        return;
       }
     },
-    [addEdgeToStore],
+    [addEdgeToStore, getNodes, screenToFlowPosition],
   );
 
   const handleEdgeDelete = useCallback(
@@ -754,6 +820,9 @@ function CanvasInner() {
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        onConnectStart={handleConnectStart}
+        onConnectEnd={handleConnectEnd}
+        connectionMode={ConnectionMode.Loose}
         onEdgesDelete={(deleted) => deleted.forEach((edge) => handleEdgeDelete(edge.id))}
         onNodeClick={(_, node) => {
           if (node.id === '__perimeter') return;
@@ -849,6 +918,24 @@ function CanvasInner() {
           >
             <Network className="mr-1 h-3.5 w-3.5" aria-hidden />
             {ru.canvas.labelLayout}
+          </Button>
+          <Button
+            size="sm"
+            variant={sizeMode !== 'off' ? 'secondary' : 'outline'}
+            className="h-8 bg-popover/95 shadow-sm"
+            data-testid="toggle-size-mode"
+            aria-pressed={sizeMode !== 'off'}
+            title={
+              sizeMode === 'cost'
+                ? ru.canvas.sizeCostTitle
+                : sizeMode === 'block'
+                  ? ru.canvas.sizeBlockTitle
+                  : ru.canvas.sizeOffTitle
+            }
+            onClick={cycleSizeMode}
+          >
+            <Scaling className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {ru.canvas.labelSize}: {ru.canvas.sizeModeLabel(sizeMode)}
           </Button>
         </Panel>
       </ReactFlow>

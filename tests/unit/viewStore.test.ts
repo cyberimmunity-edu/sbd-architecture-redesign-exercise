@@ -103,17 +103,34 @@ describe('Настройки вида канвы (v0.01.02–v0.01.04)', () => {
     expect(useViewStore.getState().showEdges).toBe(false);
   });
 
+  it('режим размеров доменов: цикл off → cost → block → off (v0.01.08)', () => {
+    expect(useViewStore.getState().sizeMode).toBe('off');
+    useViewStore.getState().cycleSizeMode();
+    expect(useViewStore.getState().sizeMode).toBe('cost');
+    useViewStore.getState().cycleSizeMode();
+    expect(useViewStore.getState().sizeMode).toBe('block');
+    useViewStore.getState().cycleSizeMode();
+    expect(useViewStore.getState().sizeMode).toBe('off');
+    useViewStore.getState().setSizeMode('cost');
+    expect(useViewStore.getState().sizeMode).toBe('cost');
+    useViewStore.getState().setSizeMode('off');
+    expect(useViewStore.getState().sizeMode).toBe('off');
+  });
+
   it('настройки вида не входят в модель проекта projectStore', () => {
     // Вид — отдельное хранилище: скрытие стрелок не попадает в undo/redo
     // и в автосохранение (Ф-21, Ф-22 остаются про модель).
     const state = useViewStore.getState();
     expect(Object.keys(state).sort()).toEqual([
       'collapsedPorts',
+      'cycleSizeMode',
       'expandAllPorts',
       'focusInternal',
       'highlightedDomainId',
       'setHighlightedDomain',
+      'setSizeMode',
       'showEdges',
+      'sizeMode',
       'toggleFocusInternal',
       'togglePort',
       'toggleShowEdges',

@@ -23,11 +23,21 @@
  *    вместо слияния в пучок — как splines=true в Graphviz. Упрощение
  *    ломаной учитывает штрафы: слияние точек запрещено через занятые
  *    клетки, иначе развязка сводилась бы на нет.
- * 5. Стрелки с общим портом расходятся веером (computeEdgeFans):
+ * 5а. Родственные группы (v0.01.08): коридоры накапливаются только между
+ *     стрелками с общим доменом (edgeRelationGroups) — незнакомые стрелки
+ *     не отклоняются от чужих линий и остаются прямыми.
+ * 5б. Прямая трасса бракуется только пересечением с доменами (v0.01.08):
+ *     штрафы влияют лишь на выбор варианта обхода в решётке. Перед
+ *     решёткой пробуются Г-образные кандидаты с одним поворотом через
+ *     середину зазора между портами — без «ступенек» A*.
+ * 5в. Скользящие якоря портов (portAnchorY, v0.01.08): Y точки соединения
+ *     тянется по высоте к домену-собеседнику — стрелки выходят и входят
+ *     лицом к лицу, а не строго на середине высоты порта.
+ * 6. Стрелки с общим портом расходятся веером (computeEdgeFans):
  *    вертикальный сдвиг точек старта/финала разводит линии, выходящие
  *    из одного порта или входящие в один порт; параллельные стрелки одной
  *    пары доменов дополнительно разводятся перпендикулярным сдвигом.
- * 6. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
+ * 7. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
  *    стрелке прежнего поведения.
  *
  * Функции чистые и детерминированные: одинаковые входы дают одинаковую
@@ -68,7 +78,9 @@ export interface RouteOptions {
   selfRects?: RouteRect[];
   /**
    * Мягкие препятствия (v0.01.07): решётка штрафов от ранее проложенных
-   * стрелок этого кадра — общие коридоры дорожают, линии расходятся.
+   * стрелок родственной группы (v0.01.08) — общие коридоры дорожают,
+   * линии расходятся. На прямой ход штрафы не влияют (v0.01.08): прямой
+   * отрезок бракуется только пересечением с доменами.
    */
   penalty?: RoutePenalty;
 }
@@ -570,10 +582,32 @@ export function computeRoutePath(
   );
   const expanded = [...obstacles, ...crossing].map((rect) => expandRect(rect, pad));
   const penalty = options?.penalty;
-  // Прямой ход без пересечений и без занятых клеток (v0.01.07): прежнее
-  // поведение; в переполненном коридоре стрелка уходит в сторону.
-  if (!crossesAny(source, target, expanded) && !penaltyAlongSegment(penalty, source, target)) {
+  // Прямой ход проверяется только на пересечение с доменами (v0.01.08):
+  // штрафы коридоров не бракуют прямую трассу — незнакомые стрелки больше
+  // не отклоняются от чужих линий; штрафы влияют только на выбор варианта
+  // обхода в решётке и на упрощение ломаной.
+  if (!crossesAny(source, target, expanded)) {
     return [source, target];
+  }
+
+  // Г-образные кандидаты (v0.01.08): один поворот через середину зазора
+  // между портами — дешевле решётки и без «ступенек» A*. Первый кандидат
+  // идёт горизонтом до середины зазора (поток слева направо), второй —
+  // вертикалью от порта (обходы вокруг ряда доменов).
+  const midX = (source.x + target.x) / 2;
+  const midY = (source.y + target.y) / 2;
+  const candidates: RoutePoint[][] = [
+    [source, { x: midX, y: source.y }, { x: midX, y: target.y }, target],
+    [source, { x: source.x, y: midY }, { x: target.x, y: midY }, target],
+  ];
+  for (const candidate of candidates) {
+    const legs = dedupePoints(candidate);
+    if (legs.length < 2) continue;
+    let blocked = false;
+    for (let leg = 0; leg < legs.length - 1 && !blocked; leg += 1) {
+      if (crossesAny(legs[leg], legs[leg + 1], expanded)) blocked = true;
+    }
+    if (!blocked) return legs;
   }
 
   // Размер клетки подбирается так, чтобы решётка оставалась компактной:
@@ -776,6 +810,78 @@ export function computeEdgeFans(
     'targetFan',
   );
   return fans;
+}
+
+/* ------------------------------------------------------------------ */
+/* Скользящие якоря портов и родственные группы (v0.01.08)              */
+/* ------------------------------------------------------------------ */
+
+/** Отступ скользящего якоря от верхней/нижней границы домена, px. */
+export const ANCHOR_INSET = 24;
+
+/**
+ * Скользящий якорь порта (v0.01.08): Y точки соединения тянется к
+ * вертикальному центру домена-собеседника и зажимается в пределах высоты
+ * своего домена (с отступом inset от краёв) — стрелки выходят и входят
+ * лицом к лицу, а не строго на середине высоты порта. Веерный сдвиг
+ * (computeEdgeFans) добавляется к якорю поверх зажима.
+ * Чистая функция: одинаковые входы — одинаковый якорь.
+ */
+export function portAnchorY(
+  own: RouteRect,
+  other: RouteRect,
+  offset = 0,
+  inset = ANCHOR_INSET,
+): number {
+  const desired = other.y + other.height / 2;
+  const min = own.y + inset;
+  const max = Math.max(min, own.y + own.height - inset);
+  return Math.min(Math.max(desired, min), max) + offset;
+}
+
+/**
+ * Родственные группы стрелок (v0.01.08): стрелки, у которых есть общий
+ * домен хотя бы по одному концу, попадают в одну группу — только внутри
+ * группы коридоры развязываются штрафами. Незнакомые стрелки трассируются
+ * независимо и не отклоняются от чужих линий (причина «необъяснимых
+ * изломов» v0.01.07 — общая решётка штрафов на весь кадр).
+ * Система непересекающихся множеств по доменам; возвращает индекс группы
+ * для каждой стрелки в порядке входа — детерминированно.
+ */
+export function edgeRelationGroups(
+  edges: Array<Pick<FanEdge, 'from' | 'to'>>,
+): number[] {
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    let current = x;
+    while (parent.get(current) !== current) {
+      const next = parent.get(current)!;
+      parent.set(current, root);
+      current = next;
+    }
+    return root;
+  };
+  for (const edge of edges) {
+    if (!parent.has(edge.from)) parent.set(edge.from, edge.from);
+    if (!parent.has(edge.to)) parent.set(edge.to, edge.to);
+    const rootFrom = find(edge.from);
+    const rootTo = find(edge.to);
+    if (rootFrom !== rootTo) parent.set(rootFrom, rootTo);
+  }
+  const groupByRoot = new Map<string, number>();
+  const groups: number[] = [];
+  for (const edge of edges) {
+    const root = find(edge.from);
+    let group = groupByRoot.get(root);
+    if (group === undefined) {
+      group = groupByRoot.size;
+      groupByRoot.set(root, group);
+    }
+    groups.push(group);
+  }
+  return groups;
 }
 
 /** Середина ломаной по длине — точка размещения подписи стрелки. */

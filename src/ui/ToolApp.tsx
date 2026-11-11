@@ -31,6 +31,7 @@ import { useSkibStore } from '../store/projectStore';
 import { MAX_FILE_SIZE } from '../engine/types';
 import type { Architecture, Project, SecuritySpec } from '../engine/types';
 import { frameBounds } from '../engine/trust';
+import { validateProject } from '../engine/audit';
 import {
   parseArchitectureYaml,
   parseSecurityYaml,
@@ -49,6 +50,7 @@ import { Canvas } from './Canvas';
 import { InspectorPanel } from './InspectorPanel';
 import { SummaryPanel } from './SummaryPanel';
 import { DvbPanel } from './DvbPanel';
+import { AdvisorPanel } from './AdvisorPanel';
 import { DecomposeDialog } from './DecomposeDialog';
 import { ValidationPanel } from './ValidationPanel';
 import { HelpDialog } from './HelpDialog';
@@ -299,6 +301,19 @@ export function ToolApp() {
     }
   }, [isEmpty, resetProject]);
 
+  /** Проверка диаграммы (v0.01.08): трассировка «цель → функция → домен»
+   *  по текущему состоянию; чисто — тост, иначе панель валидации. */
+  const handleCheckDiagram = useCallback(() => {
+    const messages = validateProject(useSkibStore.getState().project);
+    const errors = messages.filter((message) => message.code.startsWith('E-'));
+    const warnings = messages.filter((message) => message.code.startsWith('W-'));
+    if (errors.length === 0 && warnings.length === 0) {
+      toast({ title: ru.topBar.checkClean });
+      return;
+    }
+    setValidation({ errors, warnings, context: 'diagram' });
+  }, [setValidation, toast]);
+
   const confirmPending = useCallback(() => {
     if (!pending) return;
     if (pending.kind === 'architecture') {
@@ -353,6 +368,7 @@ export function ToolApp() {
         onAddExternal={handleAddExternal}
         onExport={handleExport}
         onReset={handleReset}
+        onCheckDiagram={handleCheckDiagram}
         onUndo={undo}
         onRedo={redo}
         onHelp={() => setHelpOpen(true)}
@@ -422,6 +438,9 @@ export function ToolApp() {
               <ScrollArea className="h-full">
                 <SummaryPanel />
                 <DvbPanel />
+                {/* Советы по архитектуре (v0.01.08): эвристики с оценкой
+                    экономии; применение — вручную. */}
+                <AdvisorPanel />
               </ScrollArea>
             </ResizablePanel>
           </ResizablePanelGroup>

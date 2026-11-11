@@ -11,10 +11,12 @@ import {
   computeEdgeFans,
   computeRoutePath,
   createRoutePenalty,
+  edgeRelationGroups,
   expandRect,
   penaltyAlongSegment,
   polylineMidpoint,
   polylineToRoundedPath,
+  portAnchorY,
   segmentIntersectsRect,
   DEFAULT_CELL,
   DEFAULT_PAD,
@@ -313,23 +315,38 @@ describe('computeEdgeFans (развязка портов, v0.01.05)', () => {
   });
 });
 
-describe('Развязка коридоров — мягкие штрафы (v0.01.07)', () => {
+describe('Развязка коридоров — мягкие штрафы (v0.01.08)', () => {
   const corridor: RouteRect = { x: 0, y: 0, width: 800, height: 400 };
   const straight = [{ x: 0, y: 200 }, { x: 800, y: 200 }];
 
-  it('первая стрелка в свободном коридоре — прямая, вторая расходится с ней', () => {
+  it('чужой коридор не отклоняет прямую трассу (v0.01.08)', () => {
     const penalty = createRoutePenalty([corridor], []);
     const first = computeRoutePath(straight[0], straight[1], [], { penalty });
     expect(first).toEqual(straight);
     accumulateRoutePenalty(penalty, first);
     const second = computeRoutePath(straight[0], straight[1], [], { penalty });
-    // Вторая не легла на первую: концы на месте, форма отклонилась
-    // на заметное расстояние (параллельная дорожка).
-    expect(second.length).toBeGreaterThan(2);
+    // Прямая трасса бракуется только доменами (v0.01.08): незнакомые
+    // стрелки не отклоняются от чужих коридоров — «необъяснимых изломов» нет.
+    expect(second).toEqual(straight);
+  });
+
+  it('родственная стрелка расходится с занятым коридором обхода (v0.01.08)', () => {
+    const box: RouteRect = { x: 380, y: 120, width: 40, height: 160 };
+    const penalty = createRoutePenalty([box], []);
+    const first = computeRoutePath(straight[0], straight[1], [box], { penalty });
+    // Прямая заблокирована доменом — обход через решётку.
+    expect(first.length).toBeGreaterThan(2);
+    expect(avoidsRect(first, box)).toBe(true);
+    accumulateRoutePenalty(penalty, first);
+    const second = computeRoutePath(straight[0], straight[1], [box], { penalty });
     expect(second[0]).toEqual(straight[0]);
     expect(second[second.length - 1]).toEqual(straight[1]);
-    const mid = polylineMidpoint(second);
-    expect(Math.abs(mid.y - 200)).toBeGreaterThanOrEqual(DEFAULT_CELL - 1);
+    expect(avoidsRect(second, box)).toBe(true);
+    // Вторая обошла по другой стороне, а не легла на коридор первой:
+    // внутри родственной группы развязка сохраняется.
+    const midFirst = polylineMidpoint(first);
+    const midSecond = polylineMidpoint(second);
+    expect(Math.abs(midSecond.y - midFirst.y)).toBeGreaterThanOrEqual(DEFAULT_CELL - 1);
   });
 
   it('развязка детерминирована: одинаковая последовательность — одинаковые формы', () => {
@@ -377,6 +394,44 @@ describe('Развязка коридоров — мягкие штрафы (v0.
     expect(points[points.length - 1]).toEqual(target);
     expect(avoidsRect(points, box)).toBe(true);
     expect(avoidsRect(points, expandRect(box, DEFAULT_PAD - 4))).toBe(true);
+  });
+});
+
+describe('Г-образные кандидаты, группы и якоря (v0.01.08)', () => {
+  it('обход препятствия Г-образным кандидатом — без решётки и «ступенек»', () => {
+    const source: RoutePoint = { x: 0, y: 150 };
+    const target: RoutePoint = { x: 800, y: 250 };
+    const box: RouteRect = { x: 60, y: 130, width: 30, height: 30 };
+    // Прямая задевает домен; горизонт-первый кандидат тоже, вертикаль-первый
+    // свободен: путь из двух поворотов через середины зазоров.
+    const points = computeRoutePath(source, target, [box]);
+    expect(points).toEqual([
+      { x: 0, y: 150 },
+      { x: 0, y: 200 },
+      { x: 800, y: 200 },
+      { x: 800, y: 250 },
+    ]);
+  });
+
+  it('родственные группы: стрелки с общим доменом — вместе, чужие — отдельно', () => {
+    const groups = edgeRelationGroups([
+      { from: 'a', to: 'b' },
+      { from: 'c', to: 'b' }, // общий приёмник с первой
+      { from: 'd', to: 'e' }, // чужая пара
+      { from: 'e', to: 'f' }, // общий домен с предыдущей
+    ]);
+    expect(groups).toEqual([0, 0, 1, 1]);
+  });
+
+  it('скользящий якорь тянется к собеседнику и зажимается в своём домене', () => {
+    const own: RouteRect = { x: 0, y: 0, width: 240, height: 120 };
+    const below: RouteRect = { x: 400, y: 500, width: 240, height: 120 }; // центр Y = 560
+    expect(portAnchorY(own, below)).toBe(96); // y + 120 − 24 — нижний зажим
+    const above: RouteRect = { x: 400, y: -300, width: 240, height: 120 }; // центр Y = −240
+    expect(portAnchorY(own, above)).toBe(24); // верхний зажим
+    const aligned: RouteRect = { x: 400, y: 0, width: 240, height: 120 }; // центр Y = 60
+    expect(portAnchorY(own, aligned)).toBe(60); // на одной высоте — центр порта
+    expect(portAnchorY(own, aligned, 4.5)).toBe(64.5); // веер поверх якоря
   });
 });
 

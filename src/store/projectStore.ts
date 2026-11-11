@@ -28,10 +28,13 @@ interface Snapshot {
   assignments: Assignment[];
 }
 
-interface ValidationState {
+/** Источник сообщений панели валидации: файл при загрузке или проверка диаграммы (v0.01.08). */
+export interface ValidationState {
   errors: ImportMessage[];
   warnings: ImportMessage[];
   file?: string;
+  /** «diagram» — кнопка «Проверить»; заголовки панели другие (v0.01.08). */
+  context?: 'import' | 'diagram';
 }
 
 interface SkibStore {

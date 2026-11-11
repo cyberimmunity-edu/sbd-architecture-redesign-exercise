@@ -15,6 +15,10 @@
  * Подсветка из таблиц (v0.01.04): наведение на строку домена в таблице
  * «Расширенный анализ ДВБ» подсвечивает этот домен на диаграмме (голубая
  * рамка-кольцо) и в мини-навигаторе; клик по строке — фокус и выбор (Canvas.tsx).
+ * Точки соединения без семантики вход/выход (v0.01.08): направление стрелки
+ * задаёт жест соединения (Canvas.tsx, onConnectStart/onConnectEnd),
+ * прилепиться можно к любой точке домена. Автоматические размеры
+ * (v0.01.08): data.size задаёт минимальные габариты узла (режим «Размеры»).
  */
 
 import { memo, useState } from 'react';
@@ -46,6 +50,8 @@ export interface DomainNodeData extends Record<string, unknown> {
   functions: SecurityFunction[];
   /** Число стрелок на портах входа/выхода — для кнопок «+/−» (v0.01.03). */
   portCounts: { in: number; out: number };
+  /** Автоматические размеры узла (v0.01.08, режим «Размеры» канвы). */
+  size?: { width: number; height: number };
   goalStatusOf: (fn: SecurityFunction) => Status[];
   onPlace: (functionId: string, blockId: string) => void;
   onUnplace: (functionId: string) => void;
@@ -87,6 +93,12 @@ export const DomainNode = memo(function DomainNode({
   const inCollapsed = collapsedPorts[inKey] ?? false;
   const outCollapsed = collapsedPorts[outKey] ?? false;
   const { in: inCount, out: outCount } = data.portCounts ?? { in: 0, out: 0 };
+  // Автоматические размеры (v0.01.08): минимальные габариты узла; содержимое
+  // может увеличить узел сверх них (хэндлы и кнопки портов не обрезаются),
+  // расчёты и данные не меняются.
+  const sizeStyle = data.size
+    ? { minWidth: data.size.width, minHeight: data.size.height }
+    : {};
 
   // Заливка по доверию: НДБ — полупрозрачная красная; ДДБПЦД — жёлтая; ДДБ — зелёная.
   // Внешние системы: недоверенная — красная, доверенная — зелёная; пунктирный контур.
@@ -112,6 +124,7 @@ export const DomainNode = memo(function DomainNode({
         borderWidth: selected || dropHint ? 2 : 1.5,
         padding: '10px 12px',
         color: 'var(--foreground)',
+        ...sizeStyle,
         // Подсветка из таблицы ДВБ (v0.01.04): голубое кольцо вокруг домена.
         boxShadow: highlighted
           ? `0 0 0 3px ${HIGHLIGHT_COLOR}, 0 0 16px ${HIGHLIGHT_COLOR}66`
@@ -134,25 +147,26 @@ export const DomainNode = memo(function DomainNode({
         if (functionId) data.onPlace(functionId, data.blockId);
       }}
     >
-      <Handle type="target" position={Position.Left} isConnectable aria-label="Входящая стрелка" />
-      <Handle type="source" position={Position.Right} isConnectable aria-label="Исходящая стрелка" />
-      {/* Встречные стрелки (v0.01.07): когда приёмник левее источника, стрелка
-          выходит из левого порта источника и входит в правый порт приёмника —
-          линия короче и не оборачивается вокруг собственного домена.
-          Порты совмещены с обычными: канва назначает стороны по геометрии. */}
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="left"
-        isConnectable
-        aria-label="Исходящая стрелка влево (встречная)"
-      />
+      {/* Точки соединения (v0.01.08): семантики вход/выход нет — направление
+          стрелки задаёт жест соединения (Canvas.tsx). Четыре хэндла совмещены
+          в две видимые точки (по одной на сторону); хэндлы-источники —
+          верхними в DOM: перетаскивание соединения стартует только
+          от source-хэндла, а канва назначает стороны портов по геометрии. */}
       <Handle
         type="target"
         position={Position.Right}
         id="right"
         isConnectable
-        aria-label="Входящая стрелка справа (встречная)"
+        aria-label="Точка соединения (справа)"
+      />
+      <Handle type="source" position={Position.Right} isConnectable aria-label="Точка соединения (справа)" />
+      <Handle type="target" position={Position.Left} isConnectable aria-label="Точка соединения (слева)" />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        isConnectable
+        aria-label="Точка соединения (слева)"
       />
 
       {/* Кнопки свёртки стрелок порта (v0.01.03): только если к порту идёт

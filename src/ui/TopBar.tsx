@@ -29,6 +29,7 @@ import {
   Undo2,
   Upload,
   Layers,
+  SearchCheck,
   AlertTriangle,
   CircleCheck,
   CircleX,
@@ -49,6 +50,8 @@ export interface TopBarProps {
   onAddExternal: () => void;
   onExport: (kind: 'architecture' | 'puml' | 'state') => void;
   onReset: () => void;
+  /** Проверка диаграммы: трассировка «цель → функция → домен» (v0.01.08). */
+  onCheckDiagram: () => void;
   onUndo: () => void;
   onRedo: () => void;
   /** Открытие краткой справки по интерфейсу (v0.01.02). */
@@ -206,6 +209,18 @@ export function TopBar(props: TopBarProps) {
       </Button>
       <Button size="sm" variant="outline" className="h-8" data-testid="add-external" onClick={props.onAddExternal}>
         <FilePlus2 className="mr-1 h-3.5 w-3.5" /> {ru.topBar.addExternal}
+      </Button>
+      {/* Проверка диаграммы (v0.01.08): трассировка «цель → функция → домен»
+          по текущему состоянию проекта, не по файлу. */}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8"
+        data-testid="check-diagram"
+        onClick={props.onCheckDiagram}
+        title={ru.topBar.checkDiagramTitle}
+      >
+        <SearchCheck className="mr-1 h-3.5 w-3.5" /> {ru.topBar.checkDiagram}
       </Button>
 
       <DropdownMenu>
