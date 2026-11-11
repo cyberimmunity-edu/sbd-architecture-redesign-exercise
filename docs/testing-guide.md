@@ -1,6 +1,6 @@
 # Руководство тестировщика
 
-Версия соответствует 0.01.02. Стратегия и обязательные кейсы — раздел 11 ТЗ v0.01.01.
+Версия соответствует 0.01.04. Стратегия и обязательные кейсы — раздел 11 ТЗ v0.01.01.
 
 ## 1. Пирамида тестов
 
@@ -28,7 +28,8 @@ make test-e2e             # Playwright (dev-сервер на PORT, по умо�
                           # конфигурация наследует PORT, webServer переиспользует
                           # запущенный сервер или поднимает свой на том же порту)
 make test                 # unit, затем E2E
-make check                # lint + test — полная проверка перед сдачей
+make check                # проверка Makefile + lint + test — полная проверка перед сдачей
+make check-makefile       # только синтаксическая проверка Makefile (сухой прогон целей)
 
 # Приёмочная проверка в Firefox — пункт 10 чек-листа приёмки 14.2 ТЗ
 # (сценарии Э-01, Э-03, Э-04; регулярный набор 11.3 остаётся на Chromium):
@@ -36,13 +37,22 @@ npx playwright install firefox   # однократно
 npx playwright test tests/e2e/load.spec.ts -c playwright.firefox.config.ts
 ```
 
+Правило проекта: тесты и проверки запускаются только через make — каждый
+запуск make одновременно проверяет и сам Makefile. Правило введено после
+регрессии v0.01.04: табуляция в рецептах Makefile была заменена 8 пробелами,
+make падал с «missing separator», а прямые npm-запуски этого не выявляли.
+На случай повтора табуляцию страхует unit-тест `makefile.test.ts`,
+восстановление — `python3 scripts/fix_makefile_tabs.py`.
+
 ## 3. Структура тестов и фикстур
 
 ```text
 tests/unit/     cost.test.ts (T-C-01…12), trust.test.ts (T-T-01…10), coverage.test.ts,
                 archYaml.test.ts, securityYaml.test.ts, plantuml.test.ts,
                 decompose.test.ts, store.test.ts, viewStore.test.ts (вид канвы v0.01.02),
-                fixtures.test.ts, api.test.ts, edge.test.ts
+                fixtures.test.ts, api.test.ts, edge.test.ts,
+                makefile.test.ts (синтаксис Makefile: табуляция рецептов,
+                .PHONY, сухой прогон make -n — правило «проверки через make»)
 tests/e2e/      load.spec.ts (Э-01,03,04), coverage.spec.ts (Э-06,06b),
                 decompose.spec.ts (Э-05), persistence.spec.ts (Э-07),
                 export.spec.ts (Э-02,02b,08,09), view.spec.ts (вид и справка v0.01.02)

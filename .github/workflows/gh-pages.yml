@@ -1,0 +1,55 @@
+# Публикация «Конструктора СКИБ» на GitHub Pages (статический экспорт out/).
+# Разовая настройка: Settings → Pages → Build and deployment → Source: GitHub Actions.
+# BASE_PATH подставляется автоматически: сайт открывается по адресу
+# https://<логин>.github.io/<имя-репозитория>/. Для личного сайта
+# <логин>.github.io удалите блок env у шага сборки (см. docs/github-pages.md).
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Загрузка исходников
+        uses: actions/checkout@v4
+      - name: Node.js по .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Зависимости
+        run: npm ci
+      - name: Сборка статического экспорта (BASE_PATH = /<репозиторий>)
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+        run: npm run build
+      - name: Отключение Jekyll (.nojekyll для файлов _next/*)
+        run: touch out/.nojekyll
+      - name: Публикуемый артефакт
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Деплой на GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

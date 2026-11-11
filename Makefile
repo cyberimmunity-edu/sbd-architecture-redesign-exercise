@@ -14,8 +14,8 @@ NODE_IMAGE ?= node:22-alpine
 SKIB_ZIP ?= skib-lab-$(TAG)-src.zip
 
 .PHONY: help install dev build preview lint test-unit test-unit-coverage \
-	test-e2e test check zip docker-build docker-run docker-start docker-stop \
-	docker-logs docker-shell clean distclean
+        test-e2e test check check-makefile zip docker-build docker-run docker-start docker-stop \
+        docker-logs docker-shell clean distclean
 
 help: ## список целей (по умолчанию)
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
@@ -48,18 +48,23 @@ test-e2e: ## E2E-тесты Playwright (webServer использует dev-се�
 test: ## test-unit затем test-e2e
 	npm test
 
-check: ## lint затем test — полная локальная проверка перед сдачей
+check: ## проверка Makefile, затем lint и test — полная проверка перед сдачей
+	$(MAKE) check-makefile
 	$(MAKE) lint
 	$(MAKE) test
+
+check-makefile: ## синтаксическая проверка Makefile — сухой прогон всех целей (правило проекта)
+	$(MAKE) --no-print-directory -n help install dev build preview lint test-unit test-unit-coverage test-e2e test zip docker-build docker-run docker-start docker-stop docker-logs docker-shell clean distclean > /dev/null
+	@echo "Makefile: синтаксис и табуляция в порядке (сухой прогон целей прошёл)."
 
 zip: ## упаковать исходники, документацию и отчёты (docs/) в $(SKIB_ZIP)
 	@command -v zip >/dev/null 2>&1 || { echo "Утилита zip не найдена (пакет zip)."; exit 1; }
 	rm -f $(SKIB_ZIP)
-	zip -q -r $(SKIB_ZIP) src samples tests docs public nginx scripts \
-		.dockerignore .gitignore .nvmrc CHANGELOG.md Caddyfile Dockerfile LICENSE \
-		Makefile README.md components.json docker-compose.yml eslint.config.mjs \
-		next.config.ts package.json package-lock.json playwright.config.ts \
-		playwright.firefox.config.ts postcss.config.mjs tsconfig.json vitest.config.ts
+	zip -q -r $(SKIB_ZIP) src samples tests docs public nginx scripts .github \
+                .dockerignore .gitignore .nvmrc CHANGELOG.md Caddyfile Dockerfile LICENSE \
+                Makefile README.md components.json docker-compose.yml eslint.config.mjs \
+                next.config.ts package.json package-lock.json playwright.config.ts \
+                playwright.firefox.config.ts postcss.config.mjs tsconfig.json vitest.config.ts
 	@echo "Архив собран: $(SKIB_ZIP) (отчёты — в docs/)"
 
 docker-build: ## сборка образа $(IMAGE):$(TAG) с аргументами BASE_PATH, NODE_IMAGE
