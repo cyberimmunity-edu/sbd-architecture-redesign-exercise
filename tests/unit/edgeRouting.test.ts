@@ -184,9 +184,12 @@ describe('computeRoutePath: обход препятствий', () => {
 });
 
 describe('computeRoutePath: горизонтальные «усики» у портов', () => {
-  const box: RouteRect = { x: 380, y: 120, width: 240, height: 160 };
+  // Стрелка «с уступом»: прямой ход задет доменом, выбран контурный
+  // кандидат с горизонтальными коленами у обоих портов. Усик ставится
+  // только при горизонтальном выходе/входе (v0.01.09).
+  const box: RouteRect = { x: 380, y: 180, width: 240, height: 100 };
   const source: RoutePoint = { x: 200, y: 200 };
-  const target: RoutePoint = { x: 800, y: 200 };
+  const target: RoutePoint = { x: 800, y: 320 };
   const hints = { sourceExit: { x: 16, y: 0 }, targetEntry: { x: -16, y: 0 } };
 
   it('усик добавляется у обоих портов, если не задевает домены', () => {
@@ -195,7 +198,7 @@ describe('computeRoutePath: горизонтальные «усики» у по�
     expect(points[0]).toEqual(source);
     expect(points[1]).toEqual({ x: 216, y: 200 });
     // Вход в левый порт приёмника — горизонтальный участок слева от него.
-    expect(points[points.length - 2]).toEqual({ x: 784, y: 200 });
+    expect(points[points.length - 2]).toEqual({ x: 784, y: 320 });
     expect(points[points.length - 1]).toEqual(target);
   });
 
@@ -210,11 +213,24 @@ describe('computeRoutePath: горизонтальные «усики» у по�
 
   it('входной усик не добавляется, если упирается в соседний домен', () => {
     // Препятствие сразу слева от порта-приёмника блокирует входной усик.
-    const near: RouteRect = { x: 776, y: 192, width: 16, height: 16 };
+    const near: RouteRect = { x: 776, y: 312, width: 16, height: 16 };
     const points = computeRoutePath(source, target, [near, box], hints);
-    expect(points[points.length - 2]).not.toEqual({ x: 784, y: 200 });
+    expect(points[points.length - 2]).not.toEqual({ x: 784, y: 320 });
     expect(points[0]).toEqual(source);
     expect(points[points.length - 1]).toEqual(target);
+  });
+
+  it('вертикальный выход из порта не получает горизонтальный усик (v0.01.09)', () => {
+    // Домен на одной высоте с портами: стрелка уходит верхним контуром,
+    // первый и последний отрезки вертикальны — усики не ставятся.
+    const middle: RouteRect = { x: 380, y: 120, width: 240, height: 160 };
+    const points = computeRoutePath(source, { x: 800, y: 200 }, [middle], hints);
+    expect(points[0]).toEqual(source);
+    expect(points[points.length - 1]).toEqual({ x: 800, y: 200 });
+    expect(points[1]).not.toEqual({ x: 216, y: 200 });
+    // Первый отрезок — вертикальный (стрелка уходит от порта вверх).
+    expect(Math.abs(points[1].y - source.y)).toBeGreaterThan(0.5);
+    expect(Math.abs(points[1].x - source.x)).toBeLessThan(0.5);
   });
 });
 
@@ -397,20 +413,43 @@ describe('Развязка коридоров — мягкие штрафы (v0.
   });
 });
 
-describe('Г-образные кандидаты, группы и якоря (v0.01.08)', () => {
-  it('обход препятствия Г-образным кандидатом — без решётки и «ступенек»', () => {
+describe('Ортогональные кандидаты, группы и якоря (v0.01.09)', () => {
+  it('обход препятствия контурным кандидатом — длинные прямые, без решётки и «ступенек»', () => {
     const source: RoutePoint = { x: 0, y: 150 };
     const target: RoutePoint = { x: 800, y: 250 };
     const box: RouteRect = { x: 60, y: 130, width: 30, height: 30 };
-    // Прямая задевает домен; горизонт-первый кандидат тоже, вертикаль-первый
-    // свободен: путь из двух поворотов через середины зазоров.
+    // Прямая задевает домен; изгиб подбирается по свободной границе
+    // препятствия (46 − 2 = 44) — горизонталь-первый кандидат при широкой
+    // стрелке: два прямых колена без «ступенек» A*.
     const points = computeRoutePath(source, target, [box]);
     expect(points).toEqual([
       { x: 0, y: 150 },
-      { x: 0, y: 200 },
-      { x: 800, y: 200 },
+      { x: 44, y: 150 },
+      { x: 44, y: 250 },
       { x: 800, y: 250 },
     ]);
+  });
+
+  it('кандидат не ложится вдоль чужого коридора: решётка обходит дорожкой (v0.01.09)', () => {
+    // Занятый коридор по прямой трассы; свободный кандидат пересекает его
+    // вдоль — отклоняется, A* уходит параллельной дорожкой.
+    const from: RoutePoint = { x: 0, y: 200 };
+    const to: RoutePoint = { x: 800, y: 200 };
+    const box: RouteRect = { x: 380, y: 120, width: 40, height: 160 };
+    const penalty = createRoutePenalty([box], []);
+    const first = computeRoutePath(from, to, [box], { penalty });
+    expect(first.length).toBeGreaterThan(2);
+    expect(avoidsRect(first, box)).toBe(true);
+    accumulateRoutePenalty(penalty, first);
+    const second = computeRoutePath(from, to, [box], { penalty });
+    expect(second[0]).toEqual(from);
+    expect(second[second.length - 1]).toEqual(to);
+    expect(avoidsRect(second, box)).toBe(true);
+    // Вторая обошла по другой стороне, а не легла на коридор первой:
+    // внутри родственной группы развязка сохраняется.
+    const midFirst = polylineMidpoint(first);
+    const midSecond = polylineMidpoint(second);
+    expect(Math.abs(midSecond.y - midFirst.y)).toBeGreaterThanOrEqual(DEFAULT_CELL - 1);
   });
 
   it('родственные группы: стрелки с общим доменом — вместе, чужие — отдельно', () => {

@@ -52,6 +52,66 @@ export function aggregateStatus(statuses: Status[]): Status {
   return 'green';
 }
 
+/** Строка сведений об обеспечивающем механизме цели (v0.01.09). */
+export interface GoalFunctionRow {
+  id: string;
+  name: string;
+  cost: number;
+  /** Вес связи «функция — цель» (решение D4). */
+  weight: 'mandatory' | 'optional';
+  /** Домен размещения или null — функция в пуле. */
+  blockId: string | null;
+}
+
+/** Строка сведений о критичном домене цели (v0.01.09). */
+export interface GoalDomainRow {
+  id: string;
+  name: string;
+}
+
+/** Распределение цели — карточка ЦБ (v0.01.09): механизмы, их размещение
+ *  и критичные домены — домены, где размещены функции, обязательные
+ *  (mandatory) для цели. Чистая функция: только чтение модели. */
+export interface GoalDistribution {
+  goalId: string;
+  status: Status;
+  /** Обеспечивающие механизмы — все функции, связанные с целью. */
+  functions: GoalFunctionRow[];
+  /** Критичные домены — домены обязательных механизмов, без повторов. */
+  criticalDomains: GoalDomainRow[];
+}
+
+/**
+ * Распределение цели безопасности (v0.01.09): статус покрытия по таблице 3.4,
+ * список обеспечивающих механизмов (функций) с весом и доменом размещения,
+ * критичные домены — домены, в которых размещены обязательные функции цели.
+ * Порядок списков следует порядку функций в модели — детерминированно.
+ */
+export function goalDistribution(project: Project, goalId: string): GoalDistribution {
+  const blockById = new Map(project.architecture.blocks.map((b) => [b.id, b]));
+  const placementByFn = new Map(project.assignments.map((a) => [a.function, a.block]));
+  const functions: GoalFunctionRow[] = [];
+  const domainIds: string[] = [];
+  for (const fn of project.security.functions) {
+    const link = (fn.implements ?? []).find((l) => l.goal === goalId);
+    if (!link) continue;
+    const blockId = placementByFn.get(fn.id) ?? null;
+    functions.push({ id: fn.id, name: fn.name, cost: fn.cost, weight: link.weight, blockId });
+    if (link.weight === 'mandatory' && blockId && !domainIds.includes(blockId)) {
+      domainIds.push(blockId);
+    }
+  }
+  const criticalDomains: GoalDomainRow[] = domainIds
+    .map((id) => ({ id, name: blockById.get(id)?.name ?? id }))
+    .filter((row) => blockById.has(row.id));
+  return {
+    goalId,
+    status: goalStatus(project, goalId),
+    functions,
+    criticalDomains,
+  };
+}
+
 /**
  * Полный пересчёт покрытия (Ф-18): статусы целей, агрегат доменов
  * (домен без функций — нейтральный) и статус системы.

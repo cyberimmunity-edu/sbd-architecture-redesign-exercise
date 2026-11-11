@@ -78,14 +78,7 @@ import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
 import {
-  accumulateRoutePenalty,
-  computeEdgeFans,
-  computeRoutePath,
-  createRoutePenalty,
-  edgeRelationGroups,
-  portAnchorY,
-  type FanEdge,
-  type RoutePenalty,
+  routeEdges,
   type RoutePoint,
   type RouteRect,
 } from '../engine/edgeRouting';
@@ -224,10 +217,12 @@ function CanvasInner() {
   // Настройки вида канвы (v0.01.02): показ стрелок и фокус на периметре.
   // Свёрнутые порты стрелок (v0.01.03): ключ `${blockId}:in|out` → свёрнут.
   // Подсветка из таблицы ДВБ (v0.01.04): идентификатор домена под курсором.
+  // Краткая подсветка критичных доменов цели (v0.01.09).
   const showEdges = useViewStore((s) => s.showEdges);
   const focusInternal = useViewStore((s) => s.focusInternal);
   const collapsedPorts = useViewStore((s) => s.collapsedPorts);
   const highlightedDomainId = useViewStore((s) => s.highlightedDomainId);
+  const flashDomainIds = useViewStore((s) => s.flashDomainIds);
   const toggleShowEdges = useViewStore((s) => s.toggleShowEdges);
   const toggleFocusInternal = useViewStore((s) => s.toggleFocusInternal);
   const expandAllPorts = useViewStore((s) => s.expandAllPorts);
@@ -425,20 +420,20 @@ function CanvasInner() {
     [project.architecture.edges, externalIds, focusInternal, collapsedPorts],
   );
 
-  // Централизованная трассировка стрелок (v0.01.07, доработана в v0.01.08):
-  // готовые ломаные для каждой видимой стрелки и стороны портов.
-  // v0.01.08: якоря портов скользят по высоте к домену-собеседнику
-  // (portAnchorY), коридоры накапливаются только между родственными
-  // стрелками (edgeRelationGroups — общий домен хотя бы по одному концу):
-  // незнакомые линии не отклоняются от чужих трасс; направление стрелки
-  // задаётся жестом соединения (см. handleConnectStart/End).
+  // Централизованная трассировка стрелок (v0.01.07–v0.01.09): готовые
+  // ломаные для каждой видимой стрелки и стороны портов. С v0.01.09 весь
+  // цикл трассировки живёт в движке (routeEdges в src/engine/edgeRouting.ts):
+  // канва передаёт габариты доменов и видимые стрелки — там считаются
+  // стороны портов, веера, скользящие якоря, родственные группы штрафов
+  // и формы стрелок; направление стрелки задаётся жестом соединения
+  // (см. handleConnectStart/End).
   const routing = useMemo<{
     paths: Map<string, RoutePoint[]>;
     sides: Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>;
   }>(() => {
-    const paths = new Map<string, RoutePoint[]>();
-    const sides = new Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>();
-    if (!showEdges || modelEdges.length === 0) return { paths, sides };
+    if (!showEdges || modelEdges.length === 0) {
+      return { paths: new Map(), sides: new Map() };
+    }
     // Прямоугольники доменов — по узлам канвы (актуальны во время drag).
     const rects = new Map<string, RouteRect>();
     for (const node of rfNodes) {
@@ -450,111 +445,7 @@ function CanvasInner() {
         height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
       });
     }
-    const centerX = (id: string): number => {
-      const rect = rects.get(id);
-      return rect ? rect.x + rect.width / 2 : 0;
-    };
-    const visible = modelEdges.filter((edge) => rects.has(edge.from) && rects.has(edge.to));
-    for (const edge of visible) {
-      const backward = centerX(edge.to) < centerX(edge.from) - 40;
-      sides.set(
-        edge.id,
-        backward
-          ? { source: 'left', target: 'right' }
-          : { source: 'right', target: 'left' },
-      );
-    }
-    // Вееры портов с учётом сторон (v0.01.07): обычные и встречные выходы
-    // не смешиваются в одной группе.
-    const positionsMap: Record<string, { x: number; y: number }> = {};
-    const portPoints: RoutePoint[] = [];
-    for (const [id, rect] of rects) {
-      positionsMap[id] = { x: rect.x, y: rect.y };
-      portPoints.push({ x: rect.x, y: rect.y + rect.height / 2 });
-      portPoints.push({ x: rect.x + rect.width, y: rect.y + rect.height / 2 });
-    }
-    const fanEdges: FanEdge[] = visible.map((edge) => {
-      const side = sides.get(edge.id);
-      return {
-        id: edge.id,
-        from: edge.from,
-        to: edge.to,
-        sourceSide: side?.source,
-        targetSide: side?.target,
-      };
-    });
-    const fans = computeEdgeFans(fanEdges, positionsMap);
-    // Родственные группы (v0.01.08): решётка штрафов — по группе, а не на
-    // весь кадр; коридоры чужих групп не влияют на трассу.
-    const relationGroups = edgeRelationGroups(visible);
-    const groupOf = new Map<string, number>();
-    visible.forEach((edge, index) => groupOf.set(edge.id, relationGroups[index]));
-    const penalties = new Map<number, RoutePenalty>();
-    const penaltyFor = (group: number): RoutePenalty => {
-      let grid = penalties.get(group);
-      if (!grid) {
-        grid = createRoutePenalty([...rects.values()], portPoints);
-        penalties.set(group, grid);
-      }
-      return grid;
-    };
-    // Параллельные стрелки одной пары узлов разводятся перпендикулярным
-    // сдвигом ±8 px вокруг оси пары.
-    const pairIndex = new Map<string, number>();
-    const pairCount = new Map<string, number>();
-    for (const edge of visible) {
-      const pairKey = [edge.from, edge.to].sort().join('~');
-      pairCount.set(pairKey, (pairCount.get(pairKey) ?? 0) + 1);
-    }
-    const ordered = [...visible].sort((a, b) => a.id.localeCompare(b.id));
-    for (const edge of ordered) {
-      const side = sides.get(edge.id);
-      if (!side) continue;
-      const fan = fans.get(edge.id) ?? { sourceFan: 0, targetFan: 0 };
-      const sourceRect = rects.get(edge.from)!;
-      const targetRect = rects.get(edge.to)!;
-      const sourcePort = side.source === 'left' ? sourceRect.x : sourceRect.x + sourceRect.width;
-      const targetPort = side.target === 'left' ? targetRect.x : targetRect.x + targetRect.width;
-      // Скользящие якоря (v0.01.08): Y тянется к вертикальному центру
-      // собеседника с зажимом в пределах своего домена; веер — поверх якоря.
-      let from: RoutePoint = {
-        x: sourcePort,
-        y: portAnchorY(sourceRect, targetRect, fan.sourceFan),
-      };
-      let to: RoutePoint = {
-        x: targetPort,
-        y: portAnchorY(targetRect, sourceRect, fan.targetFan),
-      };
-      const pairKey = [edge.from, edge.to].sort().join('~');
-      const nth = pairIndex.get(pairKey) ?? 0;
-      pairIndex.set(pairKey, nth + 1);
-      const shift = (nth - ((pairCount.get(pairKey) ?? 1) - 1) / 2) * 8;
-      if (shift !== 0) {
-        const dx = to.x - from.x;
-        const dy = to.y - from.y;
-        const length = Math.hypot(dx, dy) || 1;
-        from = { x: from.x + (-dy / length) * shift, y: from.y + (dx / length) * shift };
-        to = { x: to.x + (-dy / length) * shift, y: to.y + (dx / length) * shift };
-      }
-      const obstacles: RouteRect[] = [];
-      const selfRects: RouteRect[] = [];
-      for (const [id, rect] of rects) {
-        if (id === edge.from || id === edge.to) selfRects.push(rect);
-        else obstacles.push(rect);
-      }
-      const penalty = penaltyFor(groupOf.get(edge.id) ?? 0);
-      const points = computeRoutePath(from, to, obstacles, {
-        // Горизонтальные «усики»: из правого порта — вправо, из левого — влево.
-        sourceExit: side.source === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
-        targetEntry: side.target === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
-        // Встречные стрелки обходят и свой блок (см. selfRects).
-        selfRects,
-        penalty,
-      });
-      paths.set(edge.id, points);
-      accumulateRoutePenalty(penalty, points);
-    }
-    return { paths, sides };
+    return routeEdges({ rects, edges: modelEdges });
   }, [rfNodes, modelEdges, showEdges]);
 
   const edges = useMemo<Edge[]>(() => {
@@ -877,10 +768,15 @@ function CanvasInner() {
             if (data.trustClass === 'ddbpcd') return TRUST_COLORS.yellow.border;
             return data.trustClass === 'ddb' ? TRUST_COLORS.green.border : TRUST_COLORS.red.border;
           }}
-          // Подсветка домена из таблицы ДВБ (v0.01.04): голубой контур
-          // узла в мини-навигаторе — как на самой диаграмме.
-          nodeStrokeColor={(node) => (node.id === highlightedDomainId ? HIGHLIGHT_COLOR : 'transparent')}
-          nodeStrokeWidth={highlightedDomainId ? 2 : 1}
+          // Подсветка домена из таблицы ДВБ (v0.01.04) и краткая подсветка
+          // критичных доменов цели (v0.01.09): голубой контур узла в
+          // мини-навигаторе — как на самой диаграмме.
+          nodeStrokeColor={(node) =>
+            node.id === highlightedDomainId || flashDomainIds?.has(node.id)
+              ? HIGHLIGHT_COLOR
+              : 'transparent'
+          }
+          nodeStrokeWidth={highlightedDomainId || flashDomainIds ? 2 : 1}
         />
         {/* Кнопки вида канвы (v0.01.02–v0.01.03): стрелки, периметр, раскладка. */}
         <Panel position="top-left" className="flex items-center gap-1.5">

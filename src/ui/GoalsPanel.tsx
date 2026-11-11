@@ -5,17 +5,25 @@
  * функций. В v0.01.01 размещается в левой панели под пулом карточек
  * (раздел 5.1 v0.01.01). Предположения безопасности и признак ПЛО (*)
  * у целей — v0.01.05; левая панель раздвижная — текст помещается целиком.
+ * Карточка ЦБ (v0.01.09): клик по цели выбирает её (карточка ЦБ
+ * открывается в инспекторе) и кратко подсвечивает все критичные для цели
+ * домены на канве — голубое кольцо, остальные домены приглушены
+ * (viewStore.flashDomains, примерно как подсветка стрелок).
  */
 
 import { useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSkibStore } from '../store/projectStore';
-import { recalcCoverage } from '../engine/coverage';
+import { useViewStore } from '../store/viewStore';
+import { goalDistribution, recalcCoverage } from '../engine/coverage';
 import { ru } from '../i18n/ru';
 import { StatusDot } from './status';
 
 export function GoalsPanel() {
   const project = useSkibStore((s) => s.project);
+  const selection = useSkibStore((s) => s.selection);
+  const setSelection = useSkibStore((s) => s.setSelection);
+  const flashDomains = useViewStore((s) => s.flashDomains);
   const { goalStatuses } = useMemo(() => recalcCoverage(project), [project]);
 
   const placementByFn = useMemo(() => {
@@ -27,6 +35,13 @@ export function GoalsPanel() {
   const covered = project.security.goals.filter(
     (goal) => goalStatuses.get(goal.id) === 'green',
   ).length;
+
+  /** Клик по цели (v0.01.09): выбор цели + краткая подсветка критичных доменов. */
+  const openGoalCard = (goalId: string): void => {
+    setSelection({ kind: 'goal', id: goalId });
+    const distribution = goalDistribution(project, goalId);
+    flashDomains(distribution.criticalDomains.map((domain) => domain.id));
+  };
 
   return (
     <div className="flex min-h-0 flex-[2] flex-col border-t border-border" data-testid="goals-panel">
@@ -65,8 +80,31 @@ export function GoalsPanel() {
             const linked = project.security.functions.filter((fn) =>
               (fn.implements ?? []).some((link) => link.goal === goal.id),
             );
+            const selected = selection?.kind === 'goal' && selection.id === goal.id;
             return (
-              <div key={goal.id} className="rounded border border-border bg-card px-2.5 py-2">
+              <div
+                key={goal.id}
+                className="cursor-pointer rounded border border-border bg-card px-2.5 py-2 transition-colors hover:bg-accent/40"
+                data-testid={`goal-card-${goal.id}`}
+                data-selected={selected ? 'true' : 'false'}
+                role="button"
+                tabIndex={0}
+                aria-pressed={selected}
+                aria-label={`${ru.goals.openCard}: ${goal.name}`}
+                title={ru.goals.cardHint}
+                onClick={() => openGoalCard(goal.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openGoalCard(goal.id);
+                  }
+                }}
+                style={
+                  selected
+                    ? { borderColor: 'var(--foreground)', borderWidth: 1.5 }
+                    : undefined
+                }
+              >
                 <div className="flex items-center gap-2">
                   <StatusDot status={goalStatuses.get(goal.id) ?? 'red'} />
                   {/* ПЛО: значок (*) из коротких формулировок убран (v0.01.08) —

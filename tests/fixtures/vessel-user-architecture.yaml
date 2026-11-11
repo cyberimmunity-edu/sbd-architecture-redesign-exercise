@@ -1,0 +1,257 @@
+version: 1
+blocks:
+  - id: blk-gps-ins
+    name: Навигация GPS/INS
+    cost: 3
+    position:
+      x: 512
+      'y': 296.25
+  - id: blk-cam
+    name: Камера (техническое зрение)
+    cost: 2
+    position:
+      x: 512
+      'y': 99.25
+  - id: blk-lidar
+    name: Лидар
+    cost: 2
+    forceTrusted: true
+    position:
+      x: 512
+      'y': 493.25
+  - id: blk-nav
+    name: Навигационный вычислитель
+    cost: 4
+    position:
+      x: 1567.7564121432522
+      'y': 262.3833038519853
+  - id: blk-vision
+    name: Анализ видеопотока
+    cost: 3
+    position:
+      x: 981
+      'y': 118.5
+  - id: blk-ota
+    name: Подсистема OTA-обновления
+    cost: 3
+    position:
+      x: 998.1265354730031
+      'y': 335.52346206744323
+  - id: blk-ai
+    name: Бортовой ИИ (оценка обстановки и планирование маршрута)
+    cost: 5
+    position:
+      x: 2065.5996462238236
+      'y': -147.2883131883005
+  - id: blk-avoid
+    name: Подсистема расхождения
+    cost: 3
+    position:
+      x: 1707.0000000000005
+      'y': -348.25
+  - id: blk-cargo
+    name: Контроль груза и выгрузки
+    cost: 2
+    position:
+      x: 986.3673103372159
+      'y': 560.4954304243515
+  - id: blk-radio
+    name: Радиосвязь
+    cost: 2
+    position:
+      x: 1423.72829451567
+      'y': 591.2803164309157
+  - id: ext-shore
+    name: Береговой пост (СУДС)
+    cost: 0
+    external: true
+    trusted: true
+    position:
+      x: 3551.575920350427
+      'y': 303.7368144225028
+  - id: ext-lock
+    name: Оператор шлюза
+    cost: 0
+    external: true
+    position:
+      x: 3256.7703794052168
+      'y': 670.6483752801057
+  - id: dom-1
+    name: Контроль AIS
+    cost: 1
+    position:
+      x: 2636.7812500000005
+      'y': 563.25
+  - id: dom-2
+    name: Контроль миссии
+    cost: 1
+    position:
+      x: 1500
+      'y': 875.25
+  - id: dom-3
+    name: Контроль положения
+    cost: 1
+    position:
+      x: 1999.6242506851786
+      'y': 185.91133549507686
+  - id: dom-4
+    name: Аварийный уход от столкновения
+    cost: 1
+    position:
+      x: 2534.0255728763555
+      'y': 209.12426746791687
+  - id: dom-5
+    name: Верификация и применение обновления прошивки
+    cost: 2
+    position:
+      x: 1998.0144089006367
+      'y': 538.4044811316044
+  - id: dom-6
+    name: Выполнение критичных команд
+    cost: 1
+    position:
+      x: 1992.6745160173111
+      'y': 853.8072056800952
+  - id: dom-7
+    name: События безопасности
+    cost: 1
+    position:
+      x: 997.0829525353624
+      'y': 871.8117752557437
+  - id: dom-8
+    name: Блокировка движения
+    cost: 1
+    position:
+      x: 2615.6253070946004
+      'y': 851.4799651142931
+  - id: ext-1
+    name: Внешняя среда
+    cost: 0
+    external: true
+    position:
+      x: 80
+      'y': 309.5833333333333
+  - id: ext-2
+    name: Радиоэфир
+    cost: 0
+    external: true
+    position:
+      x: 3150.3303155429257
+      'y': 302.68566866979205
+edges:
+  - id: e-lock-radio
+    from: ext-lock
+    to: blk-radio
+    label: разрешение шлюзования
+  - id: e-radio-nav
+    from: blk-radio
+    to: blk-nav
+    label: очищенные данные
+  - id: e-radio-ota
+    from: blk-radio
+    to: blk-ota
+    label: пакеты обновлений (OTA)
+  - id: e-radio-lock
+    from: blk-radio
+    to: ext-lock
+    label: заявка на шлюзование
+  - id: e-gps-nav
+    from: blk-gps-ins
+    to: blk-nav
+    label: навигационное решение
+  - id: e-cam-vision
+    from: blk-cam
+    to: blk-vision
+    label: видеопоток
+  - id: e-lidar-vision
+    from: blk-lidar
+    to: blk-vision
+    label: облако точек
+  - id: e-vision-ai
+    from: blk-vision
+    to: blk-ai
+    label: распознанная обстановка
+  - id: e-nav-ai
+    from: blk-nav
+    to: blk-ai
+    label: данные курса и позиции
+  - id: e-ai-avoid
+    from: blk-ai
+    to: blk-avoid
+    label: план манёвра
+  - id: e-avoid-nav
+    from: blk-avoid
+    to: blk-nav
+    label: корректировка маршрута
+  - id: e-nav-cargo
+    from: blk-nav
+    to: blk-cargo
+    label: маршрутный лист
+  - id: e-ota-nav
+    from: blk-ota
+    to: blk-nav
+    label: установленная прошивка
+  - id: e-ota-ai
+    from: blk-ota
+    to: blk-ai
+    label: обновление моделей ИИ
+  - id: e-1
+    from: blk-ota
+    to: dom-5
+  - id: e-2
+    from: dom-3
+    to: dom-4
+  - id: e-3
+    from: dom-7
+    to: blk-radio
+  - id: e-4
+    from: blk-cargo
+    to: dom-6
+  - id: e-5
+    from: blk-nav
+    to: dom-3
+  - id: e-6
+    from: blk-lidar
+    to: dom-4
+  - id: e-7
+    from: ext-1
+    to: blk-lidar
+  - id: e-8
+    from: ext-shore
+    to: ext-2
+  - id: e-9
+    from: ext-2
+    to: blk-radio
+  - id: e-10
+    from: blk-radio
+    to: ext-2
+    label: статус груза
+  - id: e-11
+    from: blk-cargo
+    to: blk-radio
+    label: статус груза
+  - id: e-12
+    from: dom-7
+    to: blk-cargo
+    label: статус груза
+  - id: e-13
+    from: ext-1
+    to: blk-cam
+  - id: e-14
+    from: ext-1
+    to: blk-gps-ins
+  - id: e-15
+    from: dom-6
+    to: dom-8
+  - id: e-16
+    from: dom-2
+    to: dom-7
+  - id: e-17
+    from: blk-avoid
+    to: dom-1
+  - id: e-18
+    from: dom-1
+    to: dom-4
+  - id: e-19
+    from: ext-2
+    to: ext-shore

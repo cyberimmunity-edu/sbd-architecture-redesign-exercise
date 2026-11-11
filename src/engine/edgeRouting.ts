@@ -1,43 +1,56 @@
 /**
- * Трассировка стрелок с обходом доменов — v0.01.07.
+ * Трассировка стрелок с обходом доменов — v0.01.09.
  *
  * Штатные кривые Безье React Flow идут по прямой дуге от порта к порту
  * и при плотной раскладке пересекают чужие домены. Здесь форма стрелки
  * рассчитывается так, чтобы обойти промежуточные домены по свободным
- * сторонам (как во Flying Logic):
+ * сторонам (как во Flying Logic), с приоритетом длинных прямых участков:
  *
  * 1. Прямой отрезок «порт → порт» проверяется на пересечение с прямоугольниками
  *    доменов, расширенными на отступ pad; если пересечений нет — стрелка прямая.
- * 2. Иначе вокруг препятствий строится регулярная решётка (клетка ~14 px)
- *    и ищется путь поиском A* (8 направлений, без срезания углов),
- *    эвристика — октальное расстояние.
- * 3. Ломаная упрощается «прямой видимостью»: соседние точки сливаются,
- *    пока отрезок между ними не задевает препятствия, — остаются только
- *    повороты. Углы скругляются кубическими кривыми Безье после среза
- *    углов Чейкина (polylineToRoundedPath) — форма выходит плавной,
- *    без острых изломов и «лестниц».
- * 4. Развязка коридоров (v0.01.07): стрелки трассируются последовательно
- *    (порядок — в Canvas.tsx), и клетки, уже занятые прежними стрелками,
- *    получают надбавку стоимости (мягкие препятствия). Так линии,
- *    которым тесно в общем коридоре, расходятся параллельными дорожками
- *    вместо слияния в пучок — как splines=true в Graphviz. Упрощение
- *    ломаной учитывает штрафы: слияние точек запрещено через занятые
- *    клетки, иначе развязка сводилась бы на нет.
- * 5а. Родственные группы (v0.01.08): коридоры накапливаются только между
+ * 2. Ортогональные кандидаты (v0.01.09): ходы с двумя поворотами через
+ *    свободные вертикальные/горизонтальные зазоры между препятствиями
+ *    (границы препятствий ± 2 px, середина между портами, сами порты —
+ *    вырождаются в Г-образный ход с одним поворотом). Кандидаты упорядочены
+ *    по близости изгиба к середине и оси пары портов; из свободных
+ *    выбирается ход с наименьшим «пробегом» по чужим коридорам
+ *    (penaltyExposure).
+ * 3. Если кандидатов нет — регулярная решётка (клетка ~20 px) и поиск A*
+ *    по ортогональным направлениям (v0.01.09) со штрафом за поворот
+ *    (TURN_COST): состояние поиска — «клетка + направление движения»,
+ *    поэтому путь выходит с длинными прямыми участками и минимумом изломов
+ *    вместо «ступенек» диагональной решётки прежних версий. Диагонали
+ *    решётке не нужны: любой путь без срезания углов переводится в
+ *    ортогональный, а манхэттенское расстояние — допустимая эвристика.
+ * 4. Ломаная упрощается «прямой видимостью» (краткое пересечение чужой
+ *    дорожки разрешено — PENALTY_CROSS_SAMPLES) и выпрямляется
+ *    постобработкой (v0.01.09): слияние коллинеарных вершин, удаление
+ *    одиночного угла, «лестница» из двух углов заменяется одним
+ *    Г-образным ходом.
+ * 5. Углы скругляются одной кубической кривой на вершину (v0.01.09):
+ *    касательное приближение дуги, отступ дуги от вершины ограничен
+ *    (MAX_CORNER_CUT) — плавные скругления вместо острых изломов и вместо
+ *    двойного сглаживания «Чейкин + кривая» прежних версий.
+ * 6. Развязка коридоров (v0.01.07): стрелки трассируются последовательно
+ *    (порядок — в routeEdges), и клетки, уже занятые прежними стрелками,
+ *    получают надбавку стоимости (мягкие препятствия). Линии расходятся
+ *    параллельными дорожками вместо слияния в пучок; слияние сегментов
+ *    при упрощении/выпрямлении допускает лишь краткое пересечение чужой
+ *    дорожки, но не наложение.
+ * 6а. Родственные группы (v0.01.08): коридоры накапливаются только между
  *     стрелками с общим доменом (edgeRelationGroups) — незнакомые стрелки
  *     не отклоняются от чужих линий и остаются прямыми.
- * 5б. Прямая трасса бракуется только пересечением с доменами (v0.01.08):
- *     штрафы влияют лишь на выбор варианта обхода в решётке. Перед
- *     решёткой пробуются Г-образные кандидаты с одним поворотом через
- *     середину зазора между портами — без «ступенек» A*.
- * 5в. Скользящие якоря портов (portAnchorY, v0.01.08): Y точки соединения
- *     тянется по высоте к домену-собеседнику — стрелки выходят и входят
- *     лицом к лицу, а не строго на середине высоты порта.
- * 6. Стрелки с общим портом расходятся веером (computeEdgeFans):
+ * 6б. Прямая трасса бракуется только пересечением с доменами (v0.01.08):
+ *     штрафы влияют лишь на выбор варианта обхода. Скользящие якоря
+ *     портов (portAnchorY, v0.01.08) тянут Y соединения к собеседнику.
+ * 7. Стрелки с общим портом расходятся веером (computeEdgeFans):
  *    вертикальный сдвиг точек старта/финала разводит линии, выходящие
  *    из одного порта или входящие в один порт; параллельные стрелки одной
  *    пары доменов дополнительно разводятся перпендикулярным сдвигом.
- * 7. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
+ * 8. «Усики» у портов (горизонтальный участок) добавляются только при
+ *    горизонтальном выходе/входе (v0.01.09): стрелка, уходящая от порта
+ *    вертикалью, не получает крючок.
+ * 9. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
  *    стрелке прежнего поведения.
  *
  * Функции чистые и детерминированные: одинаковые входы дают одинаковую
@@ -93,11 +106,6 @@ export const DEFAULT_CELL = 20;
 export const DEFAULT_MARGIN = 140;
 /** Радиус скругления углов по умолчанию, px (v0.01.05: крупнее — плавнее). */
 export const DEFAULT_CORNER_RADIUS = 16;
-/** Шаг среза углов Чейкина (доля смежного отрезка) — v0.01.05. */
-const CHAIKIN_RATIO = 0.25;
-/** Предельный отступ среза угла Чейкина от вершины, px (v0.01.05):
- *  ограничивает отклонение сглаженной формы внутрь коридора. */
-const CHAIKIN_MAX_CUT = 10;
 /** Отношение контрольных точек кубической кривой к радиусу (v0.01.05):
  *  классическое приближение четверти окружности — 0.5523. */
 const CUBIC_CONTROL = 0.5523;
@@ -116,6 +124,32 @@ export const PENALTY_MAX = 8;
  *  разведены веером (computeEdgeFans), а зона порта обязана оставаться
  *  достижимой для всех его стрелок. */
 const PENALTY_TRIM = 24;
+/** Штраф за поворот трассы в поиске A* (v0.01.09), в шагах решётки:
+ *  путь с меньшим числом изломов предпочтителен — длинные прямые
+ *  участки, максимум длины отрезков при минимуме углов. */
+const TURN_COST = 2;
+/** Допустимый «пробег» по чужим коридорам при слиянии сегментов (v0.01.09):
+ *  краткое пересечение чужой дорожки (перпендикулярный проход, до
+ *  PENALTY_CROSS_SAMPLES занятых клеток) разрешено, длинное параллельное
+ *  наложение — нет. */
+const PENALTY_CROSS_SAMPLES = 4;
+/** Предельный «пробег» ортогонального кандидата по чужим коридорам
+ *  (v0.01.09): кандидат, ложащийся вдоль занятой дорожки (краткое
+ *  перпендикулярное пересечение — до нескольких клеток), отклоняется
+ *  в пользу решётки A*, которая обойдёт коридор параллельной дорожкой. */
+const PENALTY_CANDIDATE_LIMIT = 8;
+/** Предельное срезание угла скруглением — отступ дуги от вершины, px
+ *  (v0.01.09): скругление не приближает стрелку к домену заметнее решётки. */
+const MAX_CORNER_CUT = 10;
+/** Число проходов выпрямления ломаной (v0.01.09) — защита от зацикливания. */
+const STRAIGHTEN_PASSES = 8;
+/** Предел кандидатов на одну ось при подборе ортогонального хода (v0.01.09). */
+const MAX_BEND_CANDIDATES = 8;
+/** Допуск совмещения точек по строке/столбцу при упрощении (v0.01.09):
+ *  якоря портов редко лежат ровно на центрах клеток решётки — слияние
+ *  по почти общей горизонтали/вертикали даёт прямые участки вместо
+ *  наклонных «стяжек». */
+const SNAP_EPS = 2;
 
 /**
  * Мягкие препятствия (v0.01.07): общая на весь кадр решётка штрафов.
@@ -214,17 +248,35 @@ export function penaltyAlongSegment(
   a: RoutePoint,
   b: RoutePoint,
 ): boolean {
-  if (!penalty || penalty.values.length === 0) return false;
-  const length = Math.hypot(b.x - a.x, b.y - a.y);
-  const samples = Math.max(1, Math.ceil(length / (penalty.cell / 2)));
-  for (let s = 0; s <= samples; s += 1) {
-    const t = s / samples;
-    if (penaltyValueAt(penalty, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) > 0) return true;
-  }
-  return false;
+  return penaltyExposure(penalty, a, b) > 0;
 }
 
-const SQRT2 = Math.SQRT2;
+/**
+ * «Пробег» отрезка по чужим коридорам (v0.01.09): число занятых прежними
+ * стрелками клеток вдоль отрезка. Краткое пересечение чужой дорожки
+ * (перпендикулярный проход) даёт 1–3 клетки; длинное параллельное
+ * наложение — десятки. Слияние сегментов при упрощении и выпрямлении
+ * разрешено, пока пробег не превышает PENALTY_CROSS_SAMPLES: развязка
+ * коридоров сохраняется, а лишние изломы «ступенек» убираются.
+ */
+export function penaltyExposure(
+  penalty: RoutePenalty | undefined,
+  a: RoutePoint,
+  b: RoutePoint,
+): number {
+  if (!penalty || penalty.values.length === 0) return 0;
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  if (length < 0.5) return penaltyValueAt(penalty, a.x, a.y) > 0 ? 1 : 0;
+  const samples = Math.max(1, Math.ceil(length / (penalty.cell / 2)));
+  let exposed = 0;
+  for (let s = 0; s <= samples; s += 1) {
+    const t = s / samples;
+    if (penaltyValueAt(penalty, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) > 0) {
+      exposed += 1;
+    }
+  }
+  return exposed;
+}
 
 /** Расширение прямоугольника на отступ со всех сторон. */
 export function expandRect(rect: RouteRect, pad: number): RouteRect {
@@ -301,73 +353,26 @@ function nearestFreeCellIndex(
   return -1;
 }
 
-/** Соседи клетки: сначала ортогональные, затем диагонали (без среза углов). */
-const NEIGHBORS: ReadonlyArray<readonly [number, number, number]> = [
-  [1, 0, 1],
-  [-1, 0, 1],
-  [0, 1, 1],
-  [0, -1, 1],
-  [1, 1, SQRT2],
-  [1, -1, SQRT2],
-  [-1, 1, SQRT2],
-  [-1, -1, SQRT2],
+/**
+ * Ортогональные направления движения по решётке (v0.01.09): диагонали
+ * исключены. Путь A* без срезания углов всегда переводится в
+ * ортогональный (шаг по диагонали заменяется парой ортогональных шагов
+ * по свободным клеткам), а прямые углы дают чистые горизонтальные и
+ * вертикальные участки вместо «лесенок».
+ */
+const GRID_DIRECTIONS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
 ];
 
-/** Минимальная двоичная куча по приоритету (f, затем h — для детерминизма). */
-class MinHeap {
-  private readonly items: Array<{ f: number; h: number; index: number }> = [];
-
-  get size(): number {
-    return this.items.length;
-  }
-
-  push(f: number, h: number, index: number): void {
-    this.items.push({ f, h, index });
-    let i = this.items.length - 1;
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (this.less(i, parent)) {
-        [this.items[i], this.items[parent]] = [this.items[parent], this.items[i]];
-        i = parent;
-      } else break;
-    }
-  }
-
-  pop(): number {
-    const top = this.items[0];
-    const last = this.items.pop()!;
-    if (this.items.length > 0) {
-      this.items[0] = last;
-      let i = 0;
-      for (;;) {
-        const left = 2 * i + 1;
-        const right = left + 1;
-        let smallest = i;
-        if (left < this.items.length && this.less(left, smallest)) smallest = left;
-        if (right < this.items.length && this.less(right, smallest)) smallest = right;
-        if (smallest === i) break;
-        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
-        i = smallest;
-      }
-    }
-    return top.index;
-  }
-
-  private less(a: number, b: number): boolean {
-    const x = this.items[a];
-    const y = this.items[b];
-    return x.f < y.f || (x.f === y.f && x.h < y.h);
-  }
-}
-
 /**
- * Октальное расстояние (эвристика A* на 8 направлениях) — допустимая
- * (не завышенная) оценка длины пути между клетками.
+ * Манхэттенское расстояние — допустимая эвристика A* на ортогональной
+ * решётке (v0.01.09; раньше было октальное — для восьми направлений).
  */
-function octile(dx: number, dy: number): number {
-  const absX = Math.abs(dx);
-  const absY = Math.abs(dy);
-  return absX > absY ? absX - absY + absY * SQRT2 : absY - absX + absX * SQRT2;
+function manhattan(dx: number, dy: number): number {
+  return Math.abs(dx) + Math.abs(dy);
 }
 
 interface Grid {
@@ -416,9 +421,64 @@ function buildGrid(
   return { cols, rows, cell: cellSize, x0, y0, blocked };
 }
 
-/** Путь A* по решётке: возвращает список клеток-индексов от старта к цели.
- *  Штрафы (v0.01.07) добавляются к стоимости входа в клетку: клетки
- *  коридоров прежних стрелок дорожают, и путь расходится в сторону. */
+/**
+ * Минимальная двоичная куча по приоритету (f, затем h — для детерминизма).
+ */
+class MinHeap {
+  private readonly items: Array<{ f: number; h: number; index: number }> = [];
+
+  get size(): number {
+    return this.items.length;
+  }
+
+  push(f: number, h: number, index: number): void {
+    this.items.push({ f, h, index });
+    let i = this.items.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (this.less(i, parent)) {
+        [this.items[i], this.items[parent]] = [this.items[parent], this.items[i]];
+        i = parent;
+      } else break;
+    }
+  }
+
+  pop(): number {
+    const top = this.items[0];
+    const last = this.items.pop()!;
+    if (this.items.length > 0) {
+      this.items[0] = last;
+      let i = 0;
+      for (;;) {
+        const left = 2 * i + 1;
+        const right = left + 1;
+        let smallest = i;
+        if (left < this.items.length && this.less(left, smallest)) smallest = left;
+        if (right < this.items.length && this.less(right, smallest)) smallest = right;
+        if (smallest === i) break;
+        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
+        i = smallest;
+      }
+    }
+    return top.index;
+  }
+
+  private less(a: number, b: number): boolean {
+    const x = this.items[a];
+    const y = this.items[b];
+    return x.f < y.f || (x.f === y.f && x.h < y.h);
+  }
+}
+
+/**
+ * Путь A* по ортогональной решётке со штрафом за поворот (v0.01.09):
+ * состояние поиска — «клетка + направление движения» (cell × 4 + dir),
+ * смена направления стоит TURN_COST шагов. Поэтому среди путей одинаковой
+ * длины выбирается путь с наименьшим числом изломов — длинные прямые
+ * участки вместо «ступенек». Штрафы (v0.01.07) добавляются к стоимости
+ * входа в клетку: клетки коридоров прежних стрелок дорожают, и путь
+ * расходится в сторону. Возвращает список клеток-индексов от старта к цели.
+ */
 function findGridPath(
   grid: Grid,
   start: number,
@@ -426,11 +486,13 @@ function findGridPath(
   penalty?: RoutePenalty,
 ): number[] | null {
   const { cols, rows, blocked } = grid;
+  const dirCount = GRID_DIRECTIONS.length;
+  const size = cols * rows;
   const goalCol = goal % cols;
   const goalRow = Math.floor(goal / cols);
-  const gScore = new Float64Array(cols * rows).fill(Infinity);
-  const cameFrom = new Int32Array(cols * rows).fill(-1);
-  const closed = new Uint8Array(cols * rows);
+  const gScore = new Float64Array(size * dirCount).fill(Infinity);
+  const cameFrom = new Int32Array(size * dirCount).fill(-1);
+  const closed = new Uint8Array(size * dirCount);
   const heap = new MinHeap();
   const cellPenalty = (index: number): number => {
     if (!penalty || penalty.values.length === 0) return 0;
@@ -442,44 +504,51 @@ function findGridPath(
       grid.y0 + (row + 0.5) * grid.cell,
     );
   };
-  // Эвристика считается напрямую от координат клеток:
   const startCol = start % cols;
   const startRow = Math.floor(start / cols);
-  const hStart = octile(goalCol - startCol, goalRow - startRow);
-  gScore[start] = 0;
-  heap.push(hStart, hStart, start);
+  const hStart = manhattan(goalCol - startCol, goalRow - startRow);
+  // Стартовые состояния: направление ещё не выбрано — для каждого
+  // направления g = 0, и первый ход не платит штраф за поворот.
+  for (let d = 0; d < dirCount; d += 1) {
+    gScore[start * dirCount + d] = 0;
+    heap.push(hStart, hStart, start * dirCount + d);
+  }
   while (heap.size > 0) {
-    const current = heap.pop();
-    if (current === goal) {
-      const path: number[] = [goal];
-      let node = goal;
-      while (cameFrom[node] >= 0) {
+    const state = heap.pop();
+    if (closed[state]) continue;
+    closed[state] = 1;
+    const cell = Math.floor(state / dirCount);
+    if (cell === goal) {
+      const path: number[] = [];
+      let node = state;
+      while (node >= 0) {
+        path.push(Math.floor(node / dirCount));
         node = cameFrom[node];
-        path.push(node);
       }
       return path.reverse();
     }
-    if (closed[current]) continue;
-    closed[current] = 1;
-    const col = current % cols;
-    const row = Math.floor(current / cols);
-    for (const [dc, dr, cost] of NEIGHBORS) {
+    const col = cell % cols;
+    const row = Math.floor(cell / cols);
+    const dir = state % dirCount;
+    const fromStart = cameFrom[state] < 0;
+    for (let nd = 0; nd < dirCount; nd += 1) {
+      const [dc, dr] = GRID_DIRECTIONS[nd];
       const nextCol = col + dc;
       const nextRow = row + dr;
       if (nextCol < 0 || nextCol >= cols || nextRow < 0 || nextRow >= rows) continue;
       const next = nextRow * cols + nextCol;
-      if (blocked[next] || closed[next]) continue;
-      // Диагональ разрешена, только если свободны обе ортогональные клетки —
-      // иначе путь срезает угол препятствия.
-      if (dc !== 0 && dr !== 0) {
-        if (blocked[row * cols + nextCol] || blocked[nextRow * cols + col]) continue;
-      }
-      const tentative = gScore[current] + cost * (1 + cellPenalty(next));
-      if (tentative < gScore[next]) {
-        gScore[next] = tentative;
-        cameFrom[next] = current;
-        const h = octile(goalCol - nextCol, goalRow - nextRow);
-        heap.push(tentative + h, h, next);
+      if (blocked[next]) continue;
+      const nextState = next * dirCount + nd;
+      if (closed[nextState]) continue;
+      const turn = nd !== dir && !fromStart ? TURN_COST : 0;
+      // Стоимость шага: базовый шаг с надбавкой за занятость клетки
+      // (штрафы коридоров) плюс штраф за смену направления.
+      const tentative = gScore[state] + 1 + cellPenalty(next) + turn;
+      if (tentative < gScore[nextState]) {
+        gScore[nextState] = tentative;
+        cameFrom[nextState] = state;
+        const h = manhattan(goalCol - nextCol, goalRow - nextRow);
+        heap.push(tentative + h, h, nextState);
       }
     }
   }
@@ -487,9 +556,15 @@ function findGridPath(
 }
 
 /**
- * Упрощение ломаной «прямой видимостью» — остаются только повороты.
- * Занятые прежними стрелками клетки (v0.01.07) тоже запрещают слияние:
- * иначе упрощение возвращало бы развязанные коридоры обратно в пучок.
+ * Упрощение ломаной «прямой видимостью» по осям (v0.01.09): остаются только
+ * повороты, причём сливаются лишь точки на общей (в пределах SNAP_EPS)
+ * горизонтали или вертикали — наклонные «стяжки» между клетками решётки
+ * не появляются, форма остаётся ортогональной. Занятые прежними стрелками
+ * клетки (v0.01.07) тоже мешают слиянию, но лишь частично: краткое
+ * пересечение чужой дорожки (до PENALTY_CROSS_SAMPLES занятых клеток —
+ * перпендикулярный проход) разрешено, длинное параллельное наложение —
+ * нет. Развязка коридоров сохраняется, «ступеньки» на свободных
+ * направлениях сливаются в прямые.
  */
 function simplifyPath(
   points: RoutePoint[],
@@ -497,21 +572,141 @@ function simplifyPath(
   penalty?: RoutePenalty,
 ): RoutePoint[] {
   if (points.length <= 2) return points.slice();
+  const clear = (a: RoutePoint, b: RoutePoint): boolean =>
+    !crossesAny(a, b, obstacles) &&
+    penaltyExposure(penalty, a, b) <= PENALTY_CROSS_SAMPLES;
+  const aligned = (a: RoutePoint, b: RoutePoint): boolean =>
+    Math.abs(a.x - b.x) <= SNAP_EPS || Math.abs(a.y - b.y) <= SNAP_EPS;
   const result: RoutePoint[] = [points[0]];
   let i = 0;
   while (i < points.length - 1) {
     let j = points.length - 1;
-    while (
-      j > i + 1 &&
-      (crossesAny(points[i], points[j], obstacles) ||
-        penaltyAlongSegment(penalty, points[i], points[j]))
-    ) {
+    while (j > i + 1 && (!aligned(points[i], points[j]) || !clear(points[i], points[j]))) {
       j -= 1;
     }
     result.push(points[j]);
     i = j;
   }
   return result;
+}
+
+/**
+ * Выпрямление ломаной (v0.01.09): постобработка упрощённой трассы,
+ * максимизирующая длину прямых отрезков и минимизирующая число углов.
+ * Три правила, применяемые проходами до сходимости:
+ * 1) слияние коллинеарных вершин (две смежные «горизонтали» или
+ *    «вертикали» становятся одним отрезком);
+ * 2) удаление одиночного угла — если прямая «через угол» свободна;
+ * 3) «лестница» из двух углов (горизонталь-вертикаль-горизонталь или
+ *    вертикаль-горизонталь-вертикаль) заменяется одним Г-образным ходом,
+ *    если оба его колена свободны.
+ * Слияния проверяются и на краткое пересечение чужих коридоров
+ * (penaltyExposure ≤ PENALTY_CROSS_SAMPLES): развязка не рушится.
+ */
+function straightenPath(
+  points: RoutePoint[],
+  obstacles: RouteRect[],
+  penalty?: RoutePenalty,
+): RoutePoint[] {
+  // Ортогонализация наклонных участков (v0.01.09): наклонные «усики»
+  // у портов (якорь редко лежит на центре клетки) заменяются Г-образной
+  // вставкой в свободном направлении; если оба направления заняты,
+  // участок остаётся наклонным.
+  let pts: RoutePoint[] = [points[0]];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i];
+    const b = points[i + 1];
+    if (Math.abs(a.x - b.x) > 0.5 && Math.abs(a.y - b.y) > 0.5) {
+      const bend1: RoutePoint = { x: b.x, y: a.y };
+      const bend2: RoutePoint = { x: a.x, y: b.y };
+      const bend = !crossesAny(a, bend1, obstacles) && !crossesAny(bend1, b, obstacles)
+        ? bend1
+        : !crossesAny(a, bend2, obstacles) && !crossesAny(bend2, b, obstacles)
+          ? bend2
+          : null;
+      if (bend) pts.push(bend);
+    }
+    pts.push(b);
+  }
+  pts = dedupePoints(pts);
+  const clear = (a: RoutePoint, b: RoutePoint): boolean =>
+    !crossesAny(a, b, obstacles) &&
+    penaltyExposure(penalty, a, b) <= PENALTY_CROSS_SAMPLES;
+  const axisOf = (a: RoutePoint, b: RoutePoint): 'h' | 'v' | null => {
+    if (Math.abs(a.y - b.y) < 0.5) return 'h';
+    if (Math.abs(a.x - b.x) < 0.5) return 'v';
+    return null;
+  };
+  for (let pass = 0; pass < STRAIGHTEN_PASSES; pass += 1) {
+    let changed = false;
+    // 1. Коллинеарные вершины.
+    {
+      const result: RoutePoint[] = [pts[0]];
+      for (let i = 1; i < pts.length - 1; i += 1) {
+        const axis = axisOf(result[result.length - 1], pts[i + 1]);
+        const sameH = axis === 'h' && Math.abs(pts[i].y - pts[i + 1].y) < 0.5;
+        const sameV = axis === 'v' && Math.abs(pts[i].x - pts[i + 1].x) < 0.5;
+        if (sameH || sameV) {
+          changed = true;
+          continue; // вершина на прямой — пропустить
+        }
+        result.push(pts[i]);
+      }
+      result.push(pts[pts.length - 1]);
+      pts = result;
+    }
+    // 2. Одиночный угол: прямая через него свободна — угол лишний.
+    for (let i = 1; i < pts.length - 1; ) {
+      if (clear(pts[i - 1], pts[i + 1])) {
+        pts.splice(i, 1);
+        changed = true;
+        // не сдвигаем i: следующая вершина может тоже убраться
+      } else {
+        i += 1;
+      }
+    }
+    // 3. «Лестница» → Г-образный ход.
+    for (let i = 1; i < pts.length - 3; ) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const c = pts[i + 1];
+      const d = pts[i + 2];
+      const firstAxis = axisOf(a, b);
+      const secondAxis = axisOf(c, d);
+      if (
+        firstAxis &&
+        secondAxis &&
+        firstAxis === secondAxis &&
+        axisOf(b, c) &&
+        axisOf(b, c) !== firstAxis
+      ) {
+        // Оба колена Г-образного хода: через (a.x, d.y) и через (d.x, a.y).
+        const bend1: RoutePoint = { x: a.x, y: d.y };
+        const bend2: RoutePoint = { x: d.x, y: a.y };
+        const bend =
+          (bend1.x !== a.x || bend1.y !== a.y) &&
+          (bend1.x !== d.x || bend1.y !== d.y) &&
+          clear(a, bend1) &&
+          clear(bend1, d)
+            ? bend1
+            : (bend2.x !== a.x || bend2.y !== a.y) &&
+                (bend2.x !== d.x || bend2.y !== d.y) &&
+                clear(a, bend2) &&
+                clear(bend2, d)
+              ? bend2
+              : null;
+        if (bend) {
+          pts.splice(i, 2, bend); // b и c заменяются одним изгибом
+          changed = true;
+          continue;
+        }
+      }
+      i += 1;
+    }
+    pts = dedupePoints(pts);
+    if (!changed) break;
+  }
+  return pts;
 }
 
 /** Удаление почти совпадающих последовательных точек. */
@@ -529,6 +724,9 @@ function dedupePoints(points: RoutePoint[]): RoutePoint[] {
  * «Усики» у портов: короткий горизонтальный участок, чтобы стрелка выходила
  * из порта по горизонтали (как во Flying Logic). Добавляется только если
  * и сам усик, и отрезок до следующей точки формы не задевают домены.
+ * С v0.01.09 усик уместен только при горизонтальном первом/последнем
+ * отрезке формы: стрелка, уходящая от порта вертикалью, не получает
+ * горизонтальный крючок.
  */
 function withPortHints(
   points: RoutePoint[],
@@ -539,16 +737,18 @@ function withPortHints(
   let result = points;
   if (sourceExit && result.length >= 2) {
     const [first, second] = result;
+    const horizontal = Math.abs(second.y - first.y) < 0.5;
     const hint = { x: first.x + sourceExit.x, y: first.y + sourceExit.y };
-    if (!crossesAny(first, hint, expanded) && !crossesAny(hint, second, expanded)) {
+    if (horizontal && !crossesAny(first, hint, expanded) && !crossesAny(hint, second, expanded)) {
       result = [first, hint, ...result.slice(1)];
     }
   }
   if (targetEntry && result.length >= 2) {
     const last = result[result.length - 1];
     const prev = result[result.length - 2];
+    const horizontal = Math.abs(last.y - prev.y) < 0.5;
     const hint = { x: last.x + targetEntry.x, y: last.y + targetEntry.y };
-    if (!crossesAny(hint, last, expanded) && !crossesAny(prev, hint, expanded)) {
+    if (horizontal && !crossesAny(hint, last, expanded) && !crossesAny(prev, hint, expanded)) {
       result = [...result.slice(0, -1), hint, last];
     }
   }
@@ -556,9 +756,61 @@ function withPortHints(
 }
 
 /**
+ * Ортогональные кандидаты трассировки (v0.01.09): ходы с двумя поворотами
+ * через свободные зазоры между препятствиями. Изгиб вертикали подбирается
+ * по границам препятствий ± 2 px (свободный «контурный» ход вокруг них),
+ * по середине между портами и по самим портам (вырождение в Г-образный ход
+ * с одним поворотом). Кандидаты упорядочены: сначала ось преобладающего
+ * смещения пары портов (горизонталь при широкой стрелке), внутри оси —
+ * по близости изгиба к середине; так длинные прямые участки сохраняются.
+ */
+function orthoCandidates(
+  source: RoutePoint,
+  target: RoutePoint,
+  expanded: RouteRect[],
+): RoutePoint[][] {
+  const midX = (source.x + target.x) / 2;
+  const midY = (source.y + target.y) / 2;
+  const bends = (from: number, to: number, mid: number, axis: 'x' | 'y'): number[] => {
+    const candidates = new Set<number>([mid, from, to]);
+    for (const rect of expanded) {
+      if (axis === 'x') {
+        candidates.add(rect.x - 2);
+        candidates.add(rect.x + rect.width + 2);
+      } else {
+        candidates.add(rect.y - 2);
+        candidates.add(rect.y + rect.height + 2);
+      }
+    }
+    const list = [...candidates].filter((value) => Number.isFinite(value));
+    list.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid) || a - b);
+    return list.slice(0, MAX_BEND_CANDIDATES);
+  };
+  const horizontalFirst = Math.abs(target.x - source.x) >= Math.abs(target.y - source.y);
+  const xs = bends(source.x, target.x, midX, 'x');
+  const ys = bends(source.y, target.y, midY, 'y');
+  const candidates: RoutePoint[][] = [];
+  const push = (bend: number, axis: 'x' | 'y'): void => {
+    candidates.push(
+      axis === 'x'
+        ? [source, { x: bend, y: source.y }, { x: bend, y: target.y }, target]
+        : [source, { x: source.x, y: bend }, { x: target.x, y: bend }, target],
+    );
+  };
+  const primaryAxis: 'x' | 'y' = horizontalFirst ? 'x' : 'y';
+  const secondaryAxis: 'x' | 'y' = horizontalFirst ? 'y' : 'x';
+  for (const bend of primaryAxis === 'x' ? xs : ys) push(bend, primaryAxis);
+  for (const bend of primaryAxis === 'x' ? ys : xs) push(bend, secondaryAxis);
+  return candidates;
+}
+
+/**
  * Форма стрелки с обходом препятствий: список точек ломаной от порта-источника
  * к порту-приёмнику. Без пересечений возвращает прямой отрезок, при
  * невозможности обхода — тоже прямой отрезок (откат к прежнему поведению).
+ * Конвейер v0.01.09: прямая → ортогональные кандидаты через свободные
+ * зазоры → решётка A* со штрафом за поворот → упрощение → выпрямление →
+ * «усики» портов.
  */
 export function computeRoutePath(
   source: RoutePoint,
@@ -585,29 +837,45 @@ export function computeRoutePath(
   // Прямой ход проверяется только на пересечение с доменами (v0.01.08):
   // штрафы коридоров не бракуют прямую трассу — незнакомые стрелки больше
   // не отклоняются от чужих линий; штрафы влияют только на выбор варианта
-  // обхода в решётке и на упрощение ломаной.
+  // обхода.
   if (!crossesAny(source, target, expanded)) {
     return [source, target];
   }
 
-  // Г-образные кандидаты (v0.01.08): один поворот через середину зазора
-  // между портами — дешевле решётки и без «ступенек» A*. Первый кандидат
-  // идёт горизонтом до середины зазора (поток слева направо), второй —
-  // вертикалью от порта (обходы вокруг ряда доменов).
-  const midX = (source.x + target.x) / 2;
-  const midY = (source.y + target.y) / 2;
-  const candidates: RoutePoint[][] = [
-    [source, { x: midX, y: source.y }, { x: midX, y: target.y }, target],
-    [source, { x: source.x, y: midY }, { x: target.x, y: midY }, target],
-  ];
-  for (const candidate of candidates) {
+  // Порог видимости чуть меньше блокирующего отступа: упрощённая ломаная
+  // может подходить к домену ближе решётки, но не к самому контуру.
+  const loose = expanded.map((rect) => expandRect(rect, -4));
+
+  // Ортогональные кандидаты (v0.01.09): ходы с двумя поворотами через
+  // свободные зазоры. Из свободных выбирается ход с наименьшим «пробегом»
+  // по чужим коридорам родственной группы (порядок кандидатов — при равном
+  // пробеге), тогда развязка параллельных дорожек сохраняется без решётки.
+  let bestLegs: RoutePoint[] | null = null;
+  let bestExposure = Infinity;
+  for (const candidate of orthoCandidates(source, target, expanded)) {
     const legs = dedupePoints(candidate);
     if (legs.length < 2) continue;
     let blocked = false;
-    for (let leg = 0; leg < legs.length - 1 && !blocked; leg += 1) {
-      if (crossesAny(legs[leg], legs[leg + 1], expanded)) blocked = true;
+    let exposure = 0;
+    for (let leg = 0; leg < legs.length - 1; leg += 1) {
+      if (crossesAny(legs[leg], legs[leg + 1], expanded)) {
+        blocked = true;
+        break;
+      }
+      exposure += penaltyExposure(penalty, legs[leg], legs[leg + 1]);
     }
-    if (!blocked) return legs;
+    if (blocked) continue;
+    if (exposure < bestExposure) {
+      bestExposure = exposure;
+      bestLegs = legs;
+    }
+  }
+  // Кандидат, ложащийся вдоль чужой дорожки родственной группы (пробег
+  // выше предела), отклоняется: решётка A* обойдёт коридор параллельной
+  // дорожкой — развязка стрелок сохраняется.
+  if (bestLegs && bestExposure <= PENALTY_CANDIDATE_LIMIT) {
+    // «Усики» у портов сливаются с горизонтальными коленами кандидата.
+    return withPortHints(bestLegs, loose, options?.sourceExit, options?.targetEntry);
   }
 
   // Размер клетки подбирается так, чтобы решётка оставалась компактной:
@@ -644,74 +912,52 @@ export function computeRoutePath(
     y: grid.y0 + (Math.floor(index / grid.cols) + 0.5) * grid.cell,
   }));
 
-  // Порог видимости чуть меньше блокирующего отступа: упрощённая ломаная
-  // может подходить к домену ближе решётки, но не к самому контуру.
-  const loose = expanded.map((rect) => expandRect(rect, -4));
   const simplified = simplifyPath(dedupePoints([source, ...cellPoints, target]), loose, penalty);
+  // Выпрямление (v0.01.09): лестницы и лишние углы сливаются в прямые.
+  const straightened = straightenPath(simplified, loose, penalty);
   // «Усики» проверяются по тому же порогу, что и упрощение: иначе коридор,
   // зажатый между доменами, отклонял бы усик при допустимой ломаной.
-  return withPortHints(simplified, loose, options?.sourceExit, options?.targetEntry);
+  return withPortHints(straightened, loose, options?.sourceExit, options?.targetEntry);
 }
 
 /**
- * Срез углов Чейкина (v0.01.05): каждый угол ломаной заменяется парой точек
- * на смежных отрезках — «лестница» превращается в плавную линию. Концы
- * ломаной (порты) остаются на местах; отступ среза ограничен (CHAIKIN_MAX_CUT),
- * чтобы сглаживание не приближало стрелку к доменам заметнее решётки.
- */
-function chaikinCorners(points: RoutePoint[]): RoutePoint[] {
-  if (points.length < 3) return points.slice();
-  const result: RoutePoint[] = [points[0]];
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const prev = points[i - 1];
-    const cur = points[i];
-    const next = points[i + 1];
-    const d1 = Math.hypot(cur.x - prev.x, cur.y - prev.y);
-    const d2 = Math.hypot(next.x - cur.x, next.y - cur.y);
-    if (d1 < 0.5 || d2 < 0.5) {
-      result.push(cur);
-      continue;
-    }
-    const t1 = Math.min(CHAIKIN_RATIO, CHAIKIN_MAX_CUT / d1);
-    const t2 = Math.min(CHAIKIN_RATIO, CHAIKIN_MAX_CUT / d2);
-    result.push(
-      { x: cur.x - (cur.x - prev.x) * t1, y: cur.y - (cur.y - prev.y) * t1 },
-      { x: cur.x + (next.x - cur.x) * t2, y: cur.y + (next.y - cur.y) * t2 },
-    );
-  }
-  result.push(points[points.length - 1]);
-  return result;
-}
-
-/**
- * SVG-путь по ломаной со сглаживанием (v0.01.05): сначала углы срезаются
- * по Чейкину, затем каждый поворот рисуется кубической кривой Безье
- * с касательными контрольными точками — классическое приближение дуги
- * окружности (коэффициент 0.5523): «M … L … C … L … C …». Радиус
- * скругления уменьшается до половины короткого смежного отрезка.
+ * SVG-путь по ломаной со скруглением углов (v0.01.09): каждый поворот
+ * заменяется одной кубической кривой Безье с касательными контрольными
+ * точками — классическое приближение дуги окружности (коэффициент 0.5523):
+ * «M … L … C … L …». Радиус скругления уменьшается до половины короткого
+ * смежного отрезка и до предельного срезания угла (MAX_CORNER_CUT) —
+ * скругление не приближает стрелку к домену заметнее решётки. Коллинеарные
+ * вершины пропускаются: длинные прямые участки остаются линиями «L».
  */
 export function polylineToRoundedPath(
   points: RoutePoint[],
   radius = DEFAULT_CORNER_RADIUS,
 ): string {
   if (points.length < 2) return '';
-  const smooth = chaikinCorners(points);
   const fmt = (value: number) => Math.round(value * 100) / 100;
-  const first = smooth[0];
-  const last = smooth[smooth.length - 1];
+  const first = points[0];
+  const last = points[points.length - 1];
   let d = `M ${fmt(first.x)} ${fmt(first.y)}`;
-  for (let i = 1; i < smooth.length - 1; i += 1) {
-    const prev = smooth[i - 1];
-    const cur = smooth[i];
-    const next = smooth[i + 1];
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = points[i - 1];
+    const cur = points[i];
+    const next = points[i + 1];
     const d1 = Math.hypot(cur.x - prev.x, cur.y - prev.y);
     const d2 = Math.hypot(next.x - cur.x, next.y - cur.y);
     if (d1 < 0.5 || d2 < 0.5) continue;
-    const r = Math.min(radius, d1 / 2, d2 / 2);
     const t1x = (cur.x - prev.x) / d1;
     const t1y = (cur.y - prev.y) / d1;
     const t2x = (next.x - cur.x) / d2;
     const t2y = (next.y - cur.y) / d2;
+    const dot = t1x * t2x + t1y * t2y; // косинус угла поворота
+    if (dot > 0.999) continue; // коллинеарно — прямая через вершину
+    // Отступ дуги от вершины: r·(1 − sin(θ/2)) / cos(θ/2) ≤ MAX_CORNER_CUT.
+    const cosHalf = Math.sqrt((1 + dot) / 2);
+    const sinHalf = Math.sqrt((1 - dot) / 2);
+    const cutCap =
+      1 - sinHalf > 1e-9 ? (MAX_CORNER_CUT * cosHalf) / (1 - sinHalf) : Infinity;
+    const r = Math.min(radius, d1 / 2, d2 / 2, cutCap);
+    if (r < 0.5) continue;
     const k = r * CUBIC_CONTROL;
     d +=
       ` L ${fmt(cur.x - t1x * r)} ${fmt(cur.y - t1y * r)}` +
@@ -907,4 +1153,159 @@ export function polylineMidpoint(points: RoutePoint[]): RoutePoint {
     remain -= lengths[i];
   }
   return points[points.length - 1];
+}
+
+/* ------------------------------------------------------------------ */
+/* Централизованная трассировка видимых стрелок (v0.01.09)             */
+/* ------------------------------------------------------------------ */
+
+/** Стрелка для трассировки: идентификатор и концы. */
+export interface RouteEdgeSpec {
+  id: string;
+  from: string;
+  to: string;
+}
+
+/** Стороны портов стрелки (обычная или встречная). */
+export interface RouteSide {
+  source: 'left' | 'right';
+  target: 'left' | 'right';
+}
+
+/** Вход централизованной трассировки: габариты доменов и видимые стрелки. */
+export interface RoutingLayout {
+  /** Прямоугольники всех видимых доменов канвы (id → габариты). */
+  rects: Map<string, RouteRect>;
+  /** Видимые стрелки; концы без габаритов пропускаются. */
+  edges: RouteEdgeSpec[];
+}
+
+/** Результат трассировки: ломаные и стороны портов. */
+export interface RoutingOutput {
+  paths: Map<string, RoutePoint[]>;
+  sides: Map<string, RouteSide>;
+}
+
+/**
+ * Трассировка всех видимых стрелок (v0.01.09): единая чистая функция,
+ * которую вызывает канва (раньше цикл жил в Canvas.tsx). Порядок шагов:
+ * стороны портов по геометрии (встречные стрелки — назад), веера общих
+ * портов, скользящие якоря, родственные группы штрафов, параллельный сдвиг
+ * пар, индивидуальная трассировка каждой стрелки с накоплением коридоров.
+ * Чистая и детерминированная: одинаковые входы — одинаковые формы.
+ */
+export function routeEdges(layout: RoutingLayout): RoutingOutput {
+  const paths = new Map<string, RoutePoint[]>();
+  const sides = new Map<string, RouteSide>();
+  const { rects } = layout;
+  const visible = layout.edges.filter((edge) => rects.has(edge.from) && rects.has(edge.to));
+  const centerX = (id: string): number => {
+    const rect = rects.get(id);
+    return rect ? rect.x + rect.width / 2 : 0;
+  };
+  for (const edge of visible) {
+    const backward = centerX(edge.to) < centerX(edge.from) - 40;
+    sides.set(
+      edge.id,
+      backward
+        ? { source: 'left', target: 'right' }
+        : { source: 'right', target: 'left' },
+    );
+  }
+  // Вееры портов с учётом сторон: обычные и встречные выходы не смешиваются.
+  const positionsMap: Record<string, { x: number; y: number }> = {};
+  const portPoints: RoutePoint[] = [];
+  for (const [id, rect] of rects) {
+    positionsMap[id] = { x: rect.x, y: rect.y };
+    portPoints.push({ x: rect.x, y: rect.y + rect.height / 2 });
+    portPoints.push({ x: rect.x + rect.width, y: rect.y + rect.height / 2 });
+  }
+  const fanEdges: FanEdge[] = visible.map((edge) => {
+    const side = sides.get(edge.id);
+    return {
+      id: edge.id,
+      from: edge.from,
+      to: edge.to,
+      sourceSide: side?.source,
+      targetSide: side?.target,
+    };
+  });
+  const fans = computeEdgeFans(fanEdges, positionsMap);
+  // Родственные группы: решётка штрафов — по группе, а не на весь кадр.
+  const relationGroups = edgeRelationGroups(visible);
+  const groupOf = new Map<string, number>();
+  visible.forEach((edge, index) => groupOf.set(edge.id, relationGroups[index]));
+  const penalties = new Map<number, RoutePenalty>();
+  const penaltyFor = (group: number): RoutePenalty => {
+    let grid = penalties.get(group);
+    if (!grid) {
+      grid = createRoutePenalty([...rects.values()], portPoints);
+      penalties.set(group, grid);
+    }
+    return grid;
+  };
+  // Параллельные стрелки одной пары узлов разводятся перпендикулярным
+  // сдвигом ±8 px вокруг оси пары.
+  const pairIndex = new Map<string, number>();
+  const pairCount = new Map<string, number>();
+  for (const edge of visible) {
+    const pairKey = [edge.from, edge.to].sort().join('~');
+    pairCount.set(pairKey, (pairCount.get(pairKey) ?? 0) + 1);
+  }
+  const ordered = [...visible].sort((a, b) => a.id.localeCompare(b.id));
+  for (const edge of ordered) {
+    const side = sides.get(edge.id);
+    if (!side) continue;
+    const fan = fans.get(edge.id) ?? { sourceFan: 0, targetFan: 0 };
+    const sourceRect = rects.get(edge.from)!;
+    const targetRect = rects.get(edge.to)!;
+    const sourcePort = side.source === 'left' ? sourceRect.x : sourceRect.x + sourceRect.width;
+    const targetPort = side.target === 'left' ? targetRect.x : targetRect.x + targetRect.width;
+    // Скользящие якоря: Y тянется к вертикальному центру собеседника
+    // с зажимом в пределах своего домена; веер — поверх якоря.
+    let from: RoutePoint = {
+      x: sourcePort,
+      y: portAnchorY(sourceRect, targetRect, fan.sourceFan),
+    };
+    let to: RoutePoint = {
+      x: targetPort,
+      y: portAnchorY(targetRect, sourceRect, fan.targetFan),
+    };
+    const pairKey = [edge.from, edge.to].sort().join('~');
+    const nth = pairIndex.get(pairKey) ?? 0;
+    pairIndex.set(pairKey, nth + 1);
+    const shift = (nth - ((pairCount.get(pairKey) ?? 1) - 1) / 2) * 8;
+    if (shift !== 0) {
+      // Каноническая ось пары (v0.01.09): у стрелок «туда-обратно» перпендикуляр
+      // считается по одному и тому же направлению оси — иначе сдвиги совпадали
+      // и обе стрелки ложились на одну дорожку.
+      let axisX = to.x - from.x;
+      let axisY = to.y - from.y;
+      if (axisX < 0 || (Math.abs(axisX) < 1e-9 && axisY < 0)) {
+        axisX = -axisX;
+        axisY = -axisY;
+      }
+      const length = Math.hypot(axisX, axisY) || 1;
+      from = { x: from.x + (-axisY / length) * shift, y: from.y + (axisX / length) * shift };
+      to = { x: to.x + (-axisY / length) * shift, y: to.y + (axisX / length) * shift };
+    }
+    const obstacles: RouteRect[] = [];
+    const selfRects: RouteRect[] = [];
+    for (const [id, rect] of rects) {
+      if (id === edge.from || id === edge.to) selfRects.push(rect);
+      else obstacles.push(rect);
+    }
+    const penalty = penaltyFor(groupOf.get(edge.id) ?? 0);
+    const points = computeRoutePath(from, to, obstacles, {
+      // Горизонтальные «усики»: из правого порта — вправо, из левого — влево.
+      sourceExit: side.source === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
+      targetEntry: side.target === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
+      // Встречные стрелки обходят и свой блок (см. selfRects).
+      selfRects,
+      penalty,
+    });
+    paths.set(edge.id, points);
+    accumulateRoutePenalty(penalty, points);
+  }
+  return { paths, sides };
 }

@@ -154,4 +154,4 @@ export function emptyProject(): Project {
 }
 
 /** Версия инструмента — отображается в интерфейсе и документации. */
-export const APP_VERSION = '0.01.08';
+export const APP_VERSION = '0.01.09';

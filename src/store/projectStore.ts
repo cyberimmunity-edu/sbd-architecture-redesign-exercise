@@ -20,7 +20,9 @@ import { decompose } from '../engine/decompose';
 import type { DecomposeInput } from '../engine/decompose';
 import { snapExternalsOutside } from '../engine/trust';
 
-export type Selection = { kind: 'domain' | 'card' | 'edge'; id: string };
+/** Выбор объекта интерфейса: домен, карточка функции, стрелка
+ *  или цель безопасности (v0.01.09 — карточка ЦБ в инспекторе). */
+export type Selection = { kind: 'domain' | 'card' | 'edge' | 'goal'; id: string };
 
 interface Snapshot {
   architecture: Project['architecture'];

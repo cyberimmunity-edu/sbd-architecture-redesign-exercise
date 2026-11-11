@@ -3,7 +3,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { recalcCoverage, goalStatus, aggregateStatus } from '@/engine/coverage';
+import { recalcCoverage, goalStatus, goalDistribution, aggregateStatus } from '@/engine/coverage';
 import { emptyProject, type Project } from '@/engine/types';
 
 function fn(
@@ -208,5 +208,82 @@ describe('Правила покрытия (раздел 3.4, алгоритм 7.
     });
     expect(goalStatus(project, 'gx')).toBe('red');
     expect(aggregateStatus([])).toBe('green');
+  });
+});
+
+describe('goalDistribution — карточка ЦБ (v0.01.09)', () => {
+  const security = {
+    goals: [goal('g1'), goal('g2')],
+    functions: [
+      fn('fm1', [{ goal: 'g1', weight: 'mandatory' as const }], 3),
+      fn('fo1', [{ goal: 'g1', weight: 'optional' as const }], 2),
+      fn('fm2', [{ goal: 'g1', weight: 'mandatory' as const }], 4),
+      fn('fx', [{ goal: 'g2', weight: 'mandatory' as const }]),
+    ],
+  };
+  const architecture = { blocks: [block('b1'), block('b2')], edges: [] };
+
+  it('обеспечивающие механизмы с весом и размещением; критичные домены — только mandatory', () => {
+    const project = build({
+      architecture,
+      security,
+      assignments: [
+        { function: 'fm1', block: 'b1' },
+        { function: 'fo1', block: 'b1' },
+      ],
+    });
+    const dist = goalDistribution(project, 'g1');
+    expect(dist.goalId).toBe('g1');
+    // Статус распределения по таблице 3.4: одна из двух mandatory — жёлтый.
+    expect(dist.status).toBe('yellow');
+    expect(dist.functions.map((row) => row.id)).toEqual(['fm1', 'fo1', 'fm2']);
+    expect(dist.functions[0]).toEqual({
+      id: 'fm1',
+      name: 'Функция fm1',
+      cost: 3,
+      weight: 'mandatory',
+      blockId: 'b1',
+    });
+    // fo1 — optional: её домен не делает домен критичным для цели.
+    expect(dist.functions[1].blockId).toBe('b1');
+    expect(dist.functions[1].weight).toBe('optional');
+    expect(dist.functions[2].blockId).toBeNull();
+    // Критичный домен — b1 (обязательный fm1); без повторов.
+    expect(dist.criticalDomains.map((row) => row.id)).toEqual(['b1']);
+  });
+
+  it('критичные домены без повторов и в порядке следования функций модели', () => {
+    const project = build({
+      architecture,
+      security,
+      assignments: [
+        { function: 'fm1', block: 'b1' },
+        { function: 'fm2', block: 'b2' },
+      ],
+    });
+    const dist = goalDistribution(project, 'g1');
+    expect(dist.status).toBe('green');
+    expect(dist.criticalDomains.map((row) => row.id)).toEqual(['b1', 'b2']);
+    expect(dist.criticalDomains[0].name).toBe('Блок b1');
+    expect(dist.criticalDomains[1].name).toBe('Блок b2');
+  });
+
+  it('цель без функций: пустые списки, статус красный', () => {
+    const project = build({
+      architecture,
+      security: { goals: [goal('g2')], functions: [] },
+    });
+    const dist = goalDistribution(project, 'g2');
+    expect(dist.status).toBe('red');
+    expect(dist.functions).toEqual([]);
+    expect(dist.criticalDomains).toEqual([]);
+  });
+
+  it('функции цели не размещены: критичных доменов нет, статус красный', () => {
+    const project = build({ architecture, security, assignments: [] });
+    const dist = goalDistribution(project, 'g1');
+    expect(dist.status).toBe('red');
+    expect(dist.functions).toHaveLength(3);
+    expect(dist.criticalDomains).toEqual([]);
   });
 });

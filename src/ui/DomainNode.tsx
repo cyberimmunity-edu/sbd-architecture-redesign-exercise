@@ -15,6 +15,10 @@
  * Подсветка из таблиц (v0.01.04): наведение на строку домена в таблице
  * «Расширенный анализ ДВБ» подсвечивает этот домен на диаграмме (голубая
  * рамка-кольцо) и в мини-навигаторе; клик по строке — фокус и выбор (Canvas.tsx).
+ * Краткая подсветка критичных доменов цели (v0.01.09): клик по цели
+ * безопасности в левой панели подсвечивает все критичные для неё домены
+ * (голубое кольцо) и приглушает остальные — примерно как при подсветке
+ * стрелок; подсветка гаснет сама через FLASH_DURATION_MS (viewStore).
  * Точки соединения без семантики вход/выход (v0.01.08): направление стрелки
  * задаёт жест соединения (Canvas.tsx, onConnectStart/onConnectEnd),
  * прилепиться можно к любой точке домена. Автоматические размеры
@@ -88,6 +92,11 @@ export const DomainNode = memo(function DomainNode({
   const togglePort = useViewStore((s) => s.togglePort);
   // Подсветка из таблиц правой панели (v0.01.04).
   const highlighted = useViewStore((s) => s.highlightedDomainId) === data.blockId;
+  // Краткая подсветка критичных доменов цели (v0.01.09): этот домен в наборе —
+  // голубое кольцо; набор есть, но домена в нём нет — приглушение.
+  const flashSet = useViewStore((s) => s.flashDomainIds);
+  const flashed = flashSet?.has(data.blockId) ?? false;
+  const dimmedByFlash = flashSet !== null && !flashed;
   const inKey = `${data.blockId}:in`;
   const outKey = `${data.blockId}:out`;
   const inCollapsed = collapsedPorts[inKey] ?? false;
@@ -115,7 +124,8 @@ export const DomainNode = memo(function DomainNode({
   return (
     <div
       data-block-id={data.blockId}
-      data-highlighted={highlighted ? 'true' : 'false'}
+      data-highlighted={highlighted || flashed ? 'true' : 'false'}
+      data-flash={flashed ? 'true' : 'false'}
       className="relative min-w-[240px] min-h-[120px] max-w-[320px] rounded-md shadow-sm bg-[var(--sk-node-bg,transparent)]"
       style={{
         background: color.fill,
@@ -125,11 +135,14 @@ export const DomainNode = memo(function DomainNode({
         padding: '10px 12px',
         color: 'var(--foreground)',
         ...sizeStyle,
-        // Подсветка из таблицы ДВБ (v0.01.04): голубое кольцо вокруг домена.
-        boxShadow: highlighted
+        transition: 'opacity 0.35s ease, box-shadow 0.35s ease',
+        opacity: dimmedByFlash ? 0.4 : undefined,
+        // Подсветка из таблицы ДВБ (v0.01.04) и краткая подсветка критичных
+        // доменов цели (v0.01.09): голубое кольцо вокруг домена.
+        boxShadow: highlighted || flashed
           ? `0 0 0 3px ${HIGHLIGHT_COLOR}, 0 0 16px ${HIGHLIGHT_COLOR}66`
           : undefined,
-        zIndex: highlighted ? 1 : undefined,
+        zIndex: highlighted || flashed ? 1 : undefined,
       }}
       onDragOver={(event) => {
         if (data.external) return; // функции размещаются только во внутренние домены

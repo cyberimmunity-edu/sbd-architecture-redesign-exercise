@@ -6,16 +6,17 @@
  * расчёты.
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
-import { useViewStore } from '../../src/store/viewStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FLASH_DURATION_MS, useViewStore } from '../../src/store/viewStore';
 
-describe('Настройки вида канвы (v0.01.02–v0.01.04)', () => {
+describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
   beforeEach(() => {
     useViewStore.setState({
       showEdges: true,
       focusInternal: false,
       collapsedPorts: {},
       highlightedDomainId: null,
+      flashDomainIds: null,
     });
   });
 
@@ -125,6 +126,8 @@ describe('Настройки вида канвы (v0.01.02–v0.01.04)', () => {
       'collapsedPorts',
       'cycleSizeMode',
       'expandAllPorts',
+      'flashDomainIds',
+      'flashDomains',
       'focusInternal',
       'highlightedDomainId',
       'setHighlightedDomain',
@@ -135,5 +138,40 @@ describe('Настройки вида канвы (v0.01.02–v0.01.04)', () => {
       'togglePort',
       'toggleShowEdges',
     ]);
+  });
+
+  it('flashDomains кратко подсвечивает домены и гаснет сама (v0.01.09)', () => {
+    vi.useFakeTimers();
+    try {
+      useViewStore.getState().flashDomains(['dom-1', 'dom-3']);
+      const flash = useViewStore.getState().flashDomainIds;
+      expect(flash).not.toBeNull();
+      expect(flash!.has('dom-1')).toBe(true);
+      expect(flash!.has('dom-3')).toBe(true);
+      expect(flash!.has('dom-2')).toBe(false);
+      // Подсветка гаснет сама по истечении FLASH_DURATION_MS.
+      vi.advanceTimersByTime(FLASH_DURATION_MS + 10);
+      expect(useViewStore.getState().flashDomainIds).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('повторный flashDomains перезапускает отсчёт и заменяет набор (v0.01.09)', () => {
+    vi.useFakeTimers();
+    try {
+      useViewStore.getState().flashDomains(['dom-1']);
+      vi.advanceTimersByTime(FLASH_DURATION_MS - 100);
+      useViewStore.getState().flashDomains(['dom-2']);
+      // Первый набор заменён, таймер перезапущен: подсветка ещё жива.
+      expect(useViewStore.getState().flashDomainIds!.has('dom-2')).toBe(true);
+      expect(useViewStore.getState().flashDomainIds!.has('dom-1')).toBe(false);
+      vi.advanceTimersByTime(FLASH_DURATION_MS - 200);
+      expect(useViewStore.getState().flashDomainIds).not.toBeNull();
+      vi.advanceTimersByTime(200);
+      expect(useViewStore.getState().flashDomainIds).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

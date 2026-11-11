@@ -2,11 +2,17 @@
 
 /**
  * Инспектор — зона раздела 5.1: свойства выбранного объекта (домен, карточка,
- * стрелка) и доступные действия: перемещение функций в другой домен (Ф-9),
- * правка имени/стоимости, подписи стрелок (Ф-14), удаление домена (Ф-15).
- * В v0.01.01: для внешних систем показывается доверенность (можно изменить)
- * и не отображается стоимость (она не определяется); правка и удаление
- * функций доступны только внутренним доменам (3.5 v0.01.01).
+ * стрелка, цель безопасности) и доступные действия: перемещение функций
+ * в другой домен (Ф-9), правка имени/стоимости, подписи стрелок (Ф-14),
+ * удаление домена (Ф-15). В v0.01.01: для внешних систем показывается
+ * доверенность (можно изменить) и не отображается стоимость (она не
+ * определяется); правка и удаление функций доступны только внутренним
+ * доменам (3.5 v0.01.01).
+ * Карточка ЦБ (v0.01.09): клик по цели безопасности в левой панели открывает
+ * её карточку — обеспечивающие механизмы (функции) с весом и размещением,
+ * статус распределения (светофор покрытия) и критичные домены с их типами
+ * доверия; клик по домену — фокус на диаграмме и выбор, клик по функции —
+ * её карточка. Чистые расчёты — recalcCosts/goalDistribution (без мутаций).
  * Под инспектором — панель расчёта и статуса (SummaryPanel).
  */
 
@@ -34,18 +40,25 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSkibStore } from '../store/projectStore';
+import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
+import { goalDistribution } from '../engine/coverage';
+import { recalcCosts } from '../engine/cost';
+import type { DomainTrustClass } from '../engine/trust';
 import { ru } from '../i18n/ru';
-import { TRUST_COLORS } from './status';
+import { TRUST_COLORS, StatusBadge } from './status';
 
 export function InspectorPanel() {
   const project = useSkibStore((s) => s.project);
   const selection = useSkibStore((s) => s.selection);
+  const setSelection = useSkibStore((s) => s.setSelection);
   const updateDomain = useSkibStore((s) => s.updateDomain);
   const deleteDomain = useSkibStore((s) => s.deleteDomain);
   const updateEdge = useSkibStore((s) => s.updateEdge);
   const deleteEdge = useSkibStore((s) => s.deleteEdge);
   const unplaceFunction = useSkibStore((s) => s.unplaceFunction);
   const placeFunction = useSkibStore((s) => s.placeFunction);
+  const setHighlightedDomain = useViewStore((s) => s.setHighlightedDomain);
+  const clearFlash = useViewStore((s) => s.flashDomains);
 
   const blockById = useMemo(
     () => new Map(project.architecture.blocks.map((b) => [b.id, b])),
@@ -68,6 +81,20 @@ export function InspectorPanel() {
     for (const assignment of project.assignments) map.set(assignment.function, assignment.block);
     return map;
   }, [project.assignments]);
+  // Карточка ЦБ (v0.01.09): распределение выбранной цели и классы доверия
+  // доменов (типы ДДБ/ДДБПЦД у критичных доменов). Чистые пересчёты.
+  const goalDist = useMemo(
+    () => (selection?.kind === 'goal' ? goalDistribution(project, selection.id) : null),
+    [project, selection],
+  );
+  const trustByBlock = useMemo(() => recalcCosts(project).trust.internal, [project]);
+
+  /** Тип домена доверия для строки критичного домена (v0.01.09). */
+  const trustBadge = (trustClass: DomainTrustClass | undefined) => {
+    if (trustClass === 'ddbpcd') return { label: 'ДДБПЦД', color: TRUST_COLORS.yellow };
+    if (trustClass === 'ddb') return { label: 'ДДБ', color: TRUST_COLORS.green };
+    return { label: 'НДБ', color: TRUST_COLORS.red };
+  };
 
   let body: React.ReactNode = (
     <p className="px-1 text-xs italic text-muted-foreground">{ru.inspector.nothingSelected}</p>
@@ -342,6 +369,124 @@ export function InspectorPanel() {
               {ru.canvas.remove}
             </Button>
           )}
+        </div>
+      );
+    }
+  } else if (selection?.kind === 'goal' && goalDist) {
+    // Карточка ЦБ (v0.01.09): обеспечивающие механизмы, статус распределения
+    // и критичные домены с типами; клик по домену — фокус и выбор на канве.
+    const goal = goalById.get(selection.id);
+    if (goal) {
+      body = (
+        <div className="space-y-3" data-testid="goal-inspector">
+          <h3 className="text-sm font-semibold">
+            {ru.inspector.goal}: <span className="font-mono text-xs text-muted-foreground">{goal.id}</span>
+            {goal.unconditional && (
+              <span
+                className="ml-2 rounded border border-dashed border-border px-1.5 py-0.5 align-middle text-[10px] font-medium"
+                title={ru.goals.unconditionalHint}
+              >
+                {ru.inspector.goalPlo}
+              </span>
+            )}
+          </h3>
+          <p className="text-sm text-foreground">{goal.name}</p>
+          {goal.description && (
+            <p className="text-xs leading-snug text-muted-foreground">{goal.description}</p>
+          )}
+          <div>
+            <Label className="text-xs">{ru.inspector.goalStatus}</Label>
+            <div className="mt-1" data-testid="goal-status">
+              <StatusBadge status={goalDist.status} />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">
+              {ru.inspector.goalFunctions} ({goalDist.functions.length})
+            </Label>
+            {goalDist.functions.length === 0 && (
+              <p className="mt-1 text-xs italic text-muted-foreground">{ru.inspector.goalNoFunctions}</p>
+            )}
+            <ul className="mt-1 space-y-1" data-testid="goal-functions">
+              {goalDist.functions.map((fn) => {
+                const placedBlock = fn.blockId ? blockById.get(fn.blockId) : undefined;
+                return (
+                  <li key={fn.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
+                      data-testid={`goal-fn-${fn.id}`}
+                      title={`${fn.name} — ${placedBlock ? ru.pool.placedIn(placedBlock.name) : ru.pool.free}`}
+                      onClick={() => setSelection({ kind: 'card', id: fn.id })}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium">{fn.name}</span>
+                      <span className="text-xs text-muted-foreground">{fn.cost}</span>
+                      <span
+                        className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${
+                          fn.weight === 'mandatory'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground'
+                        }`}
+                      >
+                        {fn.weight === 'mandatory' ? ru.goals.mandatory : ru.goals.optional}
+                      </span>
+                      <span
+                        className={`shrink-0 text-[11px] ${
+                          placedBlock ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {placedBlock ? ru.goals.placed : ru.goals.notPlaced}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div>
+            <Label className="text-xs">
+              {ru.inspector.goalCriticalDomains} ({goalDist.criticalDomains.length})
+            </Label>
+            {goalDist.functions.length > 0 && goalDist.criticalDomains.length === 0 && (
+              <p className="mt-1 text-xs italic text-muted-foreground">
+                {ru.inspector.goalFunctionsNotPlaced}
+              </p>
+            )}
+            <ul className="mt-1 space-y-1" data-testid="goal-domains">
+              {goalDist.criticalDomains.map((domain) => {
+                const badge = trustBadge(trustByBlock.get(domain.id));
+                return (
+                  <li key={domain.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
+                      data-testid={`goal-domain-${domain.id}`}
+                      title={`${domain.name}: клик — фокус на диаграмме и выбор`}
+                      onClick={() => {
+                        // Фокус на домене (в центр, с укрупнением) и выбор —
+                        // событие ловит FocusController внутри канвы (v0.01.04).
+                        // Краткая подсветка цели гаснет: выбран конкретный домен.
+                        setSelection({ kind: 'domain', id: domain.id });
+                        clearFlash([]);
+                        window.dispatchEvent(new CustomEvent(FOCUS_NODE_EVENT, { detail: domain.id }));
+                      }}
+                      onMouseEnter={() => setHighlightedDomain(domain.id)}
+                      onMouseLeave={() => setHighlightedDomain(null)}
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium">{domain.name}</span>
+                      <span
+                        className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold"
+                        style={{ border: `1px solid ${badge.color.border}`, background: badge.color.fill }}
+                      >
+                        {badge.label}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <p className="text-[11px] italic text-muted-foreground">{ru.inspector.goalCardHint}</p>
         </div>
       );
     }

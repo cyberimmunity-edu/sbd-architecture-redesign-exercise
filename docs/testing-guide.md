@@ -1,22 +1,29 @@
 # Руководство тестировщика
 
-Версия соответствует 0.01.08. Стратегия и обязательные кейсы — раздел 11 ТЗ v0.01.01.
+Версия соответствует 0.01.09. Стратегия и обязательные кейсы — раздел 11 ТЗ v0.01.01.
 
 ## 1. Пирамида тестов
 
 - **Unit (Vitest, `tests/unit/`)** — движок, парсеры и хранилище: стоимость
   с коэффициентом доверия (T-C-01…12), модель доверия (T-T-01…10) и принудительный
-  ввод в ДВБ (v0.01.06, forceTrusted), покрытие (T-P-01…09), architecture.yaml
+  ввод в ДВБ (v0.01.06, forceTrusted), покрытие (T-P-01…09) и карточка ЦБ
+  (v0.01.09, goalDistribution), architecture.yaml
   (T-Y-01…10), security.yaml и state.yaml
   (T-Y-06…08, T-S-01…03), PlantUML со стереотипами external (T-U-01…06),
   декомпозиция (T-D-01…04), лимиты (Ф-17), история (Ф-21), сброс карточки
   на свободное место канвы (v0.01.06 — одна операция истории), фикстуры примеров 1 и 2
   (контрольные числа 486 и 943; пример 2 с доработки v0.01.05 — 10 доменов,
   9 целей ПЛО, 2 предположения, 10 механизмов), фикстуры invalid/ (приёмка 14.2.5
-  и E-208), НФ-1 (пересчёт < 100 мс на модели 200×500×100). Всего 219 unit.
+  и E-208), НФ-1 (пересчёт < 100 мс на модели 200×500×100). Трассировка стрелок:
+  edgeRouting (конвейер v0.01.09 — ортогональные кандидаты, решётка A*
+  со штрафом за поворот, выпрямление, скругление) и routeLayout — регрессия
+  на фактической раскладке пользователя (фикстура vessel-user-state.yaml:
+  не больше трёх поворотов у стрелки, без пересечений и наложений).
+  Всего 272 unit.
 - **E2E (Playwright, `tests/e2e/`)** — интерфейс: Э-01…Э-09 (включая Э-02b и
   Э-06b) против dev-сервера (порт `PORT`, по умолчанию 3000), Chromium 1280×800;
-  при падении сохраняются скриншот и trace.
+  при падении сохраняются скриншот и trace. С v0.01.09 — goals-card:
+  карточка ЦБ и краткая подсветка критичных доменов. Всего 33 E2E.
 
 Пороги покрытия (`make test-unit-coverage`): `src/engine` и `src/io` — не менее
 90 % строк и ветвей; `src/store` — не менее 70 %. Пороги зашиты в
@@ -47,20 +54,42 @@ make падал с «missing separator», а прямые npm-запуски э�
 На случай повтора табуляцию страхует unit-тест `makefile.test.ts`,
 восстановление — `python3 scripts/fix_makefile_tabs.py`.
 
+Правило окружения (v0.01.09): в чистом тестовом окружении Chromium и браузеры
+Playwright по умолчанию НЕ установлены — первый прогон E2E падает с
+«Executable doesn't exist». Перед началом тестирования сразу установите
+браузеры, не теряя время на прогонах без них:
+
+```bash
+npx playwright install chromium   # однократно, до первого make test / make check
+```
+
+Если кэш браузеров в среде недоступен или нужна конкретная сборка,
+путь к готовому Chromium передаётся переменной `SKIB_CHROMIUM_PATH`
+(см. playwright.config.ts): `SKIB_CHROMIUM_PATH=/путь/chrome make test-e2e`.
+
 ## 3. Структура тестов и фикстур
 
 ```text
-tests/unit/     cost.test.ts (T-C-01…12), trust.test.ts (T-T-01…10), coverage.test.ts,
-                archYaml.test.ts, securityYaml.test.ts, plantuml.test.ts,
-                decompose.test.ts, store.test.ts, viewStore.test.ts (вид канвы v0.01.02),
-                fixtures.test.ts, api.test.ts, edge.test.ts,
+tests/unit/     cost.test.ts (T-C-01…12), trust.test.ts (T-T-01…10), coverage.test.ts
+                (+ goalDistribution v0.01.09), archYaml.test.ts, securityYaml.test.ts,
+                plantuml.test.ts, decompose.test.ts, store.test.ts,
+                viewStore.test.ts (вид канвы v0.01.02, подсветка критичных
+                доменов цели v0.01.09), fixtures.test.ts, api.test.ts,
+                edge.test.ts, edgeRouting.test.ts (конвейер трассировки),
+                routeLayout.test.ts (регрессия на раскладке пользователя,
+                фикстура vessel-user-state.yaml),
                 makefile.test.ts (синтаксис Makefile: табуляция рецептов,
                 .PHONY, сухой прогон make -n — правило «проверки через make»)
 tests/e2e/      load.spec.ts (Э-01,03,04), coverage.spec.ts (Э-06,06b),
                 decompose.spec.ts (Э-05), persistence.spec.ts (Э-07),
-                export.spec.ts (Э-02,02b,08,09), view.spec.ts (вид и справка v0.01.02)
+                export.spec.ts (Э-02,02b,08,09), view.spec.ts (вид и справка v0.01.02),
+                edges-ux.spec.ts (жест соединения и размеры v0.01.08),
+                advisor.spec.ts (проверка диаграммы и советы v0.01.08),
+                goals-card.spec.ts (карточка ЦБ и подсветка доменов v0.01.09)
 tests/fixtures/ robot/ — пример 1 (14.4.1, Приложения А–В и state.yaml шага 1);
                 vessel/ — пример 2 (14.4.2; доработка v0.01.05 — ПЛО и предположения);
+                vessel-user-state.yaml — раскладка пользователя примера 2
+                (22 блока, 33 стрелки — регрессия трассировки v0.01.09);
                 invalid/ — по одному дефекту на файл (E-001…E-401, включая E-208)
 ```
 
