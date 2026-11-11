@@ -7,13 +7,19 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  accumulateRoutePenalty,
   computeEdgeFans,
   computeRoutePath,
+  createRoutePenalty,
   expandRect,
+  penaltyAlongSegment,
   polylineMidpoint,
   polylineToRoundedPath,
   segmentIntersectsRect,
+  DEFAULT_CELL,
   DEFAULT_PAD,
+  PENALTY_MAX,
+  PENALTY_STEP,
   type RoutePoint,
   type RouteRect,
 } from '../../src/engine/edgeRouting';
@@ -304,6 +310,115 @@ describe('computeEdgeFans (развязка портов, v0.01.05)', () => {
     expect(Math.min(...values)).toBe(-30);
     expect(Math.max(...values)).toBe(30);
     expect(computeEdgeFans(edges, manyPositions)).toEqual(fans);
+  });
+});
+
+describe('Развязка коридоров — мягкие штрафы (v0.01.07)', () => {
+  const corridor: RouteRect = { x: 0, y: 0, width: 800, height: 400 };
+  const straight = [{ x: 0, y: 200 }, { x: 800, y: 200 }];
+
+  it('первая стрелка в свободном коридоре — прямая, вторая расходится с ней', () => {
+    const penalty = createRoutePenalty([corridor], []);
+    const first = computeRoutePath(straight[0], straight[1], [], { penalty });
+    expect(first).toEqual(straight);
+    accumulateRoutePenalty(penalty, first);
+    const second = computeRoutePath(straight[0], straight[1], [], { penalty });
+    // Вторая не легла на первую: концы на месте, форма отклонилась
+    // на заметное расстояние (параллельная дорожка).
+    expect(second.length).toBeGreaterThan(2);
+    expect(second[0]).toEqual(straight[0]);
+    expect(second[second.length - 1]).toEqual(straight[1]);
+    const mid = polylineMidpoint(second);
+    expect(Math.abs(mid.y - 200)).toBeGreaterThanOrEqual(DEFAULT_CELL - 1);
+  });
+
+  it('развязка детерминирована: одинаковая последовательность — одинаковые формы', () => {
+    const run = (): RoutePoint[][] => {
+      const penalty = createRoutePenalty([corridor], []);
+      const a = computeRoutePath(straight[0], straight[1], [], { penalty });
+      accumulateRoutePenalty(penalty, a);
+      const b = computeRoutePath(straight[0], straight[1], [], { penalty });
+      accumulateRoutePenalty(penalty, b);
+      const c = computeRoutePath(straight[0], straight[1], [], { penalty });
+      return [a, b, c];
+    };
+    expect(run()).toEqual(run());
+  });
+
+  it('зоны портов не штрафуются: у порта стрелки могут начинаться вместе', () => {
+    const penalty = createRoutePenalty([corridor], straight);
+    accumulateRoutePenalty(penalty, straight);
+    // Первые 24 px трассы от порта свободны (граница клетки — 20 px),
+    // дальше коридор занят.
+    expect(penaltyAlongSegment(penalty, { x: 0, y: 200 }, { x: 19, y: 200 })).toBe(false);
+    expect(penaltyAlongSegment(penalty, { x: 30, y: 200 }, { x: 100, y: 200 })).toBe(true);
+    // Симметрично у приёмника.
+    expect(penaltyAlongSegment(penalty, { x: 781, y: 200 }, { x: 800, y: 200 })).toBe(false);
+  });
+
+  it('штраф клетки насыщается PENALTY_MAX и детерминирован', () => {
+    const penalty = createRoutePenalty([{ x: 0, y: 0, width: 400, height: 40 }], straight);
+    for (let i = 0; i < 10; i += 1) accumulateRoutePenalty(penalty, straight);
+    expect(Math.max(...penalty.values)).toBeLessThanOrEqual(PENALTY_MAX + 1e-9);
+    expect(Math.max(...penalty.values)).toBeGreaterThan(0);
+    const snapshot = [...penalty.values];
+    accumulateRoutePenalty(penalty, straight);
+    expect([...penalty.values]).toEqual(snapshot);
+  });
+
+  it('штраф не искажает стрелку с мешающим доменом: обход остаётся обходом', () => {
+    const box: RouteRect = { x: 380, y: 120, width: 240, height: 160 };
+    const penalty = createRoutePenalty([box, corridor], []);
+    const source: RoutePoint = { x: 200, y: 200 };
+    const target: RoutePoint = { x: 800, y: 200 };
+    accumulateRoutePenalty(penalty, [source, { x: 300, y: 200 }, target]);
+    const points = computeRoutePath(source, target, [box], { penalty });
+    expect(points[0]).toEqual(source);
+    expect(points[points.length - 1]).toEqual(target);
+    expect(avoidsRect(points, box)).toBe(true);
+    expect(avoidsRect(points, expandRect(box, DEFAULT_PAD - 4))).toBe(true);
+  });
+});
+
+describe('Вееры портов по сторонам (v0.01.07)', () => {
+  const positions = {
+    a: { x: 0, y: 100 },
+    b: { x: -400, y: 50 },
+    c: { x: -400, y: 150 },
+    d: { x: 400, y: 100 },
+  };
+
+  it('встречные выходы (слева) не смешиваются с обычными (справа)', () => {
+    const edges = [
+      { id: 'e1', from: 'a', to: 'd' }, // обычный выход — справа
+      { id: 'e2', from: 'a', to: 'b', sourceSide: 'left' as const }, // встречный
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    // Разные стороны порта источника — отдельные группы, сдвигов нет.
+    expect(fans.get('e1')).toEqual({ sourceFan: 0, targetFan: 0 });
+    expect(fans.get('e2')).toEqual({ sourceFan: 0, targetFan: 0 });
+  });
+
+  it('встречные выходы одной стороны расходятся веером как обычно', () => {
+    const edges = [
+      { id: 'e1', from: 'a', to: 'b', sourceSide: 'left' as const },
+      { id: 'e2', from: 'a', to: 'c', sourceSide: 'left' as const },
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    // Порядок по вертикали приёмников: b (50) — верхний слот, c (150) — нижний.
+    expect(fans.get('e1')!.sourceFan).toBe(-4.5);
+    expect(fans.get('e2')!.sourceFan).toBe(4.5);
+  });
+
+  it('встречные входы (справа) образуют отдельный веер у приёмника', () => {
+    const edges = [
+      { id: 'e1', from: 'b', to: 'a', targetSide: 'right' as const },
+      { id: 'e2', from: 'c', to: 'a', targetSide: 'right' as const },
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    // Порядок по вертикали источников: b (50) — верхний слот.
+    expect(fans.get('e1')!.targetFan).toBe(-4.5);
+    expect(fans.get('e2')!.targetFan).toBe(4.5);
   });
 });
 

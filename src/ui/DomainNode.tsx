@@ -136,6 +136,24 @@ export const DomainNode = memo(function DomainNode({
     >
       <Handle type="target" position={Position.Left} isConnectable aria-label="Входящая стрелка" />
       <Handle type="source" position={Position.Right} isConnectable aria-label="Исходящая стрелка" />
+      {/* Встречные стрелки (v0.01.07): когда приёмник левее источника, стрелка
+          выходит из левого порта источника и входит в правый порт приёмника —
+          линия короче и не оборачивается вокруг собственного домена.
+          Порты совмещены с обычными: канва назначает стороны по геометрии. */}
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="left"
+        isConnectable
+        aria-label="Исходящая стрелка влево (встречная)"
+      />
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="right"
+        isConnectable
+        aria-label="Входящая стрелка справа (встречная)"
+      />
 
       {/* Кнопки свёртки стрелок порта (v0.01.03): только если к порту идёт
           хотя бы одна стрелка; клик не выделяет узел и не тащит его. */}

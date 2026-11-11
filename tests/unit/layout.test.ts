@@ -1,7 +1,8 @@
 /**
- * Тесты автоматической раскладки — v0.01.03: слои по направлению связей
- * внутри периметра, внешние системы за рамкой, детерминированность,
- * устойчивость к циклам и пустой архитектуре.
+ * Тесты автоматической раскладки — v0.01.03 (слои, детерминизм, устойчивость
+ * к циклам), v0.01.07: минимизация пересечений проходами барицентров,
+ * выравнивание вертикалей по связям (метод Брандеса–Кёпфа), внешние системы
+ * по сторонам рамки (источники слева, приёмники справа) и нормировка границ.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -87,19 +88,54 @@ describe('Автоматическая раскладка (v0.01.03)', () => {
     expect(Math.max(...xs)).toBeLessThanOrEqual(80 + 2 * (NODE_ESTIMATED_WIDTH + 110));
   });
 
-  it('внешние системы размещаются правее рамки периметра', () => {
+  it('внешние системы по сторонам рамки: источник — слева, приёмник — справа', () => {
     const result = computeAutoLayout(
       arch(
-        [block('a'), block('b'), block('ext-1', true), block('ext-2', true)],
+        [block('a'), block('b'), block('ext-src', true), block('ext-sink', true)],
         [
-          { id: 'e1', from: 'ext-1', to: 'a' },
-          { id: 'e2', from: 'b', to: 'ext-2' },
+          { id: 'e1', from: 'ext-src', to: 'a' },
+          { id: 'e2', from: 'b', to: 'ext-sink' },
         ],
       ),
     );
+    // Источник стрелок встаёт слева от внутренних доменов, приёмник — справа.
+    const leftInternal = Math.min(result.get('a')!.x, result.get('b')!.x);
     const rightInternal = Math.max(result.get('a')!.x, result.get('b')!.x) + NODE_ESTIMATED_WIDTH;
-    expect(result.get('ext-1')!.x).toBeGreaterThan(rightInternal);
-    expect(result.get('ext-2')!.x).toBe(result.get('ext-1')!.x);
+    expect(result.get('ext-src')!.x + NODE_ESTIMATED_WIDTH).toBeLessThan(leftInternal);
+    expect(result.get('ext-sink')!.x).toBeGreaterThan(rightInternal);
+    // Вся диаграмма остаётся в области раскладки: левый край — не левее ORIGIN.
+    const minX = Math.min(...[...result.values()].map((p) => p.x));
+    expect(minX).toBeGreaterThanOrEqual(80);
+  });
+
+  it('внешняя система-источник слева выравнивается по вертикали связанного домена', () => {
+    const result = computeAutoLayout(
+      arch(
+        [block('a'), block('ext-src', true)],
+        [{ id: 'e1', from: 'ext-src', to: 'a' }],
+      ),
+    );
+    const ext = result.get('ext-src')!;
+    expect(ext.x + NODE_ESTIMATED_WIDTH).toBeLessThan(result.get('a')!.x);
+    expect(ext.y + NODE_ESTIMATED_HEIGHT / 2).toBeCloseTo(result.get('a')!.y + NODE_ESTIMATED_HEIGHT / 2, 0);
+  });
+
+  it('при равенстве потоков доверенная внешняя система слева, недоверенная — справа', () => {
+    const result = computeAutoLayout(
+      arch(
+        [
+          block('a'),
+          { id: 'ext-trusted', name: 'ext-trusted', cost: 0, external: true, trusted: true },
+          block('ext-untrusted', true),
+        ],
+        [
+          { id: 'e1', from: 'ext-trusted', to: 'a' },
+          { id: 'e2', from: 'a', to: 'ext-untrusted' },
+        ],
+      ),
+    );
+    expect(result.get('ext-trusted')!.x).toBeLessThan(result.get('a')!.x);
+    expect(result.get('ext-untrusted')!.x).toBeGreaterThan(result.get('a')!.x);
   });
 
   it('внешняя система выравнивается по вертикали связанного домена; совпадающие сдвигаются вниз', () => {

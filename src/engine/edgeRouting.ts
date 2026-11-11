@@ -1,5 +1,5 @@
 /**
- * Трассировка стрелок с обходом доменов — v0.01.05.
+ * Трассировка стрелок с обходом доменов — v0.01.07.
  *
  * Штатные кривые Безье React Flow идут по прямой дуге от порта к порту
  * и при плотной раскладке пересекают чужие домены. Здесь форма стрелки
@@ -16,12 +16,18 @@
  *    повороты. Углы скругляются кубическими кривыми Безье после среза
  *    углов Чейкина (polylineToRoundedPath) — форма выходит плавной,
  *    без острых изломов и «лестниц».
- * 4. Стрелки с общим портом расходятся веером (computeEdgeFans):
+ * 4. Развязка коридоров (v0.01.07): стрелки трассируются последовательно
+ *    (порядок — в Canvas.tsx), и клетки, уже занятые прежними стрелками,
+ *    получают надбавку стоимости (мягкие препятствия). Так линии,
+ *    которым тесно в общем коридоре, расходятся параллельными дорожками
+ *    вместо слияния в пучок — как splines=true в Graphviz. Упрощение
+ *    ломаной учитывает штрафы: слияние точек запрещено через занятые
+ *    клетки, иначе развязка сводилась бы на нет.
+ * 5. Стрелки с общим портом расходятся веером (computeEdgeFans):
  *    вертикальный сдвиг точек старта/финала разводит линии, выходящие
  *    из одного порта или входящие в один порт; параллельные стрелки одной
- *    пары доменов дополнительно разводятся перпендикулярным сдвигом
- *    в Canvas.tsx.
- * 5. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
+ *    пары доменов дополнительно разводятся перпендикулярным сдвигом.
+ * 6. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
  *    стрелке прежнего поведения.
  *
  * Функции чистые и детерминированные: одинаковые входы дают одинаковую
@@ -60,6 +66,11 @@ export interface RouteOptions {
    * и остаются прямыми, не теряя раннего выхода.
    */
   selfRects?: RouteRect[];
+  /**
+   * Мягкие препятствия (v0.01.07): решётка штрафов от ранее проложенных
+   * стрелок этого кадра — общие коридоры дорожают, линии расходятся.
+   */
+  penalty?: RoutePenalty;
 }
 
 /** Отступ формы стрелки от границы домена по умолчанию, px. */
@@ -82,6 +93,124 @@ const CUBIC_CONTROL = 0.5523;
 const MAX_CELLS = 24000;
 /** Радиус поиска свободной клетки от заблокированной точки, клеток. */
 const MAX_CELL_SEARCH_RADIUS = 5;
+/** Надбавка стоимости клетки за одну прежнюю стрелку в ней (v0.01.07):
+ *  параллельный сдвиг дорожки стоит двух «шагов» по краям, поэтому уже
+ *  надбавка ≈2 делает параллельный развод выгоднее слияния в пучок. */
+export const PENALTY_STEP = 2;
+/** Верхняя граница штрафа клетки (после ~4 прежних стрелок коридор
+ *  считается занятым окончательно). */
+export const PENALTY_MAX = 8;
+/** Концы ломаной не создают штрафов: у общих портов стрелки и так
+ *  разведены веером (computeEdgeFans), а зона порта обязана оставаться
+ *  достижимой для всех его стрелок. */
+const PENALTY_TRIM = 24;
+
+/**
+ * Мягкие препятствия (v0.01.07): общая на весь кадр решётка штрафов.
+ * Клетка без стрелок — 0, занятая прежними стрелками — до PENALTY_MAX.
+ * Клетки вне решётки считаются свободными.
+ */
+export interface RoutePenalty {
+  x0: number;
+  y0: number;
+  cell: number;
+  cols: number;
+  rows: number;
+  values: Float32Array;
+}
+
+/**
+ * Решётка штрафов на кадр: область охватывает все узлы и порты
+ * с запасом margin — трассы не уходят дальше от доменов.
+ */
+export function createRoutePenalty(
+  rects: RouteRect[],
+  points: RoutePoint[],
+  cell = DEFAULT_CELL,
+  margin = DEFAULT_MARGIN,
+): RoutePenalty {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const rect of rects) {
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.width);
+    maxY = Math.max(maxY, rect.y + rect.height);
+  }
+  for (const point of points) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+  if (!Number.isFinite(minX)) return { x0: 0, y0: 0, cell, cols: 0, rows: 0, values: new Float32Array(0) };
+  const x0 = minX - margin;
+  const y0 = minY - margin;
+  const cols = Math.ceil((maxX + margin - x0) / cell) + 1;
+  const rows = Math.ceil((maxY + margin - y0) / cell) + 1;
+  return { x0, y0, cell, cols, rows, values: new Float32Array(cols * rows) };
+}
+
+function penaltyIndexAt(penalty: RoutePenalty, x: number, y: number): number {
+  const col = Math.floor((x - penalty.x0) / penalty.cell);
+  const row = Math.floor((y - penalty.y0) / penalty.cell);
+  if (col < 0 || col >= penalty.cols || row < 0 || row >= penalty.rows) return -1;
+  return row * penalty.cols + col;
+}
+
+function penaltyValueAt(penalty: RoutePenalty, x: number, y: number): number {
+  const index = penaltyIndexAt(penalty, x, y);
+  return index < 0 ? 0 : penalty.values[index];
+}
+
+/**
+ * Накопление штрафов вдоль проложенной ломаной (v0.01.07): клетки трассы
+ * дорожают для последующих стрелок. Концы ломаной (PENALTY_TRIM px
+ * от порта) не штрафуются — зона порта общая для всех его стрелок.
+ */
+export function accumulateRoutePenalty(penalty: RoutePenalty, path: RoutePoint[]): void {
+  if (penalty.values.length === 0 || path.length < 2) return;
+  const step = penalty.cell / 2;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const a = path[i];
+    const b = path[i + 1];
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    if (length < 0.5) continue;
+    const samples = Math.max(1, Math.ceil(length / step));
+    for (let s = 0; s <= samples; s += 1) {
+      const t = s / samples;
+      // Пропускаем зоны портов: первые и последние PENALTY_TRIM px трассы.
+      const fromStart = i === 0 ? t * length : Infinity;
+      const toEnd = i === path.length - 2 ? length - t * length : Infinity;
+      if (fromStart < PENALTY_TRIM || toEnd < PENALTY_TRIM) continue;
+      const index = penaltyIndexAt(
+        penalty,
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
+      );
+      if (index < 0) continue;
+      penalty.values[index] = Math.min(PENALTY_MAX, penalty.values[index] + PENALTY_STEP);
+    }
+  }
+}
+
+/** Есть ли занятые прежними стрелками клетки вдоль отрезка (v0.01.07). */
+export function penaltyAlongSegment(
+  penalty: RoutePenalty | undefined,
+  a: RoutePoint,
+  b: RoutePoint,
+): boolean {
+  if (!penalty || penalty.values.length === 0) return false;
+  const length = Math.hypot(b.x - a.x, b.y - a.y);
+  const samples = Math.max(1, Math.ceil(length / (penalty.cell / 2)));
+  for (let s = 0; s <= samples; s += 1) {
+    const t = s / samples;
+    if (penaltyValueAt(penalty, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t) > 0) return true;
+  }
+  return false;
+}
 
 const SQRT2 = Math.SQRT2;
 
@@ -275,8 +404,15 @@ function buildGrid(
   return { cols, rows, cell: cellSize, x0, y0, blocked };
 }
 
-/** Путь A* по решётке: возвращает список клеток-индексов от старта к цели. */
-function findGridPath(grid: Grid, start: number, goal: number): number[] | null {
+/** Путь A* по решётке: возвращает список клеток-индексов от старта к цели.
+ *  Штрафы (v0.01.07) добавляются к стоимости входа в клетку: клетки
+ *  коридоров прежних стрелок дорожают, и путь расходится в сторону. */
+function findGridPath(
+  grid: Grid,
+  start: number,
+  goal: number,
+  penalty?: RoutePenalty,
+): number[] | null {
   const { cols, rows, blocked } = grid;
   const goalCol = goal % cols;
   const goalRow = Math.floor(goal / cols);
@@ -284,6 +420,16 @@ function findGridPath(grid: Grid, start: number, goal: number): number[] | null 
   const cameFrom = new Int32Array(cols * rows).fill(-1);
   const closed = new Uint8Array(cols * rows);
   const heap = new MinHeap();
+  const cellPenalty = (index: number): number => {
+    if (!penalty || penalty.values.length === 0) return 0;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return penaltyValueAt(
+      penalty,
+      grid.x0 + (col + 0.5) * grid.cell,
+      grid.y0 + (row + 0.5) * grid.cell,
+    );
+  };
   // Эвристика считается напрямую от координат клеток:
   const startCol = start % cols;
   const startRow = Math.floor(start / cols);
@@ -316,7 +462,7 @@ function findGridPath(grid: Grid, start: number, goal: number): number[] | null 
       if (dc !== 0 && dr !== 0) {
         if (blocked[row * cols + nextCol] || blocked[nextRow * cols + col]) continue;
       }
-      const tentative = gScore[current] + cost;
+      const tentative = gScore[current] + cost * (1 + cellPenalty(next));
       if (tentative < gScore[next]) {
         gScore[next] = tentative;
         cameFrom[next] = current;
@@ -328,14 +474,28 @@ function findGridPath(grid: Grid, start: number, goal: number): number[] | null 
   return null;
 }
 
-/** Упрощение ломаной «прямой видимостью» — остаются только повороты. */
-function simplifyPath(points: RoutePoint[], obstacles: RouteRect[]): RoutePoint[] {
+/**
+ * Упрощение ломаной «прямой видимостью» — остаются только повороты.
+ * Занятые прежними стрелками клетки (v0.01.07) тоже запрещают слияние:
+ * иначе упрощение возвращало бы развязанные коридоры обратно в пучок.
+ */
+function simplifyPath(
+  points: RoutePoint[],
+  obstacles: RouteRect[],
+  penalty?: RoutePenalty,
+): RoutePoint[] {
   if (points.length <= 2) return points.slice();
   const result: RoutePoint[] = [points[0]];
   let i = 0;
   while (i < points.length - 1) {
     let j = points.length - 1;
-    while (j > i + 1 && crossesAny(points[i], points[j], obstacles)) j -= 1;
+    while (
+      j > i + 1 &&
+      (crossesAny(points[i], points[j], obstacles) ||
+        penaltyAlongSegment(penalty, points[i], points[j]))
+    ) {
+      j -= 1;
+    }
     result.push(points[j]);
     i = j;
   }
@@ -409,7 +569,10 @@ export function computeRoutePath(
     segmentIntersectsRect(source, target, expandRect(rect, -1)),
   );
   const expanded = [...obstacles, ...crossing].map((rect) => expandRect(rect, pad));
-  if (!crossesAny(source, target, expanded)) {
+  const penalty = options?.penalty;
+  // Прямой ход без пересечений и без занятых клеток (v0.01.07): прежнее
+  // поведение; в переполненном коридоре стрелка уходит в сторону.
+  if (!crossesAny(source, target, expanded) && !penaltyAlongSegment(penalty, source, target)) {
     return [source, target];
   }
 
@@ -439,7 +602,7 @@ export function computeRoutePath(
   const goal = nearestFreeCellIndex(grid.blocked, grid.cols, grid.rows, goalCol, goalRow);
   if (start < 0 || goal < 0) return [source, target];
 
-  const cells = findGridPath(grid, start, goal);
+  const cells = findGridPath(grid, start, goal, penalty);
   if (!cells || cells.length < 2) return [source, target];
 
   const cellPoints = cells.map((index) => ({
@@ -450,7 +613,7 @@ export function computeRoutePath(
   // Порог видимости чуть меньше блокирующего отступа: упрощённая ломаная
   // может подходить к домену ближе решётки, но не к самому контуру.
   const loose = expanded.map((rect) => expandRect(rect, -4));
-  const simplified = simplifyPath(dedupePoints([source, ...cellPoints, target]), loose);
+  const simplified = simplifyPath(dedupePoints([source, ...cellPoints, target]), loose, penalty);
   // «Усики» проверяются по тому же порогу, что и упрощение: иначе коридор,
   // зажатый между доменами, отклонял бы усик при допустимой ломаной.
   return withPortHints(simplified, loose, options?.sourceExit, options?.targetEntry);
@@ -535,6 +698,10 @@ export interface FanEdge {
   id: string;
   from: string;
   to: string;
+  /** Сторона выхода из источника (v0.01.07): right — обычная, left — встречная. */
+  sourceSide?: 'left' | 'right';
+  /** Сторона входа в приёмник (v0.01.07): left — обычная, right — встречная. */
+  targetSide?: 'left' | 'right';
 }
 
 /** Сдвиги стрелки у портов (v0.01.05). */
@@ -551,6 +718,9 @@ export interface EdgeFanOffsets {
  * в неразличимый пучок. Стрелки каждого порта упорядочиваются по вертикали
  * противоположного конца (верхняя цель — верхний слот) и получают
  * вертикальный сдвиг ±spacing px с ограничением maxOffset.
+ * С v0.01.07 у домена два выхода и два входа (обычные и встречные стрелки):
+ * группы считаются по паре «узел + сторона» — веер обычных выходов (справа)
+ * не смешивается с веером встречных выходов (слева).
  * Чистая и детерминированная функция: одинаковые входы — одинаковые сдвиги.
  */
 export function computeEdgeFans(
@@ -591,10 +761,20 @@ export function computeEdgeFans(
     }
   };
 
-  // Порт источника: стрелки с общим from сортируются по позиции приёмника.
-  assignFan((edge) => edge.from, (edge) => edge.to, 'sourceFan');
-  // Порт приёмника: стрелки с общим to сортируются по позиции источника.
-  assignFan((edge) => edge.to, (edge) => edge.from, 'targetFan');
+  // Порт источника: стрелки с общим «узел + сторона выхода» сортируются
+  // по позиции приёмника (v0.01.07: сторона учитывается, по умолчанию right).
+  assignFan(
+    (edge) => `${edge.from}#${edge.sourceSide ?? 'right'}`,
+    (edge) => edge.to,
+    'sourceFan',
+  );
+  // Порт приёмника: стрелки с общим «узел + сторона входа» — по позиции
+  // источника (по умолчанию left).
+  assignFan(
+    (edge) => `${edge.to}#${edge.targetSide ?? 'left'}`,
+    (edge) => edge.from,
+    'targetFan',
+  );
   return fans;
 }
 

@@ -6,30 +6,30 @@ blocks:
   - id: blk-perc
     name: "Подсистема восприятия"
     cost: 3
-    position: { x: 60, y: 200 }
+    position: { x: 530, y: 314 }
   - id: blk-plan
     name: "Планировщик маршрута"
     cost: 4
-    position: { x: 420, y: 120 }
+    position: { x: 950, y: 80 }
   - id: blk-drive
     name: "Привод движения"
     cost: 3
-    position: { x: 780, y: 200 }
+    position: { x: 1370, y: 80 }
   - id: blk-link
     name: "Модуль связи"
     cost: 2
-    position: { x: 420, y: 340 }
+    position: { x: 530, y: 80 }
   - id: ext-ctrl
     name: "Диспетчерский пункт"
     cost: 0
     external: true
     trusted: true
-    position: { x: 1180, y: 120 }
+    position: { x: 80, y: 314 }
   - id: ext-charge
     name: "Зарядная станция"
     cost: 0
     external: true
-    position: { x: 1180, y: 340 }
+    position: { x: 80, y: 80 }
 edges:
   - id: e-disp-link
     from: ext-ctrl

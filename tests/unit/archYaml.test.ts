@@ -41,7 +41,7 @@ describe('architecture.yaml (раздел 6.1)', () => {
       id: 'blk-perc',
       name: 'Подсистема восприятия',
       cost: 3,
-      position: { x: 60, y: 200 },
+      position: { x: 530, y: 314 },
     });
     const external = result.model!.blocks.find((b) => b.id === 'ext-ctrl')!;
     expect(external.external).toBe(true);
@@ -122,7 +122,7 @@ describe('architecture.yaml (раздел 6.1)', () => {
     expect(second.errors).toEqual([]);
     expect(equivalentArch(first.model, second.model!)).toBe(true);
     // Координаты сохраняются в architecture.yaml.
-    expect(second.model!.blocks[0].position).toEqual({ x: 60, y: 200 });
+    expect(second.model!.blocks[0].position).toEqual({ x: 530, y: 314 });
     // Внешние системы сохраняют признаки external/trusted.
     expect(second.model!.blocks.find((b) => b.id === 'ext-ctrl')).toMatchObject({ external: true, trusted: true });
   });

@@ -28,7 +28,15 @@
  * форма перестраивается. Читаемость стрелок (v0.01.05): сглаживание формы
  * (срез углов Чейкина + кубические кривые) и развязка портов — стрелки
  * с общим портом расходятся веером (computeEdgeFans), чтобы линии
- * не сливались в неразличимый пучок. Связь с таблицей ДВБ (v0.01.04): наведение
+ * не сливались в неразличимый пучок.
+ * Централизованная трассировка (v0.01.07): формы всех стрелок канвы
+ * рассчитываются здесь, последовательно по идентификаторам — клетки
+ * коридоров прежних стрелок дорожают (мягкая развязка, как splines=true
+ * в Graphviz), линии расходятся параллельными дорожками вместо слияния
+ * в пучки; встречные стрелки (приёмник левее источника) выходят из левого
+ * порта источника и входят в правый порт приёмника. Автоматическая
+ * раскладка (v0.01.07) учитывает измеренные габариты узлов.
+ * Связь с таблицей ДВБ (v0.01.04): наведение
  * на строку в «Расширенном анализе ДВБ» подсвечивает домен на диаграмме
  * и в мини-навигаторе (viewStore.highlightedDomainId); клик по строке —
  * фокус на домене (в центр, с укрупнением) и выбор — FocusController
@@ -69,7 +77,15 @@ import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
 import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
-import { computeEdgeFans } from '../engine/edgeRouting';
+import {
+  accumulateRoutePenalty,
+  computeEdgeFans,
+  computeRoutePath,
+  createRoutePenalty,
+  type FanEdge,
+  type RoutePoint,
+  type RouteRect,
+} from '../engine/edgeRouting';
 import {
   frameBounds,
   isInsideFrame,
@@ -352,6 +368,10 @@ function CanvasInner() {
     frame,
   ]);
 
+  // Состояние узлов канвы: живёт до трассировки — routing читает актуальные
+  // позиции и измеренные габариты (в том числе во время перетаскивания).
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<CanvasNode>(nodes);
+
   // Источник подсветки: наведение приоритетнее выделения из хранилища.
   const focus = useMemo<{ kind: 'edge' | 'node'; id: string } | null>(() => {
     if (hoverFocus) return hoverFocus;
@@ -372,62 +392,167 @@ function CanvasInner() {
     return connected;
   }, [focus, project.architecture.edges]);
 
-  const edges = useMemo<Edge[]>(() => {
-    // Скрытие стрелок, фокус на периметре и свёрнутые порты — только вид:
-    // модель и расчёты остаются полными (v0.01.02, v0.01.03).
-    if (!showEdges) return [];
-    const modelEdges = project.architecture.edges.filter(
-      (edge) =>
-        // Фокус на периметре: связи с внешними системами скрыты (v0.01.02).
-        (!focusInternal || (!externalIds.has(edge.from) && !externalIds.has(edge.to))) &&
-        // Свёрнутые порты: стрелки не отображаются до явного открытия (v0.01.03).
-        !collapsedPorts[`${edge.from}:out`] &&
-        !collapsedPorts[`${edge.to}:in`],
-    );
+  // Видимые стрелки: фильтр по режимам вида — модель и расчёты остаются
+  // полными (v0.01.02, v0.01.03).
+  const modelEdges = useMemo(
+    () =>
+      project.architecture.edges.filter(
+        (edge) =>
+          // Фокус на периметре: связи с внешними системами скрыты (v0.01.02).
+          (!focusInternal || (!externalIds.has(edge.from) && !externalIds.has(edge.to))) &&
+          // Свёрнутые порты: стрелки не отображаются до явного открытия (v0.01.03).
+          !collapsedPorts[`${edge.from}:out`] &&
+          !collapsedPorts[`${edge.to}:in`],
+      ),
+    [project.architecture.edges, externalIds, focusInternal, collapsedPorts],
+  );
+
+  // Централизованная трассировка стрелок (v0.01.07): готовые ломаные для
+  // каждой видимой стрелки и стороны портов. Стрелки трассируются
+  // последовательно по идентификаторам; клетки, занятые прежними стрелками,
+  // дорожают (мягкая развязка коридоров — линии расходятся параллельными
+  // дорожками, как splines=true в Graphviz, а не сливаются в пучок).
+  // Встречные стрелки (приёмник левее источника) выходят из левого порта
+  // источника и входят в правый порт приёмника — линии короче и не
+  // оборачиваются вокруг собственного домена. Форма пересчитывается
+  // при перемещении доменов (rfNodes обновляются во время перетаскивания).
+  const routing = useMemo<{
+    paths: Map<string, RoutePoint[]>;
+    sides: Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>;
+  }>(() => {
+    const paths = new Map<string, RoutePoint[]>();
+    const sides = new Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>();
+    if (!showEdges || modelEdges.length === 0) return { paths, sides };
+    // Прямоугольники доменов — по узлам канвы (актуальны во время drag).
+    const rects = new Map<string, RouteRect>();
+    for (const node of rfNodes) {
+      if (node.type !== 'domain') continue;
+      rects.set(node.id, {
+        x: node.position.x,
+        y: node.position.y,
+        width: node.measured?.width ?? NODE_ESTIMATED_WIDTH,
+        height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
+      });
+    }
+    const centerX = (id: string): number => {
+      const rect = rects.get(id);
+      return rect ? rect.x + rect.width / 2 : 0;
+    };
+    const visible = modelEdges.filter((edge) => rects.has(edge.from) && rects.has(edge.to));
+    for (const edge of visible) {
+      const backward = centerX(edge.to) < centerX(edge.from) - 40;
+      sides.set(
+        edge.id,
+        backward
+          ? { source: 'left', target: 'right' }
+          : { source: 'right', target: 'left' },
+      );
+    }
+    // Вееры портов с учётом сторон (v0.01.07): обычные и встречные выходы
+    // не смешиваются в одной группе.
+    const positionsMap: Record<string, { x: number; y: number }> = {};
+    const portPoints: RoutePoint[] = [];
+    for (const [id, rect] of rects) {
+      positionsMap[id] = { x: rect.x, y: rect.y };
+      portPoints.push({ x: rect.x, y: rect.y + rect.height / 2 });
+      portPoints.push({ x: rect.x + rect.width, y: rect.y + rect.height / 2 });
+    }
+    const fanEdges: FanEdge[] = visible.map((edge) => {
+      const side = sides.get(edge.id);
+      return {
+        id: edge.id,
+        from: edge.from,
+        to: edge.to,
+        sourceSide: side?.source,
+        targetSide: side?.target,
+      };
+    });
+    const fans = computeEdgeFans(fanEdges, positionsMap);
     // Параллельные стрелки одной пары узлов разводятся перпендикулярным
-    // сдвигом (вместо кривизны v0.01.01–v0.01.03 — форма теперь общая
-    // для пары, обходящая домены; RoutingEdge применит сдвиг к точкам).
+    // сдвигом ±8 px вокруг оси пары.
     const pairIndex = new Map<string, number>();
     const pairCount = new Map<string, number>();
-    for (const edge of modelEdges) {
+    for (const edge of visible) {
       const pairKey = [edge.from, edge.to].sort().join('~');
       pairCount.set(pairKey, (pairCount.get(pairKey) ?? 0) + 1);
     }
-    // Развязка портов (v0.01.05): стрелки с общим портом расходятся веером —
-    // вертикальные сдвиги старта/финала по позициям блоков.
-    const positionsMap: Record<string, { x: number; y: number }> = {};
-    for (const block of project.architecture.blocks) {
-      positionsMap[block.id] = block.position ?? { x: 0, y: 0 };
+    // Общая решётка штрафов кадра: узлы и порты с запасом — трассы
+    // не уходят от диаграммы дальше области поиска.
+    const penalty = createRoutePenalty([...rects.values()], portPoints);
+    const ordered = [...visible].sort((a, b) => a.id.localeCompare(b.id));
+    for (const edge of ordered) {
+      const side = sides.get(edge.id);
+      if (!side) continue;
+      const fan = fans.get(edge.id) ?? { sourceFan: 0, targetFan: 0 };
+      const sourceRect = rects.get(edge.from)!;
+      const targetRect = rects.get(edge.to)!;
+      const sourcePort = side.source === 'left' ? sourceRect.x : sourceRect.x + sourceRect.width;
+      const targetPort = side.target === 'left' ? targetRect.x : targetRect.x + targetRect.width;
+      let from: RoutePoint = {
+        x: sourcePort,
+        y: sourceRect.y + sourceRect.height / 2 + fan.sourceFan,
+      };
+      let to: RoutePoint = {
+        x: targetPort,
+        y: targetRect.y + targetRect.height / 2 + fan.targetFan,
+      };
+      const pairKey = [edge.from, edge.to].sort().join('~');
+      const nth = pairIndex.get(pairKey) ?? 0;
+      pairIndex.set(pairKey, nth + 1);
+      const shift = (nth - ((pairCount.get(pairKey) ?? 1) - 1) / 2) * 8;
+      if (shift !== 0) {
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const length = Math.hypot(dx, dy) || 1;
+        from = { x: from.x + (-dy / length) * shift, y: from.y + (dx / length) * shift };
+        to = { x: to.x + (-dy / length) * shift, y: to.y + (dx / length) * shift };
+      }
+      const obstacles: RouteRect[] = [];
+      const selfRects: RouteRect[] = [];
+      for (const [id, rect] of rects) {
+        if (id === edge.from || id === edge.to) selfRects.push(rect);
+        else obstacles.push(rect);
+      }
+      const points = computeRoutePath(from, to, obstacles, {
+        // Горизонтальные «усики»: из правого порта — вправо, из левого — влево.
+        sourceExit: side.source === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
+        targetEntry: side.target === 'left' ? { x: -16, y: 0 } : { x: 16, y: 0 },
+        // Встречные стрелки обходят и свой блок (см. selfRects).
+        selfRects,
+        penalty,
+      });
+      paths.set(edge.id, points);
+      accumulateRoutePenalty(penalty, points);
     }
-    const fans = computeEdgeFans(modelEdges, positionsMap);
+    return { paths, sides };
+  }, [rfNodes, modelEdges, showEdges]);
+
+  const edges = useMemo<Edge[]>(() => {
+    if (!showEdges) return [];
     return modelEdges.map((edge) => {
       // Цвет стрелки — целостность потока: зелёная из доверенного источника,
       // красная — низкоцелостный поток (3.5 v0.01.01).
       const color = trust.edges.get(edge.id) === 'green' ? TRUST_COLORS.green.border : TRUST_COLORS.red.border;
-      const pairKey = [edge.from, edge.to].sort().join('~');
-      const nth = pairIndex.get(pairKey) ?? 0;
-      pairIndex.set(pairKey, nth + 1);
-      // Разводка параллельных стрелок: ±8 px вокруг оси пары.
-      const shift = (nth - ((pairCount.get(pairKey) ?? 1) - 1) / 2) * 8;
-      // Развязка портов (v0.01.05): вертикальный сдвиг у общих портов.
-      const fan = fans.get(edge.id);
       const isFocused = focusedEdgeIds?.has(edge.id) ?? false;
       const dimmed = focusedEdgeIds !== null && !isFocused;
       const label = edge.label ?? '';
+      const side = routing.sides.get(edge.id);
       return {
         id: edge.id,
         source: edge.from,
         target: edge.to,
         type: 'routing' as const,
+        // Стороны портов от трассировки (v0.01.07): встречные стрелки
+        // подключаются к левому выходу источника и правому входу приёмника.
+        sourceHandle: side?.source === 'left' ? 'left' : undefined,
+        targetHandle: side?.target === 'right' ? 'right' : undefined,
         data: {
           label: isFocused || label.length <= EDGE_LABEL_LIMIT ? label || undefined : truncateLabel(label),
           color,
           labelColor: edgeLabelColor(theme),
           focused: isFocused,
           dimmed,
-          shift,
-          sourceFan: fan?.sourceFan ?? 0,
-          targetFan: fan?.targetFan ?? 0,
+          points: routing.paths.get(edge.id),
         } satisfies RoutingEdgeData,
         animated: false,
         style: { stroke: color, strokeWidth: isFocused ? 3 : 2 },
@@ -443,9 +568,8 @@ function CanvasInner() {
         className: dimmed ? 'skib-edge skib-edge--dim' : 'skib-edge',
       } as Edge;
     });
-  }, [project.architecture.edges, project.architecture.blocks, externalIds, showEdges, focusInternal, collapsedPorts, trust, theme, focusedEdgeIds]);
+  }, [modelEdges, routing, showEdges, trust, theme, focusedEdgeIds]);
 
-  const [rfNodes, setRfNodes, onNodesChange] = useNodesState<CanvasNode>(nodes);
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(edges);
 
   // Синхронизация канвы с хранилищем проекта.
@@ -514,12 +638,24 @@ function CanvasInner() {
     [deleteEdge],
   );
 
-  // Автоматическая раскладка (v0.01.03): слои по связям внутри периметра,
-  // внешние системы — правее рамки; свёрнутые порты раскрываются (смена
-  // режима), вид — «вместить». Отмена — Ctrl+Z (операция в истории).
+  // Автоматическая раскладка (v0.01.03, v0.01.07): слои по связям внутри
+  // периметра, внешние системы по сторонам рамки (источники — слева,
+  // приёмники — справа), зазоры — по измеренным габаритам узлов; свёрнутые
+  // порты раскрываются (смена режима), вид — «вместить». Отмена — Ctrl+Z
+  // (операция в истории).
   const handleAutoLayout = useCallback(() => {
     const architecture = useSkibStore.getState().project.architecture;
-    const positions = computeAutoLayout(architecture);
+    // Измеренные габариты узлов канвы (v0.01.07): вертикальные зазоры и
+    // ширины колонок учитывают фактическую высоту доменов с функциями.
+    const sizes = new Map<string, { width: number; height: number }>();
+    for (const node of getNodes()) {
+      if (node.type !== 'domain') continue;
+      sizes.set(node.id, {
+        width: node.measured?.width ?? NODE_ESTIMATED_WIDTH,
+        height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
+      });
+    }
+    const positions = computeAutoLayout(architecture, { sizes });
     if (positions.size === 0) return;
     const record: Record<string, { x: number; y: number }> = {};
     positions.forEach((position, id) => {
@@ -529,7 +665,7 @@ function CanvasInner() {
     expandAllPorts();
     window.dispatchEvent(new CustomEvent('skib-fit-view'));
     toast({ title: ru.canvas.layoutApplied });
-  }, [applyAutoLayout, expandAllPorts, toast]);
+  }, [applyAutoLayout, expandAllPorts, toast, getNodes]);
 
   // Delete удаляет только выбранную стрелку (НФ-10); домены удаляются из инспектора (Ф-15).
   useEffect(() => {

@@ -298,7 +298,7 @@ describe('Хранилище проекта', () => {
     const before = useSkibStore.getState().project.architecture.blocks.find(
       (b) => b.id === 'blk-perc',
     )!.position;
-    expect(before).toEqual({ x: 60, y: 200 });
+    expect(before).toEqual({ x: 530, y: 314 });
 
     const positions: Record<string, { x: number; y: number }> = {};
     for (const block of useSkibStore.getState().project.architecture.blocks) {
@@ -314,7 +314,7 @@ describe('Хранилище проекта', () => {
     const restored = useSkibStore.getState().project.architecture.blocks.find(
       (b) => b.id === 'blk-perc',
     )!.position;
-    expect(restored).toEqual({ x: 60, y: 200 });
+    expect(restored).toEqual({ x: 530, y: 314 });
     // Позиции блоков, не указанных в словаре, не меняются: applyAutoLayout
     // на пустой архитектуре ничего не ломает.
     useSkibStore.getState().resetProject();
