@@ -34,9 +34,14 @@
  * фокус на домене (в центр, с укрупнением) и выбор — FocusController
  * ловит событие skib-focus-node и вызывает setCenter; выделение узла
  * синхронизировано с хранилищем (selected-флаги узлов).
+ * Сброс карточки на свободное место канвы (v0.01.06): сразу создаётся новый
+ * домен безопасности с этой функцией внутри (dropFunctionAsNewDomain — одна
+ * операция с историей); сброс на внешний системный блок отклоняется
+ * с подсказкой. Для координат сброса канва обёрнута в ReactFlowProvider
+ * (screenToFlowPosition пересчитывает экранные координаты в координаты модели).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -68,7 +73,10 @@ import { computeEdgeFans } from '../engine/edgeRouting';
 import {
   frameBounds,
   isInsideFrame,
+  NODE_ESTIMATED_HEIGHT,
+  NODE_ESTIMATED_WIDTH,
 } from '../engine/trust';
+import { MAX_DOMAINS } from '../engine/types';
 import type { Status } from '../engine/types';
 import { DomainNode, type DomainFlowNode, type DomainNodeData } from './DomainNode';
 import { CanvasControls } from './CanvasControls';
@@ -182,12 +190,13 @@ function PerimeterNode({ data }: NodeProps<PerimeterFlowNode>) {
   );
 }
 
-export function Canvas() {
+function CanvasInner() {
   const project = useSkibStore((s) => s.project);
   const selection = useSkibStore((s) => s.selection);
   const setSelection = useSkibStore((s) => s.setSelection);
   const placeFunction = useSkibStore((s) => s.placeFunction);
   const unplaceFunction = useSkibStore((s) => s.unplaceFunction);
+  const dropFunctionAsNewDomain = useSkibStore((s) => s.dropFunctionAsNewDomain);
   const addEdgeToStore = useSkibStore((s) => s.addEdge);
   const deleteEdge = useSkibStore((s) => s.deleteEdge);
   const updatePositions = useSkibStore((s) => s.updatePositions);
@@ -204,6 +213,8 @@ export function Canvas() {
   const expandAllPorts = useViewStore((s) => s.expandAllPorts);
   const { toast } = useToast();
   const [theme] = useSkibTheme();
+  // Координаты сброса карточки на свободное место канвы (v0.01.06).
+  const { screenToFlowPosition, getNodes } = useReactFlow();
   // Наведение на стрелку или домен — временная подсветка связей (без истории операций).
   const [hoverFocus, setHoverFocus] = useState<{ kind: 'edge' | 'node'; id: string } | null>(null);
   // Вид канвы: восстановление сохранённого пан/зум; при отсутствии — «вместить».
@@ -310,6 +321,7 @@ export function Canvas() {
           trustClass: trust.internal.get(block.id) ?? 'ndb',
           external: block.external ?? false,
           externalTrusted: block.trusted ?? false,
+          forceTrusted: !block.external && (block.forceTrusted ?? false),
           functions: block.external ? [] : (functionsByBlock.get(block.id) ?? []),
           portCounts: portCounts.get(block.id) ?? { in: 0, out: 0 },
           goalStatusOf,
@@ -537,8 +549,67 @@ export function Canvas() {
     return () => window.removeEventListener('keydown', handler);
   }, [deleteEdge]);
 
+  // Сброс карточки функции на канву (v0.01.06): на свободном месте сразу
+  // создаётся новый домен безопасности с функцией внутри; на внутреннем
+  // домене — обычное размещение (узел обрабатывает сам и гасит событие);
+  // на внешней системе — подсказка. Разрешаем сброс только для карточек пула.
+  const handleCanvasDragOver = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (!event.dataTransfer.types.includes('application/x-skib-function')) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+    [],
+  );
+
+  const handleCanvasDrop = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      const functionId = event.dataTransfer.getData('application/x-skib-function');
+      if (!functionId) return;
+      event.preventDefault();
+      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      // Узел под курсором: внутренний домен уже обработал размещение
+      // (stopPropagation в DomainNode); внешняя система отклоняет сброс.
+      for (const node of getNodes()) {
+        if (node.id === '__perimeter') continue;
+        const width = node.measured?.width ?? NODE_ESTIMATED_WIDTH;
+        const height = node.measured?.height ?? NODE_ESTIMATED_HEIGHT;
+        const inside =
+          point.x >= node.position.x &&
+          point.x <= node.position.x + width &&
+          point.y >= node.position.y &&
+          point.y <= node.position.y + height;
+        if (!inside) continue;
+        if ((node.data as DomainNodeData).external) {
+          toast({ title: ru.canvas.dropExternalHint });
+        }
+        return;
+      }
+      const fn = useSkibStore
+        .getState()
+        .project.security.functions.find((f) => f.id === functionId);
+      if (!fn) return;
+      // Новый домен центрируется на точке сброса.
+      const id = dropFunctionAsNewDomain(functionId, {
+        x: point.x - NODE_ESTIMATED_WIDTH / 2,
+        y: point.y - NODE_ESTIMATED_HEIGHT / 2,
+      });
+      if (id === null) {
+        toast({ title: ru.errors.limitsDomains(MAX_DOMAINS), variant: 'destructive' });
+        return;
+      }
+      toast({ title: ru.canvas.domainCreated(fn.name) });
+    },
+    [dropFunctionAsNewDomain, getNodes, screenToFlowPosition, toast],
+  );
+
   return (
-    <section className="relative min-w-0 flex-1" aria-label={ru.pool.dragHint}>
+    <section
+      className="relative min-w-0 flex-1"
+      aria-label={ru.pool.dragHint}
+      onDragOver={handleCanvasDragOver}
+      onDrop={handleCanvasDrop}
+    >
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -653,5 +724,19 @@ export function Canvas() {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Канва внутри ReactFlowProvider (v0.01.06): обработчику сброса карточки
+ * на свободное место нужен useReactFlow (screenToFlowPosition) — он действует
+ * только внутри провайдера. FocusController внутри ReactFlow сохраняет
+ * прежнее поведение.
+ */
+export function Canvas() {
+  return (
+    <ReactFlowProvider>
+      <CanvasInner />
+    </ReactFlowProvider>
   );
 }

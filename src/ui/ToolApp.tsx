@@ -6,12 +6,16 @@
  * (инспектор + панель расчёта и статуса укрупнённым шрифтом). Ширины боковых
  * панелей раздвижные (v0.01.05): react-resizable-panels с запоминанием
  * ширин в localStorage (autoSaveId «skib-lab-panels-v1», диапазон 16–36 %).
+ * v0.01.06: высота области «Расчёт и статус системы» под инспектором
+ * изменяема по вертикали (вложенная вертикальная группа с запоминанием
+ * «skib-lab-summary-v1») — для больших примеров область можно вытянуть вверх.
  * Оркестрирует импорт/экспорт файлов, подтверждения замен (Ф-1, Ф-4, Ф-5,
  * Ф-23), горячие клавиши (НФ-10) и диалог декомпозиции (Ф-16).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -391,16 +395,36 @@ export function ToolApp() {
           title={ru.canvas.resizeRightTitle}
         />
         {/* Правая панель: инспектор + расчёт и статус системы + расширенный
-            анализ ДВБ (5.1 v0.01.01, v0.01.03). */}
+            анализ ДВБ (5.1 v0.01.01, v0.01.03). Высота области «Расчёт и
+            статус системы» изменяема по вертикали (v0.01.06): вложенная
+            вертикальная группа с запоминанием в localStorage — область можно
+            вытянуть вверх, используя свободное место под инспектором. */}
         <ResizablePanel
           defaultSize={24}
           minSize={16}
           maxSize={36}
           className="flex flex-col border-l border-border bg-card"
         >
-          <InspectorPanel />
-          <SummaryPanel />
-          <DvbPanel />
+          <ResizablePanelGroup
+            direction="vertical"
+            autoSaveId="skib-lab-summary-v1"
+            className="min-h-0 flex-1"
+          >
+            <ResizablePanel defaultSize={55} minSize={10} className="flex flex-col">
+              <InspectorPanel />
+            </ResizablePanel>
+            <ResizableHandle
+              className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+              aria-label={ru.canvas.resizeSummaryTitle}
+              title={ru.canvas.resizeSummaryTitle}
+            />
+            <ResizablePanel defaultSize={45} minSize={8}>
+              <ScrollArea className="h-full">
+                <SummaryPanel />
+                <DvbPanel />
+              </ScrollArea>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
       <DecomposeDialog

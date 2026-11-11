@@ -9,6 +9,7 @@ import {
   parseArchitectureYaml,
   serializeArchitectureYaml,
 } from '@/io/archYaml';
+import { parseStateYaml, serializeStateYaml } from '@/io/stateFile';
 
 const FIXTURES = resolve(__dirname, '../fixtures');
 
@@ -124,5 +125,42 @@ describe('architecture.yaml (раздел 6.1)', () => {
     expect(second.model!.blocks[0].position).toEqual({ x: 60, y: 200 });
     // Внешние системы сохраняют признаки external/trusted.
     expect(second.model!.blocks.find((b) => b.id === 'ext-ctrl')).toMatchObject({ external: true, trusted: true });
+  });
+
+  it('v0.01.06: forceTrusted сохраняется в architecture.yaml и state.yaml (round-trip)', () => {
+    const text = readFileSync(resolve(FIXTURES, 'robot/architecture.yaml'), 'utf8');
+    const first = parseArchitectureYaml(text);
+    expect(first.errors).toEqual([]);
+    // Принудительно вводим blk-perc в ДВБ и выгружаем обратно.
+    const withForced = {
+      ...first.model!,
+      blocks: first.model!.blocks.map((b) =>
+        b.id === 'blk-perc' ? { ...b, forceTrusted: true } : b,
+      ),
+    };
+    const exported = serializeArchitectureYaml(withForced);
+    expect(exported).toContain('forceTrusted: true');
+    const second = parseArchitectureYaml(exported);
+    expect(second.errors).toEqual([]);
+    expect(second.warnings.some((w) => w.code === 'W-001')).toBe(false);
+    expect(second.model!.blocks.find((b) => b.id === 'blk-perc')!.forceTrusted).toBe(true);
+    // У внешних систем признак не пишется.
+    expect(exported).not.toMatch(/external: true\n\s+trusted: true\n\s+forceTrusted/);
+    // state.yaml: сериализация → разбор тоже сохраняет признак.
+    const stateText = serializeStateYaml({
+      architecture: withForced,
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [{ id: 'f1', name: 'Функция', cost: 1 }],
+      },
+      assignments: [],
+      meta: {},
+    });
+    const stateParsed = parseStateYaml(stateText);
+    expect(stateParsed.errors).toEqual([]);
+    expect(stateParsed.model!.architecture.blocks.find((b) => b.id === 'blk-perc')!.forceTrusted).toBe(true);
+    // Признак отсутствует — поле не выводится вовсе (обратная совместимость).
+    const plain = serializeArchitectureYaml(first.model!);
+    expect(plain).not.toContain('forceTrusted');
   });
 });

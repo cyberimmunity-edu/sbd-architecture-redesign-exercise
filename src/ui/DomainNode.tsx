@@ -41,6 +41,8 @@ export interface DomainNodeData extends Record<string, unknown> {
   external: boolean;
   /** Доверенность внешней системы; для внутренних игнорируется. */
   externalTrusted: boolean;
+  /** Принудительный ввод внутреннего домена в ДВБ без критичной функции (v0.01.06). */
+  forceTrusted: boolean;
   functions: SecurityFunction[];
   /** Число стрелок на портах входа/выхода — для кнопок «+/−» (v0.01.03). */
   portCounts: { in: number; out: number };
@@ -186,7 +188,11 @@ export const DomainNode = memo(function DomainNode({
               border: `1px dashed ${color.border}`,
               color: 'var(--foreground)',
             }}
-            title={trustLabel(data)}
+            title={
+              !data.external && data.forceTrusted
+                ? `${trustLabel(data)} · введён в ДВБ принудительно (инспектор, «${ru.inspector.forceDvb}»)`
+                : trustLabel(data)
+            }
           >
             {data.external
               ? `${ru.canvas.externalBadge}: ${trustLabel(data)}`

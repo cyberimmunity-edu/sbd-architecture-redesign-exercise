@@ -1,5 +1,7 @@
-/* Скриншоты интерфейса v0.01.01 для docs/user-guide.md.
- * Запуск: node scripts/capture_docs.mjs  (нужен dev-сервер на localhost:3000)
+/* Скриншоты интерфейса v0.01.06 для docs/user-guide.md и docs/teacher-guide.md.
+ * Запуск: BASE_URL=http://localhost:4173 node scripts/capture_docs.mjs
+ * (нужен собранный out/, обслуживаемый статикой: npx serve out -s -l 4173,
+ * либо dev-сервер на localhost:3000).
  */
 import { chromium } from '/home/z/my-project/node_modules/playwright/index.mjs';
 
@@ -37,7 +39,8 @@ await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(600);
 await page.screenshot({ path: `${OUT}/01-empty.png` });
 
-// 02 — пример 1 (робот), все НДБ, стрелки красные.
+// 02 — пример 1 (робот), все НДБ, стрелки красные; на карточках целей —
+// полные формулировки инвариантов (v0.01.06).
 await loadRobot();
 await page.screenshot({ path: `${OUT}/02-demo-red.png` });
 
@@ -64,5 +67,33 @@ await drop('fn-estop', 'blk-drive');
 await page.waitForTimeout(500);
 await page.screenshot({ path: `${OUT}/05-step1-covered.png` });
 
+// 06 — панель валидации: файл с неверной версией схемы не применяется (Ф-6).
+await loadRobot();
+{
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser'),
+    page.getByRole('button', { name: 'Загрузить архитектуру…' }).click(),
+  ]);
+  await chooser.setFiles({
+    name: 'architecture-bad.yaml',
+    mimeType: 'text/yaml',
+    buffer: Buffer.from('version: 9\nblocks: []\nedges: []\n', 'utf8'),
+  });
+  await page.waitForSelector('[data-testid="validation-panel"]');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/06-validation-errors.png` });
+  await page.getByRole('button', { name: 'Закрыть' }).click();
+}
+
+// 07 — принудительный ввод домена в ДВБ (v0.01.06): blk-perc без функций
+// становится ДДБ (зелёным), в анализе ДВБ — строка «ДДБ *».
+await loadRobot();
+await page.locator('[data-block-id="blk-perc"]').click();
+await page.waitForTimeout(300);
+await page.locator('#domain-dvb').click();
+await page.getByRole('option', { name: /принудительно/ }).click();
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${OUT}/07-force-dvb.png` });
+
 await browser.close();
-console.log('OK: скриншоты обновлены');
+console.log('OK: скриншоты обновлены (v0.01.06)');

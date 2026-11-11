@@ -182,6 +182,26 @@ export function InspectorPanel() {
                 }}
               />
             </div>
+            {/* Принудительный ввод внутреннего домена в ДВБ (v0.01.06): доверенный
+                домен без функции безопасности — например, доверенные датчики. */}
+            <div>
+              <Label htmlFor="domain-dvb" className="text-xs">{ru.inspector.forceDvb}</Label>
+              <Select
+                value={block.forceTrusted ? 'forced' : 'auto'}
+                onValueChange={(value) => updateDomain(block.id, { forceTrusted: value === 'forced' })}
+              >
+                <SelectTrigger id="domain-dvb" className="mt-1 h-8 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">{ru.inspector.forceDvbAuto}</SelectItem>
+                  <SelectItem value="forced">{ru.inspector.forceDvbForced}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] italic text-muted-foreground">
+                {ru.inspector.forceDvbHint}
+              </p>
+            </div>
             <div>
               <Label className="text-xs">{ru.inspector.functionsInDomain} ({cards.length})</Label>
               <div className="mt-1 space-y-2">

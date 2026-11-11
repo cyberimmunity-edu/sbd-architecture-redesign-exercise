@@ -12,6 +12,9 @@
  * фокус на домене (в центр, с укрупнением, событие FOCUS_NODE_EVENT)
  * и выбор домена в инспекторе. Панель только читает модель: пересчёт
  * чистый (recalcCosts), расчёты и история операций не меняются.
+ * v0.01.06: принудительно введённые в ДВБ домены (forceTrusted) помечаются
+ * звёздочкой у типа; внутренний скролл таблицы убран — высота области
+ * правой панели изменяема по вертикали, прокрутку ведёт ScrollArea.
  */
 
 import { useMemo } from 'react';
@@ -29,6 +32,8 @@ interface DvbRow {
   name: string;
   trustClass: DomainTrustClass;
   cost: DomainCostResult;
+  /** Принудительный ввод в ДВБ без критичной функции (v0.01.06). */
+  forced: boolean;
 }
 
 function formatMultiplier(m: number): string {
@@ -47,7 +52,7 @@ export function DvbPanel() {
       const trustClass = trust.internal.get(block.id);
       const cost = costs.get(block.id);
       if ((trustClass === 'ddb' || trustClass === 'ddbpcd') && cost) {
-        list.push({ id: block.id, name: block.name, trustClass, cost });
+        list.push({ id: block.id, name: block.name, trustClass, cost, forced: block.forceTrusted === true });
       }
     }
     // Сортировка по стоимости домена: самые дорогие сверху (v0.01.03).
@@ -75,7 +80,7 @@ export function DvbPanel() {
           {ru.dvb.empty}
         </p>
       ) : (
-        <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border bg-background/40">
+        <div className="mt-2 rounded-lg border border-border bg-background/40">
           <table className="w-full text-left text-[11px]" data-testid="dvb-table">
             <thead>
               <tr className="border-b border-border text-muted-foreground">
@@ -117,8 +122,10 @@ export function DvbPanel() {
                       <span
                         className="rounded px-1 py-0.5 text-[9px] font-semibold"
                         style={{ border: `1px solid ${color.border}`, background: color.fill }}
+                        title={row.forced ? ru.dvb.forcedRowTitle : undefined}
                       >
                         {row.trustClass === 'ddb' ? 'ДДБ' : 'ДДБПЦД'}
+                        {row.forced ? ' *' : ''}
                       </span>
                     </td>
                     <td className="px-1 py-1 text-right tabular-nums" title={ru.dvb.columnBlockCostTitle}>{row.cost.blockCost}</td>

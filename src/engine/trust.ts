@@ -4,7 +4,8 @@
  * Состояния внутренних доменов безопасности:
  * - НДБ (ndb) — недоверенный домен: полупрозрачная красная заливка.
  *   Внутренний домен, в котором нет ни одной функции безопасности, критичной
- *   хотя бы для одной цели безопасности.
+ *   хотя бы для одной цели безопасности, и который не введён в ДВБ
+ *   принудительно (v0.01.06).
  * - ДДБ (ddb) — доверенный домен безопасности: зелёная заливка. Домен введён
  *   в доверенную вычислительную базу (в нём есть критичная функция), и все
  *   входящие в него стрелки зелёные (в том числе при отсутствии входящих).
@@ -58,6 +59,9 @@ export interface TrustResult {
 /**
  * Идентификаторы доменов, содержащих хотя бы одну функцию, критичную
  * хотя бы для одной цели безопасности (основание ввода в ДВБ).
+ * v0.01.06: в ДВБ входят также домены с явным признаком forceTrusted —
+ * принудительный ввод без критичной функции (например, доверенные датчики);
+ * для внешних систем признак не применяется (их доверенность — trusted).
  */
 export function trustedBlockIds(project: Project): Set<string> {
   const critical = new Set(
@@ -65,11 +69,16 @@ export function trustedBlockIds(project: Project): Set<string> {
       .filter((fn) => (fn.implements ?? []).length > 0)
       .map((fn) => fn.id),
   );
-  return new Set(
+  const trusted = new Set(
     project.assignments
       .filter((assignment) => critical.has(assignment.function))
       .map((assignment) => assignment.block),
   );
+  // Принудительный ввод в ДВБ (v0.01.06): только внутренние домены.
+  for (const block of project.architecture.blocks) {
+    if (!block.external && block.forceTrusted) trusted.add(block.id);
+  }
+  return trusted;
 }
 
 /**

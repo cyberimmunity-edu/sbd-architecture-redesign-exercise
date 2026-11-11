@@ -50,6 +50,8 @@ export function parseArchInner(data: unknown): ParseResult<Architecture> {
         : undefined,
       ...(block.external ? { external: true } : {}),
       ...(block.trusted ? { trusted: true } : {}),
+      // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
+      ...(!block.external && block.forceTrusted ? { forceTrusted: true } : {}),
     })),
     edges: raw.edges.map((edge) => ({
       id: edge.id,
@@ -125,6 +127,8 @@ export function serializeArchitectureYaml(
       cost: b.cost,
       ...(b.external ? { external: true } : {}),
       ...(b.external && b.trusted ? { trusted: true } : {}),
+      // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
+      ...(!b.external && b.forceTrusted ? { forceTrusted: true } : {}),
       ...(b.position ? { position: { x: b.position.x, y: b.position.y } } : {}),
     })),
     edges: architecture.edges.map((e) => ({

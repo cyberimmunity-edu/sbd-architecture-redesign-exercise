@@ -120,6 +120,8 @@ export function serializeStateYaml(project: Project): string {
         cost: b.cost,
         ...(b.external ? { external: true } : {}),
         ...(b.external && b.trusted ? { trusted: true } : {}),
+        // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
+        ...(!b.external && b.forceTrusted ? { forceTrusted: true } : {}),
         ...(b.position ? { position: { x: b.position.x, y: b.position.y } } : {}),
       })),
       edges: project.architecture.edges.map((e) => ({

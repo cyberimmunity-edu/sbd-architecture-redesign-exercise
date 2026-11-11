@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useSkibStore } from '@/store/projectStore';
 import { MAX_DOMAINS } from '@/engine/types';
+import { computeTrust } from '@/engine/trust';
 import { parseArchitectureYaml } from '@/io/archYaml';
 import { parseSecurityYaml } from '@/io/securityYaml';
 import { readFileSync } from 'node:fs';
@@ -216,6 +217,45 @@ describe('Хранилище проекта', () => {
     expect(useSkibStore.getState().project.assignments).toHaveLength(0);
   });
 
+  it('v0.01.06: сброс карточки на свободное место канвы создаёт новый домен с функцией внутри', () => {
+    const { arch, security } = loadRobot();
+    useSkibStore.getState().loadState({ architecture: arch, security, assignments: [], meta: {} });
+    const blocksBefore = useSkibStore.getState().project.architecture.blocks.length;
+    const id = useSkibStore.getState().dropFunctionAsNewDomain('fn-auth', { x: 300, y: 240 });
+    expect(id).toBe('dom-1');
+    const created = useSkibStore.getState().project.architecture.blocks.find((b) => b.id === id)!;
+    expect(created.name).toBe('Новый домен');
+    expect(created.cost).toBe(1);
+    expect(created.position).toEqual({ x: 300, y: 240 });
+    // Функция размещена в новом домене, домен выбран.
+    expect(useSkibStore.getState().project.assignments).toEqual([
+      { function: 'fn-auth', block: 'dom-1' },
+    ]);
+    expect(useSkibStore.getState().selection).toEqual({ kind: 'domain', id: 'dom-1' });
+    // Одна операция истории: Ctrl+Z убирает и домен, и размещение.
+    useSkibStore.getState().undo();
+    expect(useSkibStore.getState().project.architecture.blocks).toHaveLength(blocksBefore);
+    expect(useSkibStore.getState().project.assignments).toHaveLength(0);
+    // Неизвестная функция игнорируется.
+    expect(useSkibStore.getState().dropFunctionAsNewDomain('fn-ghost', { x: 1, y: 1 })).toBeNull();
+  });
+
+  it('v0.01.06: принудительный ввод домена в ДВБ через updateDomain — домен доверенный без функции', () => {
+    const { arch, security } = loadRobot();
+    useSkibStore.getState().loadState({ architecture: arch, security, assignments: [], meta: {} });
+    // blk-perc без функций — НДБ; принудительный ввод делает его ДДБ.
+    useSkibStore.getState().updateDomain('blk-perc', { forceTrusted: true });
+    expect(
+      useSkibStore.getState().project.architecture.blocks.find((b) => b.id === 'blk-perc')!.forceTrusted,
+    ).toBe(true);
+    const trust = computeTrust(useSkibStore.getState().project);
+    expect(trust.internal.get('blk-perc')).toBe('ddb');
+    // Возврат к автоматическому классу — снова НДБ.
+    useSkibStore.getState().updateDomain('blk-perc', { forceTrusted: false });
+    const trustAfter = computeTrust(useSkibStore.getState().project);
+    expect(trustAfter.internal.get('blk-perc')).toBe('ndb');
+  });
+
   it('Ф-14: стрелки создаются без петель и дубликатов', () => {
     const { arch, security } = loadRobot();
     useSkibStore.getState().loadState({ architecture: arch, security, assignments: [], meta: {} });
@@ -240,6 +280,8 @@ describe('Хранилище проекта', () => {
       project: { ...useSkibStore.getState().project, architecture: { blocks, edges: [] } },
     });
     expect(useSkibStore.getState().addDomain()).toBeNull();
+    // v0.01.06: сброс карточки при исчерпанном лимите тоже отклоняется.
+    expect(useSkibStore.getState().dropFunctionAsNewDomain('fn-auth', { x: 1, y: 1 })).toBeNull();
   });
 
   it('Ф-23: сброс возвращает пустой проект', () => {

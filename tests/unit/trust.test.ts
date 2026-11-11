@@ -12,6 +12,8 @@ import {
   trustedBlockIds,
   TRUST_COST_COEFFICIENT,
 } from '@/engine/trust';
+import { recalcCosts } from '@/engine/cost';
+import { recalcCoverage } from '@/engine/coverage';
 import { emptyProject, type Block, type Project } from '@/engine/types';
 
 function block(id: string, overrides: Partial<Block> = {}): Block {
@@ -220,5 +222,82 @@ describe('Модель доверия (раздел 3.5 v0.01.01)', () => {
     expect(moved!.position!.x).toBeGreaterThanOrEqual(frame!.x + frame!.width);
     // Внутренние домены не изменились.
     expect(snapped.architecture.blocks.find((b) => b.id === 'a')!.position).toEqual({ x: 100, y: 100 });
+  });
+});
+
+describe('Принудительный ввод в ДВБ — forceTrusted (v0.01.06)', () => {
+  it('Домен без критичной функции с forceTrusted — ДДБ; его исходящие потоки зелёные', () => {
+    const project = build({
+      architecture: {
+        blocks: [block('a', { forceTrusted: true }), block('b')],
+        edges: [{ id: 'e-ab', from: 'a', to: 'b' }],
+      },
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [linkedFn('f1')],
+      },
+    });
+    const trust = computeTrust(project);
+    expect(trust.internal.get('a')).toBe('ddb');
+    expect(trust.internal.get('b')).toBe('ndb');
+    expect(trust.edges.get('e-ab')).toBe('green');
+    expect(trustedBlockIds(project)).toContain('a');
+  });
+
+  it('Принудительно доверенный домен с входящей красной стрелкой — ДДБПЦД', () => {
+    const project = build({
+      architecture: {
+        blocks: [block('a', { forceTrusted: true }), block('b')],
+        edges: [{ id: 'e-ba', from: 'b', to: 'a' }],
+      },
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [linkedFn('f1')],
+      },
+    });
+    const trust = computeTrust(project);
+    expect(trust.internal.get('a')).toBe('ddbpcd');
+  });
+
+  it('forceTrusted у внешней системы игнорируется — доверенность только по trusted', () => {
+    const project = build({
+      architecture: {
+        blocks: [block('ext-1', { external: true, forceTrusted: true })],
+        edges: [],
+      },
+    });
+    const trust = computeTrust(project);
+    expect(trust.external.get('ext-1')).toBe('red');
+    expect(trustedBlockIds(project)).not.toContain('ext-1');
+  });
+
+  it('Стоимость принудительно доверенного домена — C_блока × 5 (K ДДБ), цели не меняются', () => {
+    const project = build({
+      architecture: { blocks: [block('a', { cost: 4, forceTrusted: true })], edges: [] },
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [linkedFn('f1')],
+      },
+    });
+    const { costs } = recalcCosts(project);
+    expect(costs.get('a')!.trustCoefficient).toBe(5);
+    expect(costs.get('a')!.domainCost).toBe(20); // ceil(4 × 1 × 5)
+    // forceTrusted не добавляет функций: покрытие целей не меняется.
+    const { goalStatuses } = recalcCoverage(project);
+    expect(goalStatuses.get('g1')).toBe('red');
+  });
+
+  it('forceTrusted не влияет на домен с критичной функцией — доверенность и так выведена', () => {
+    const project = build({
+      architecture: { blocks: [block('a', { forceTrusted: true })], edges: [] },
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [linkedFn('f1')],
+      },
+      assignments: [{ function: 'f1', block: 'a' }],
+    });
+    const trust = computeTrust(project);
+    expect(trust.internal.get('a')).toBe('ddb');
+    expect(trustedBlockIds(project)).toEqual(new Set(['a']));
   });
 });

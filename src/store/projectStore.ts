@@ -53,7 +53,16 @@ interface SkibStore {
   unplaceFunction: (functionId: string) => void;
   addDomain: (position?: { x: number; y: number }) => string | null;
   addExternalDomain: (position?: { x: number; y: number }) => string | null;
-  updateDomain: (id: string, patch: Partial<Pick<Block, 'name' | 'cost' | 'trusted'>>) => void;
+  /** Сброс карточки на свободное место канвы (v0.01.06): создаётся новый
+   *  домен безопасности с функцией внутри — одной операцией с историей. */
+  dropFunctionAsNewDomain: (
+    functionId: string,
+    position: { x: number; y: number },
+  ) => string | null;
+  updateDomain: (
+    id: string,
+    patch: Partial<Pick<Block, 'name' | 'cost' | 'trusted' | 'forceTrusted'>>,
+  ) => void;
   deleteDomain: (id: string) => void;
   addEdge: (from: string, to: string) => string | null;
   updateEdge: (id: string, patch: Partial<Pick<Edge, 'label'>>) => void;
@@ -285,7 +294,40 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     return id;
   },
 
-  /** Правка имени, стоимости и доверенности внешней системы (Ф-21). */
+  /** Сброс карточки на свободное место канвы (v0.01.06): создаётся новый
+   *  домен безопасности (Ф-13, «Новый домен», C_блока = 1) с функцией внутри.
+   *  Одна операция истории: Ctrl+Z убирает и домен, и размещение.
+   *  Размещать функции во внешние системы нельзя (3.5 v0.01.01) — внешние
+   *  системы отсекаются на уровне канвы до вызова действия. */
+  dropFunctionAsNewDomain: (functionId, position) => {
+    const { project, past } = get();
+    const fn = project.security.functions.find((f) => f.id === functionId);
+    if (!fn) return null;
+    if (project.architecture.blocks.length >= MAX_DOMAINS) return null;
+    const ids = new Set(project.architecture.blocks.map((b) => b.id));
+    const id = nextId('dom-', ids);
+    const block: Block = {
+      id,
+      name: 'Новый домен',
+      cost: 1,
+      position: position ?? { x: 120, y: 120 },
+    };
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: {
+        ...project,
+        architecture: { ...project.architecture, blocks: [...project.architecture.blocks, block] },
+        assignments: [...project.assignments, { function: functionId, block: id }],
+      },
+      selection: { kind: 'domain', id },
+    });
+    scheduleSave(get().project);
+    return id;
+  },
+
+  /** Правка имени, стоимости, доверенности внешней системы и принудительного
+   *  ввода внутреннего домена в ДВБ (Ф-21, v0.01.06). */
   updateDomain: (id, patch) => {
     const { project, past } = get();
     if (!project.architecture.blocks.some((b) => b.id === id)) return;

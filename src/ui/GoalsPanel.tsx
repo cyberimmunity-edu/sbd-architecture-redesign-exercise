@@ -86,6 +86,17 @@ export function GoalsPanel() {
                     {goal.name}
                   </span>
                 </div>
+                {/* Полная формулировка инварианта — видима на карточке (v0.01.06):
+                    полные тексты целей важны для восприятия, не только в подсказке. */}
+                {goal.description && (
+                  <p
+                    className="mt-1.5 border-t border-dashed border-border/60 pt-1.5 text-[11px] leading-snug text-muted-foreground"
+                    data-testid={`goal-desc-${goal.id}`}
+                    title={ru.goals.invariantHint}
+                  >
+                    {goal.description}
+                  </p>
+                )}
                 {linked.length === 0 && (
                   <p className="mt-1 text-[11px] italic text-muted-foreground">{ru.goals.noFunctions}</p>
                 )}

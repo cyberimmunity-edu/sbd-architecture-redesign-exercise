@@ -21,6 +21,8 @@ export const archInnerSchema = z.looseObject({
       position: z.looseObject({ x: z.number(), y: z.number() }).optional(),
       external: z.boolean().optional(),
       trusted: z.boolean().optional(),
+      // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
+      forceTrusted: z.boolean().optional(),
     }),
   ),
   edges: z.array(
@@ -104,7 +106,7 @@ export const allowedKeys = {
   arch: {
     version: null,
     system: { name: null, description: null },
-    blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null },
+    blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null },
     edges: { id: null, from: null, to: null, label: null },
   },
   security: {
@@ -118,7 +120,7 @@ export const allowedKeys = {
     architecture: {
       version: null,
       system: { name: null, description: null },
-      blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null },
+      blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null },
       edges: { id: null, from: null, to: null, label: null },
     },
     security: {
