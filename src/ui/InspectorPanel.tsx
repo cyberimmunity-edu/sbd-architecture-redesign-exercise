@@ -1,0 +1,370 @@
+'use client';
+
+/**
+ * Инспектор — зона раздела 5.1: свойства выбранного объекта (домен, карточка,
+ * стрелка) и доступные действия: перемещение функций в другой домен (Ф-9),
+ * правка имени/стоимости, подписи стрелок (Ф-14), удаление домена (Ф-15).
+ * В v0.01.01: для внешних систем показывается доверенность (можно изменить)
+ * и не отображается стоимость (она не определяется); правка и удаление
+ * функций доступны только внутренним доменам (3.5 v0.01.01).
+ * Под инспектором — панель расчёта и статуса (SummaryPanel).
+ */
+
+import { useMemo } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSkibStore } from '../store/projectStore';
+import { ru } from '../i18n/ru';
+import { TRUST_COLORS } from './status';
+
+export function InspectorPanel() {
+  const project = useSkibStore((s) => s.project);
+  const selection = useSkibStore((s) => s.selection);
+  const updateDomain = useSkibStore((s) => s.updateDomain);
+  const deleteDomain = useSkibStore((s) => s.deleteDomain);
+  const updateEdge = useSkibStore((s) => s.updateEdge);
+  const deleteEdge = useSkibStore((s) => s.deleteEdge);
+  const unplaceFunction = useSkibStore((s) => s.unplaceFunction);
+  const placeFunction = useSkibStore((s) => s.placeFunction);
+
+  const blockById = useMemo(
+    () => new Map(project.architecture.blocks.map((b) => [b.id, b])),
+    [project.architecture.blocks],
+  );
+  const fnById = useMemo(
+    () => new Map(project.security.functions.map((f) => [f.id, f])),
+    [project.security.functions],
+  );
+  const goalById = useMemo(
+    () => new Map(project.security.goals.map((g) => [g.id, g])),
+    [project.security.goals],
+  );
+  const edgeById = useMemo(
+    () => new Map(project.architecture.edges.map((e) => [e.id, e])),
+    [project.architecture.edges],
+  );
+  const placementByFn = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const assignment of project.assignments) map.set(assignment.function, assignment.block);
+    return map;
+  }, [project.assignments]);
+
+  let body: React.ReactNode = (
+    <p className="px-1 text-xs italic text-muted-foreground">{ru.inspector.nothingSelected}</p>
+  );
+
+  if (selection?.kind === 'domain') {
+    const block = blockById.get(selection.id);
+    if (block) {
+      const isExternal = block.external ?? false;
+      // Перемещение возможно только во внутренние домены (3.5 v0.01.01).
+      const otherBlocks = project.architecture.blocks.filter(
+        (b) => b.id !== block.id && !b.external,
+      );
+
+      if (isExternal) {
+        // Внешняя система: имя и доверенность; стоимость не определяется.
+        body = (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">
+              {ru.inspector.domain}: <span className="font-mono text-xs text-muted-foreground">{block.id}</span>
+              <span
+                className="ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-medium"
+                style={{
+                  border: `1px dashed ${(block.trusted ? TRUST_COLORS.green : TRUST_COLORS.red).border}`,
+                }}
+              >
+                {ru.inspector.externalIsExternal}
+              </span>
+            </h3>
+            <div>
+              <Label htmlFor="domain-name" className="text-xs">{ru.inspector.name}</Label>
+              <Input
+                id="domain-name"
+                className="mt-1 h-8"
+                value={block.name}
+                onChange={(event) => updateDomain(block.id, { name: event.target.value.slice(0, 80) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="external-trust" className="text-xs">{ru.inspector.externalTrust}</Label>
+              <Select
+                value={block.trusted ? 'trusted' : 'untrusted'}
+                onValueChange={(value) => updateDomain(block.id, { trusted: value === 'trusted' })}
+              >
+                <SelectTrigger id="external-trust" className="mt-1 h-8 w-full text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="untrusted">{ru.inspector.externalTrustUntrusted}</SelectItem>
+                  <SelectItem value="trusted">{ru.inspector.externalTrustTrusted}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] italic text-muted-foreground">
+                {ru.inspector.externalTrustHint}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">{ru.canvas.noCostExternal}</p>
+            <p className="text-xs text-muted-foreground">{ru.inspector.internalOnlyHint}</p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" className="h-8">
+                  {ru.inspector.deleteDomain}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{ru.dialogs.confirmReplaceTitle}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {ru.inspector.confirmDeleteDomain(block.name)}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{ru.inspector.cancel}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteDomain(block.id)}>
+                    {ru.inspector.confirm}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        );
+      } else {
+        const cards = project.security.functions.filter(
+          (fn) => placementByFn.get(fn.id) === block.id,
+        );
+        body = (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold">
+              {ru.inspector.domain}: <span className="font-mono text-xs text-muted-foreground">{block.id}</span>
+            </h3>
+            <div>
+              <Label htmlFor="domain-name" className="text-xs">{ru.inspector.name}</Label>
+              <Input
+                id="domain-name"
+                className="mt-1 h-8"
+                value={block.name}
+                onChange={(event) => updateDomain(block.id, { name: event.target.value.slice(0, 80) })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="domain-cost" className="text-xs">{ru.inspector.blockCost}</Label>
+              <Input
+                id="domain-cost"
+                className="mt-1 h-8"
+                type="number"
+                min={0}
+                step={1}
+                value={block.cost}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isInteger(value) && value >= 0) updateDomain(block.id, { cost: value });
+                }}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">{ru.inspector.functionsInDomain} ({cards.length})</Label>
+              <div className="mt-1 space-y-2">
+                {cards.length === 0 && (
+                  <p className="text-xs italic text-muted-foreground">{ru.canvas.statusNeutral}</p>
+                )}
+                {cards.map((fn) => (
+                  <div key={fn.id} className="rounded border border-border bg-card px-2 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 flex-1 truncate text-xs font-medium" title={fn.name}>
+                        {fn.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{fn.cost}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => unplaceFunction(fn.id)}
+                      >
+                        {ru.canvas.remove}
+                      </Button>
+                    </div>
+                    {otherBlocks.length > 0 && (
+                      <div className="mt-1.5">
+                        <Select
+                          value=""
+                          onValueChange={(target) => {
+                            if (target) placeFunction(fn.id, target);
+                          }}
+                        >
+                          <SelectTrigger className="h-7 w-full text-xs" aria-label={ru.inspector.move}>
+                            <SelectValue placeholder={ru.inspector.move} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {otherBlocks.map((other) => (
+                              <SelectItem key={other.id} value={other.id}>
+                                {other.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] italic text-muted-foreground">{ru.inspector.internalOnlyHint}</p>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" className="h-8">
+                  {ru.inspector.deleteDomain}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{ru.dialogs.confirmReplaceTitle}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {ru.inspector.confirmDeleteDomain(block.name)}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{ru.inspector.cancel}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteDomain(block.id)}>
+                    {ru.inspector.confirm}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        );
+      }
+    }
+  } else if (selection?.kind === 'card') {
+    const fn = fnById.get(selection.id);
+    if (fn) {
+      const placementBlock = placementByFn.get(fn.id);
+      const block = placementBlock ? blockById.get(placementBlock) : undefined;
+      const otherBlocks = project.architecture.blocks.filter(
+        (b) => b.id !== placementBlock && !b.external,
+      );
+      body = (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">
+            {ru.inspector.card}: <span className="font-mono text-xs text-muted-foreground">{fn.id}</span>
+          </h3>
+          <p className="text-sm text-foreground">{fn.name}</p>
+          <p className="text-xs text-muted-foreground">{ru.inspector.cost}: {fn.cost}</p>
+          <div>
+            <Label className="text-xs">{ru.inspector.goalsOfCard}</Label>
+            <ul className="mt-1 space-y-1">
+              {(fn.implements ?? []).length === 0 && (
+                <li className="text-xs italic text-muted-foreground">—</li>
+              )}
+              {(fn.implements ?? []).map((link, index) => {
+                const goal = goalById.get(link.goal);
+                return (
+                  <li key={index} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0 truncate text-muted-foreground">{goal?.name ?? link.goal}</span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 ${
+                        link.weight === 'mandatory'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-secondary-foreground'
+                      }`}
+                    >
+                      {link.weight === 'mandatory' ? ru.goals.mandatory : ru.goals.optional}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {block ? ru.pool.placedIn(block.name) : ru.pool.free}
+          </p>
+          {otherBlocks.length > 0 && (
+            <Select
+              value=""
+              onValueChange={(target) => {
+                if (target) placeFunction(fn.id, target);
+              }}
+            >
+              <SelectTrigger className="h-8 w-full text-xs" aria-label={ru.inspector.move}>
+                <SelectValue placeholder={ru.inspector.move} />
+              </SelectTrigger>
+              <SelectContent>
+                {otherBlocks.map((other) => (
+                  <SelectItem key={other.id} value={other.id}>
+                    {other.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {placementBlock && (
+            <Button size="sm" variant="outline" className="h-8" onClick={() => unplaceFunction(fn.id)}>
+              {ru.canvas.remove}
+            </Button>
+          )}
+        </div>
+      );
+    }
+  } else if (selection?.kind === 'edge') {
+    const edge = edgeById.get(selection.id);
+    if (edge) {
+      const from = blockById.get(edge.from);
+      const to = blockById.get(edge.to);
+      body = (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">
+            {ru.inspector.edge}: <span className="font-mono text-xs text-muted-foreground">{edge.id}</span>
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {ru.inspector.edgeFrom}: {from?.name ?? edge.from} → {ru.inspector.edgeTo}: {to?.name ?? edge.to}
+          </p>
+          <div>
+            <Label htmlFor="edge-label" className="text-xs">{ru.inspector.edgeLabel}</Label>
+            <Input
+              id="edge-label"
+              className="mt-1 h-8"
+              value={edge.label ?? ''}
+              onChange={(event) => updateEdge(edge.id, { label: event.target.value.slice(0, 60) })}
+              placeholder="—"
+            />
+          </div>
+          <Button size="sm" variant="destructive" className="h-8" onClick={() => deleteEdge(edge.id)}>
+            {ru.inspector.deleteEdge}
+          </Button>
+          <p className="text-xs text-muted-foreground">Delete — {ru.inspector.deleteEdge.toLowerCase()}</p>
+        </div>
+      );
+    }
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="inspector-panel">
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">{ru.inspector.title}</h2>
+      </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="p-4">{body}</div>
+      </ScrollArea>
+    </div>
+  );
+}

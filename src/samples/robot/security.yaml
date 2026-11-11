@@ -1,0 +1,55 @@
+version: 1
+goals:
+  - id: g-safe
+    name: "Безопасность пешеходов"
+    description: "Робот не травмирует людей на обслуживаемой территории"
+  - id: g-cmd
+    name: "Достоверность команд"
+    description: "Исполняются только подлинные команды диспетчера"
+  - id: g-telem
+    name: "Достоверность телеметрии"
+    description: "Телеметрия передаётся без искажений и подмен"
+  - id: g-route
+    name: "Сохранность маршрута"
+    description: "Маршрут не искажается и выводит к точке возврата"
+  - id: g-charge
+    name: "Безопасность зарядки"
+    description: "Зарядка начинается только при безопасных параметрах"
+functions:
+  - id: fn-auth
+    name: "Аутентификация команд диспетчера"
+    cost: 3
+    implements:
+      - { goal: g-cmd, weight: mandatory }
+  - id: fn-sanitize
+    name: "Контроль целостности входных данных"
+    cost: 2
+    implements:
+      - { goal: g-cmd, weight: optional }
+      - { goal: g-telem, weight: mandatory }
+  - id: fn-estop
+    name: "Аварийный останов"
+    cost: 3
+    implements:
+      - { goal: g-safe, weight: mandatory }
+  - id: fn-geofence
+    name: "Геоограничение"
+    cost: 2
+    implements:
+      - { goal: g-safe, weight: optional }
+      - { goal: g-route, weight: mandatory }
+  - id: fn-sign
+    name: "Подписывание телеметрии"
+    cost: 2
+    implements:
+      - { goal: g-telem, weight: mandatory }
+  - id: fn-charge-guard
+    name: "Контроль параметров зарядки"
+    cost: 2
+    implements:
+      - { goal: g-charge, weight: mandatory }
+  - id: fn-log
+    name: "Журналирование событий"
+    cost: 1
+    implements:
+      - { goal: g-telem, weight: optional }

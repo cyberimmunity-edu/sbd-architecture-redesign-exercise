@@ -1,0 +1,50 @@
+version: 1
+goals:
+  - id: g-nav
+    name: "Безопасность судоходства"
+    description: "Судно избегает столкновений и посадки на мель"
+  - id: g-comms
+    name: "Достоверность обмена с берегом"
+    description: "Обмен с береговым постом защищён от подмен"
+  - id: g-route
+    name: "Исполнение рейса"
+    description: "Рейс выполняется по согласованному маршруту"
+  - id: g-cargo
+    name: "Целостность грузовых данных"
+    description: "Данные о грузе достоверны у всех участников"
+functions:
+  - id: fn-ais
+    name: "Фильтрация AIS-данных"
+    cost: 2
+    implements:
+      - { goal: g-comms, weight: mandatory }
+  - id: fn-auth-shore
+    name: "Аутентификация береговых команд"
+    cost: 3
+    implements:
+      - { goal: g-comms, weight: mandatory }
+  - id: fn-collision
+    name: "Автоматическое расхождение"
+    cost: 4
+    implements:
+      - { goal: g-nav, weight: mandatory }
+  - id: fn-route-check
+    name: "Контроль исполнения рейса"
+    cost: 2
+    implements:
+      - { goal: g-route, weight: mandatory }
+  - id: fn-cargo-seal
+    name: "Электронная пломба"
+    cost: 3
+    implements:
+      - { goal: g-cargo, weight: mandatory }
+  - id: fn-weather
+    name: "Контроль погодных ограничений"
+    cost: 2
+    implements:
+      - { goal: g-nav, weight: optional }
+  - id: fn-log
+    name: "Журналирование рейса"
+    cost: 1
+    implements:
+      - { goal: g-cargo, weight: optional }

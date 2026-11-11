@@ -1,0 +1,9 @@
+version: 1
+blocks:
+  - id: blk-core
+    name: "Ядро системы"
+    cost: 4
+  - id: blk-core
+    name: "Дубликат ядра"
+    cost: 2
+edges: []

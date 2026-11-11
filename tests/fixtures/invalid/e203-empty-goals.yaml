@@ -1,0 +1,6 @@
+version: 1
+goals: []
+functions:
+  - id: fn-hashing
+    name: "Хеширование паролей"
+    cost: 3

@@ -1,0 +1,9 @@
+version: 1
+blocks:
+  - id: blk-core
+    name: "Ядро системы"
+    cost: 4
+edges:
+  - id: e-bad
+    from: blk-core
+    to: blk-ghost

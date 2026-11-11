@@ -1,0 +1,42 @@
+version: 1
+system:
+  name: "АСУ ТП учебного стенда"
+  description: "Контрольный пример ТЗ «Конструктор СКИБ»"
+blocks:
+  - id: blk-ui
+    name: "Консоль оператора"
+    cost: 2
+    position: { x: 60, y: 240 }
+  - id: blk-core
+    name: "Ядро системы"
+    cost: 4
+    position: { x: 380, y: 240 }
+  - id: blk-store
+    name: "Хранилище"
+    cost: 2
+    position: { x: 700, y: 120 }
+  - id: blk-audit
+    name: "Аудит"
+    cost: 3
+    position: { x: 700, y: 360 }
+  - id: blk-siem
+    name: "Внешний SIEM"
+    cost: 1
+    position: { x: 1000, y: 360 }
+edges:
+  - id: e-ui-core
+    from: blk-ui
+    to: blk-core
+    label: "команды"
+  - id: e-core-store
+    from: blk-core
+    to: blk-store
+    label: "данные"
+  - id: e-core-audit
+    from: blk-core
+    to: blk-audit
+    label: "события"
+  - id: e-audit-siem
+    from: blk-audit
+    to: blk-siem
+    label: "журналы"

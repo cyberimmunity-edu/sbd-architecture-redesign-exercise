@@ -1,0 +1,2636 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Конструктор СКИБ — техническое задание v0.01.01</title>
+<style>
+@page {
+  size: A4;
+  margin: 20mm 17mm 21mm 17mm;
+  @bottom-center { content: counter(page); font-family: 'Liberation Sans', sans-serif; font-size: 8.5pt; color: #8A94A0; }
+  @top-right { content: 'Конструктор СКИБ · ТЗ v0.01.01'; font-family: 'Liberation Sans', sans-serif; font-size: 7.5pt; color: #A7B0BB; }
+}
+@page cover { margin: 0; @bottom-center { content: none; } @top-right { content: none; } }
+@page toc-page { @top-right { content: none; } }
+
+html, body { margin: 0; padding: 0; background: #FFFFFF; color: #23282E;
+  font-family: 'Liberation Serif', 'DejaVu Serif', serif; font-size: 10.5pt; line-height: 1.5; }
+
+/* ---------- Обложка ---------- */
+.cover { page: cover; width: 210mm; height: 296mm; box-sizing: border-box;
+  break-after: page; overflow: hidden; background: #FFFFFF; position: relative; }
+.cover-inner { position: absolute; inset: 0; padding: 26mm 20mm 18mm 20mm; box-sizing: border-box;
+  display: flex; flex-direction: column; }
+.cover-label { font-family: 'Liberation Sans', sans-serif; font-size: 11pt; letter-spacing: 7px;
+  color: #1E4E8C; font-weight: 700; }
+.cover-rule { width: 34mm; height: 1.4mm; background: #1E4E8C; margin: 9mm 0 14mm 0; }
+.cover-title { font-family: 'Liberation Sans', sans-serif; font-size: 37pt; line-height: 1.12;
+  margin: 0 0 7mm 0; color: #14181D; font-weight: 700; }
+.cover-subtitle { font-size: 13.5pt; line-height: 1.5; color: #3C4550; margin: 0 0 16mm 0; max-width: 155mm; }
+.cover-meta { border-top: 0.5mm solid #1E4E8C; padding-top: 6mm; display: flex; flex-direction: column; gap: 3.2mm; max-width: 150mm; }
+.cover-meta div { font-size: 11pt; color: #23282E; }
+.cover-meta span { display: inline-block; min-width: 42mm; font-family: 'Liberation Sans', sans-serif;
+  font-size: 8.5pt; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7684; }
+.cover-rev { margin-top: 11mm; max-width: 158mm; font-size: 9.5pt; line-height: 1.55; color: #4A5462;
+  border-left: 1mm solid #C4CFDB; padding-left: 5mm; }
+.cover-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: 'Liberation Sans', sans-serif; font-size: 8.5pt; color: #6B7684;
+  border-top: 0.3mm solid #D9DEE4; padding-top: 4mm; }
+
+/* ---------- Содержание ---------- */
+.toc { page: toc-page; break-after: page; }
+.toc-title { font-family: 'Liberation Sans', sans-serif; font-size: 16pt; color: #14181D;
+  margin: 0 0 8mm 0; padding-bottom: 3mm; border-bottom: 0.6mm solid #1E4E8C; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: flex; align-items: baseline; text-decoration: none; color: #23282E;
+  font-size: 10.5pt; padding: 1.1mm 0; }
+.toc .dots { flex: 1 1 auto; border-bottom: 0.3mm dotted #B8C2CE; margin: 0 1.5mm 0.8mm 2.5mm; min-width: 6mm; }
+.toc .pg { min-width: 6mm; text-align: right; color: #6B7684; }
+.toc-h2 a { font-family: 'Liberation Sans', sans-serif; font-weight: 700; font-size: 10pt; margin-top: 2.2mm; }
+.toc-h3 a { padding-left: 7mm; font-weight: 400; }
+
+/* ---------- Основной текст ---------- */
+.main-content h2 { font-family: 'Liberation Sans', sans-serif; font-size: 15pt; color: #14181D;
+  margin: 9mm 0 4mm 0; padding-bottom: 2mm; border-bottom: 0.5mm solid #1E4E8C;
+  break-after: avoid; break-inside: avoid; }
+.main-content h3 { font-family: 'Liberation Sans', sans-serif; font-size: 12pt; color: #1E4E8C;
+  margin: 6.5mm 0 2.5mm 0; break-after: avoid; break-inside: avoid; }
+.main-content h4 { font-family: 'Liberation Sans', sans-serif; font-size: 10.5pt; color: #23282E;
+  margin: 5mm 0 2mm 0; break-after: avoid; break-inside: avoid; }
+.main-content p { margin: 0 0 2.6mm 0; text-align: justify; hyphens: auto; }
+.main-content ul, .main-content ol { margin: 0 0 2.6mm 0; padding-left: 6.5mm; }
+.main-content li { margin-bottom: 1.2mm; }
+.main-content li p { margin: 0 0 1.2mm 0; }
+
+/* Цитата-ревизия в начале документа */
+.main-content blockquote { margin: 0 0 5mm 0; padding: 3.5mm 5mm; background: #F3F6FA;
+  border-left: 1.2mm solid #1E4E8C; color: #333A44; font-size: 9.5pt; }
+.main-content blockquote p { margin: 0 0 2mm 0; text-align: left; }
+.main-content blockquote p:last-child { margin: 0; }
+
+/* Таблицы */
+table { border-collapse: collapse; width: 100%; margin: 3mm 0 4.5mm 0; font-size: 8.8pt;
+  font-family: 'Liberation Sans', sans-serif; line-height: 1.35; }
+th, td { border: 0.25mm solid #C4CFDB; padding: 1.5mm 2.2mm; text-align: left; vertical-align: top; }
+th { background: #EDF1F6; color: #14181D; font-weight: 700; }
+tr { break-inside: avoid; }
+thead { break-inside: avoid; }
+td { word-break: break-word; }
+tbody tr:nth-child(even) td { background: #FAFBFD; }
+
+/* Код */
+pre { background: #F5F7FA; border: 0.25mm solid #DFE5EC; padding: 2.8mm 3.5mm; margin: 2.5mm 0 4mm 0;
+  font-family: 'Liberation Mono', monospace; font-size: 8.2pt; line-height: 1.42; white-space: pre-wrap; }
+code { font-family: 'Liberation Mono', monospace; font-size: 0.86em; background: #F5F7FA;
+  padding: 0.2mm 0.8mm; border-radius: 0.8mm; }
+pre code { background: none; padding: 0; font-size: 1em; }
+thead { display: table-header-group; }
+
+/* Прочее */
+hr { border: none; border-top: 0.3mm solid #D9DEE4; margin: 6mm 0; }
+strong { color: #14181D; }
+a { color: #1E4E8C; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-label">TECHNICAL SPECIFICATION</div>
+    <div class="cover-rule"></div>
+    <h1 class="cover-title">Конструктор СКИБ</h1>
+    <p class="cover-subtitle">Техническое задание на разработку учебного веб-инструмента
+    проектирования систем с конструктивной информационной безопасностью</p>
+    <div class="cover-meta">
+      <div><span>Документ</span>Техническое задание · версия 0.01.01</div>
+      <div><span>Дата</span>10 ноября 2026 г.</div>
+      <div><span>Статус</span>утверждено, реализовано (v0.01.01)</div>
+      <div><span>Назначение</span>спецификация инструмента</div>
+      <div><span>Контекст курса</span>ГОСТ Р 72118-2025 · ГОСТ ISO/IEC TS 19249-2021</div>
+    </div>
+    <div class="cover-rev">Ревизия 0.01.01: модель доверия доменов (3.5), коэффициенты доверия
+    в стоимости (3.3, 7.1), внешние системы и рамка периметра, перестановка панелей и тема
+    интерфейса (5.1), примеры «Автономный коммунальный робот» и «Безэкипажное судно-доставщик»
+    (14.4), кейсы T-T-01…T-T-10 (11.2), сборка node:22-alpine (10.2).</div>
+    <div class="cover-footer">
+      <span>Конструктивная информационная безопасность · учебный курс</span>
+      <span>skib-lab · v0.01.01</span>
+    </div>
+  </div>
+</section>
+
+<nav class="toc"><h2 class="toc-title">Содержание</h2><ul>
+<li class="toc-h2"><a href="#sec-sec-1-общие-сведения"><span>1. Общие сведения</span><span class="dots"></span><span class="pg">5</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-11-наименование"><span>1.1. Наименование</span><span class="dots"></span><span class="pg">5</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-12-назначение-и-цели-создания"><span>1.2. Назначение и цели создания</span><span class="dots"></span><span class="pg">5</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-13-пользователи-и-роли"><span>1.3. Пользователи и роли</span><span class="dots"></span><span class="pg">6</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-14-границы-разработки"><span>1.4. Границы разработки</span><span class="dots"></span><span class="pg">6</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-2-термины-определения-и-обозначения"><span>2. Термины, определения и обозначения</span><span class="dots"></span><span class="pg">6</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-3-модель-предметной-области"><span>3. Модель предметной области</span><span class="dots"></span><span class="pg">7</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-31-сущности-и-атрибуты"><span>3.1. Сущности и атрибуты</span><span class="dots"></span><span class="pg">7</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-32-правило-единственного-размещения"><span>3.2. Правило единственного размещения</span><span class="dots"></span><span class="pg">9</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-33-модель-стоимости-решение-d2"><span>3.3. Модель стоимости (решение D2)</span><span class="dots"></span><span class="pg">9</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-34-правила-покрытия-целей-решение-d4"><span>3.4. Правила покрытия целей (решение D4)</span><span class="dots"></span><span class="pg">10</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-35-модель-доверия-доменов-и-целостности-потоков-v00101"><span>3.5. Модель доверия доменов и целостности потоков (v0.01.01)</span><span class="dots"></span><span class="pg">11</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-4-функциональные-требования"><span>4. Функциональные требования</span><span class="dots"></span><span class="pg">11</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-41-загрузка-данных"><span>4.1. Загрузка данных</span><span class="dots"></span><span class="pg">11</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-42-пул-карточек-и-размещения"><span>4.2. Пул карточек и размещения</span><span class="dots"></span><span class="pg">12</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-43-домены-стрелки-и-декомпозиция"><span>4.3. Домены, стрелки и декомпозиция</span><span class="dots"></span><span class="pg">12</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-44-расчёты-и-индикация"><span>4.4. Расчёты и индикация</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-45-история-операций"><span>4.5. История операций</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-46-сохранение-и-экспорт"><span>4.6. Сохранение и экспорт</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-47-сообщения-и-обработка-ошибок"><span>4.7. Сообщения и обработка ошибок</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-5-требования-к-интерфейсу-пользователя"><span>5. Требования к интерфейсу пользователя</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-51-компоновка-окна"><span>5.1. Компоновка окна</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-52-узел-домена-и-карточка"><span>5.2. Узел домена и карточка</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-53-цветовая-система-статусов"><span>5.3. Цветовая система статусов</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-6-спецификация-форматов-данных"><span>6. Спецификация форматов данных</span><span class="dots"></span><span class="pg">15</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-61-файл-architectureyaml"><span>6.1. Файл architecture.yaml</span><span class="dots"></span><span class="pg">15</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-62-файл-securityyaml"><span>6.2. Файл security.yaml</span><span class="dots"></span><span class="pg">16</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-63-представление-архитектуры-в-plantuml"><span>6.3. Представление архитектуры в PlantUML</span><span class="dots"></span><span class="pg">17</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-64-файл-рабочего-состояния-stateyaml"><span>6.4. Файл рабочего состояния state.yaml</span><span class="dots"></span><span class="pg">17</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-65-валидация-входных-файлов"><span>6.5. Валидация входных файлов</span><span class="dots"></span><span class="pg">18</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-66-требования-к-экспорту-и-обратной-загрузке"><span>6.6. Требования к экспорту и обратной загрузке</span><span class="dots"></span><span class="pg">19</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-7-алгоритмы"><span>7. Алгоритмы</span><span class="dots"></span><span class="pg">19</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-71-расчёт-стоимости"><span>7.1. Расчёт стоимости</span><span class="dots"></span><span class="pg">19</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-72-расчёт-покрытия"><span>7.2. Расчёт покрытия</span><span class="dots"></span><span class="pg">19</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-73-декомпозиция-домена"><span>7.3. Декомпозиция домена</span><span class="dots"></span><span class="pg">20</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-74-валидация-файлов"><span>7.4. Валидация файлов</span><span class="dots"></span><span class="pg">20</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-8-технические-требования"><span>8. Технические требования</span><span class="dots"></span><span class="pg">20</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-81-технологический-стек-решение-d6"><span>8.1. Технологический стек (решение D6)</span><span class="dots"></span><span class="pg">20</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-82-слои-приложения-и-запреты"><span>8.2. Слои приложения и запреты</span><span class="dots"></span><span class="pg">21</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-83-структура-репозитория"><span>8.3. Структура репозитория</span><span class="dots"></span><span class="pg">21</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-9-нефункциональные-требования"><span>9. Нефункциональные требования</span><span class="dots"></span><span class="pg">21</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-10-требования-к-развёртыванию"><span>10. Требования к развёртыванию</span><span class="dots"></span><span class="pg">22</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-101-варианты-развёртывания"><span>10.1. Варианты развёртывания</span><span class="dots"></span><span class="pg">22</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-102-требования-к-dockerfile"><span>10.2. Требования к Dockerfile</span><span class="dots"></span><span class="pg">22</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-103-требования-к-makefile"><span>10.3. Требования к Makefile</span><span class="dots"></span><span class="pg">23</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-104-конфигурационные-параметры"><span>10.4. Конфигурационные параметры</span><span class="dots"></span><span class="pg">24</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-105-обновление-и-откат"><span>10.5. Обновление и откат</span><span class="dots"></span><span class="pg">24</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-106-приёмочные-проверки-развёртывания"><span>10.6. Приёмочные проверки развёртывания</span><span class="dots"></span><span class="pg">24</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-11-требования-к-тестированию"><span>11. Требования к тестированию</span><span class="dots"></span><span class="pg">25</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-111-стратегия"><span>11.1. Стратегия</span><span class="dots"></span><span class="pg">25</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-112-unit-тесты-движка-и-парсеров"><span>11.2. Unit-тесты движка и парсеров</span><span class="dots"></span><span class="pg">25</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-113-e2e-тесты-интерфейса"><span>11.3. E2E-тесты интерфейса</span><span class="dots"></span><span class="pg">28</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-114-тестовые-данные"><span>11.4. Тестовые данные</span><span class="dots"></span><span class="pg">28</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-115-критерии-прохождения-и-отчётность"><span>11.5. Критерии прохождения и отчётность</span><span class="dots"></span><span class="pg">29</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-12-требования-к-документации-проекта"><span>12. Требования к документации проекта</span><span class="dots"></span><span class="pg">29</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-121-состав-документации"><span>12.1. Состав документации</span><span class="dots"></span><span class="pg">29</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-122-обязательное-содержание-документов"><span>12.2. Обязательное содержание документов</span><span class="dots"></span><span class="pg">29</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-123-требования-к-качеству-документации"><span>12.3. Требования к качеству документации</span><span class="dots"></span><span class="pg">30</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-13-версии-и-этапность"><span>13. Версии и этапность</span><span class="dots"></span><span class="pg">30</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-14-порядок-контроля-и-приёмки"><span>14. Порядок контроля и приёмки</span><span class="dots"></span><span class="pg">31</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-141-средства-контроля"><span>14.1. Средства контроля</span><span class="dots"></span><span class="pg">31</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-142-чек-лист-приёмки"><span>14.2. Чек-лист приёмки</span><span class="dots"></span><span class="pg">31</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-143-порядок-прогона-контрольных-примеров"><span>14.3. Порядок прогона контрольных примеров</span><span class="dots"></span><span class="pg">32</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-144-демонстрационные-примеры"><span>14.4. Демонстрационные примеры</span><span class="dots"></span><span class="pg">32</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-а-демонстрационный-architectureyaml-пример-1"><span>Приложение А. Демонстрационный architecture.yaml (пример 1)</span><span class="dots"></span><span class="pg">33</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-б-демонстрационный-securityyaml-пример-1"><span>Приложение Б. Демонстрационный security.yaml (пример 1)</span><span class="dots"></span><span class="pg">34</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-в-демонстрационный-architecturepuml-пример-1"><span>Приложение В. Демонстрационный architecture.puml (пример 1)</span><span class="dots"></span><span class="pg">35</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-г-реестр-принятых-решений"><span>Приложение Г. Реестр принятых решений</span><span class="dots"></span><span class="pg">35</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-д-структура-репозитория"><span>Приложение Д. Структура репозитория</span><span class="dots"></span><span class="pg">36</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-е-эскиз-nginxconf"><span>Приложение Е. Эскиз nginx.conf</span><span class="dots"></span><span class="pg">38</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-приложение-ж-эскиз-makefile"><span>Приложение Ж. Эскиз Makefile</span><span class="dots"></span><span class="pg">39</span></a></li>
+</ul></nav>
+<main class="main-content">
+<blockquote>
+<p>Версия 0.01.01 от 10.11.2026 · Статус: утверждено, реализовано (v0.01.01) · Назначение: спецификация инструмента · Контекст курса: ГОСТ Р 72118-2025, ГОСТ ISO/IEC TS 19249-2021</p>
+<p>Ревизия 0.01.01 (10.11.2026): добавлены модель доверия доменов и целостности потоков (раздел 3.5), коэффициенты доверия в формуле стоимости (разделы 3.3, 7.1), внешние (смежные) системы и рамка периметра (разделы 3.1, 3.5, 6.1, 6.3, 6.4), перестановка панелей и переключение темы интерфейса (раздел 5), два демонстрационных примера — «Автономный коммунальный робот» и «Безэкипажное судно-доставщик» (раздел 14.4, Приложения А–В), unit-кейсы T-T-01…T-T-10 и обновлённые T-C (раздел 11.2); базовый образ сборки — node:22-alpine (раздел 10.2). История решений — Приложение Г (D14–D18).</p>
+</blockquote>
+<h2 id="sec-1-общие-сведения">1. Общие сведения</h2>
+<h3 id="sec-11-наименование">1.1. Наименование</h3>
+<p>Рабочее наименование инструмента — «Конструктор СКИБ» (рабочее имя репозитория и артефактов сборки — <code>skib-lab</code>). Аббревиатура СКИБ соответствует предмету курса — «системы с конструктивной информационной безопасностью» (по наименованию ГОСТ Р 72118-2025). Наименование рабочее и может быть изменено правообладателем без пересмотра остальных требований.</p>
+<h3 id="sec-12-назначение-и-цели-создания">1.2. Назначение и цели создания</h3>
+<p>Разрабатывается интерактивный веб-инструмент без серверной части для практических занятий по проектированию систем с конструктивной информационной безопасностью. Студент загружает пример функциональной архитектуры, размещает функции безопасности (карточки) по доменам безопасности (функциональным блокам), наблюдает мгновенный пересчёт стоимости каждого домена и всей системы, а также светофор покрытия целей безопасности, выполняет декомпозицию доменов и оценивает, как изоляция влияет на стоимость решения. Результат работы сохраняется и сдаётся файлом рабочего состояния.</p>
+<p>Цели создания инструмента:</p>
+<ol type="1">
+<li>наглядно связать три сущности курса: цели безопасности, функции безопасности и архитектурные домены;</li>
+<li>дать численно ощутимую модель «цена безопасности» на основе формулы стоимости раздела 3.3;</li>
+<li>автоматизировать проверку полноты покрытия целей безопасности (светофор красный — жёлтый — зелёный);</li>
+<li>поддержать полный учебный цикл: выдача варианта преподавателем, проектирование студентом, сохранение и сдача результата файлом.</li>
+</ol>
+<p>Методологический контекст курса — ГОСТ Р 72118-2025 «Защита информации. Системы с конструктивной информационной безопасностью. Методология разработки» и ГОСТ ISO/IEC TS 19249-2021 (каталог архитектурных и дизайнерских принципов построения защищённых систем); понятия zero trust и MILS используются как теоретическая рамка занятий. Решение D9 (Приложение Г): сами стандарты в интерфейс инструмента не включаются, ссылки на них допустимы только в документации.</p>
+<h3 id="sec-13-пользователи-и-роли">1.3. Пользователи и роли</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Роль</th>
+<th>Основные задачи</th>
+<th>Документ по роли (раздел 12)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Студент (пользователь)</td>
+<td>Проектирование: загрузка варианта, размещение карточек, декомпозиция, сдача работы</td>
+<td>docs/user-guide.md</td>
+</tr>
+<tr class="even">
+<td>Преподаватель</td>
+<td>Подготовка файлов варианта (architecture.yaml, security.yaml), проведение занятия, проверка сданных работ</td>
+<td>docs/teacher-guide.md</td>
+</tr>
+<tr class="odd">
+<td>Разработчик</td>
+<td>Развитие кода инструмента, сборка, релизы</td>
+<td>docs/developer-guide.md</td>
+</tr>
+<tr class="even">
+<td>Тестировщик</td>
+<td>Запуск и расширение автотестов, регистрация дефектов</td>
+<td>docs/testing-guide.md</td>
+</tr>
+<tr class="odd">
+<td>Администратор (инженер по развёртыванию)</td>
+<td>Развёртывание и сопровождение: Docker, статический хостинг, обновление версии</td>
+<td>docs/deployment-guide.md</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-14-границы-разработки">1.4. Границы разработки</h3>
+<p>В версии 1.0 не реализуются: серверная часть и база данных, многопользовательский режим и одновременное совместное редактирование, интеграция с системами управления обучением (LMS), мобильная вёрстка, серверная обработка загружаемых файлов. Все перечисленные ограничения могут пересматриваться в версиях v1 и v2 (раздел 13).</p>
+<h2 id="sec-2-термины-определения-и-обозначения">2. Термины, определения и обозначения</h2>
+<p>Термины используются во всём документе в единственном значении, приведённом ниже; идентификаторы сущностей в коде и файлах данных заданы в разделе 3.1.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Термин</th>
+<th>Определение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Функциональный блок</td>
+<td>Элемент загруженной функциональной архитектуры; в модели инструмента — узел канвы со стоимостью реализации.</td>
+</tr>
+<tr class="even">
+<td>Домен безопасности</td>
+<td>Тот же объект модели, что функциональный блок, рассматриваемый как изолируемая единица. В интерфейсе — «домен». Синонимы по решению D1.</td>
+</tr>
+<tr class="odd">
+<td>Цель безопасности</td>
+<td>Проверяемое свойство системы (конфиденциальность, целостность, доступность и т. п.); определяется в security.yaml.</td>
+</tr>
+<tr class="even">
+<td>Функция безопасности</td>
+<td>Конкретный защитный механизм с числовой стоимостью реализации (решение D1, D3); определяются в security.yaml.</td>
+</tr>
+<tr class="odd">
+<td>Карточка</td>
+<td>Визуальное представление функции безопасности в пуле и внутри домена.</td>
+</tr>
+<tr class="even">
+<td>Пул карточек</td>
+<td>Перечень всех функций security.yaml с индикацией статуса размещения.</td>
+</tr>
+<tr class="odd">
+<td>Размещение</td>
+<td>Факт нахождения функции ровно в одном домене (правило 3.2).</td>
+</tr>
+<tr class="even">
+<td>Покрытие цели</td>
+<td>Полнота размещения функций, привязанных к цели; правила — в разделе 3.4.</td>
+</tr>
+<tr class="odd">
+<td>Светофор</td>
+<td>Индикация статуса покрытия: красный, жёлтый, зелёный.</td>
+</tr>
+<tr class="even">
+<td>Декомпозиция</td>
+<td>Замена домена группой доменов того же уровня (плоская модель, решение D5). Только для внутренних доменов (3.5).</td>
+</tr>
+<tr class="odd">
+<td>Внешняя (смежная) система</td>
+<td>Объект модели с признаком <code>external</code>: взаимодействует с целевой системой, но находится вне её периметра (3.5); функций не получает, декомпозиции не подлежит, стоимость не определяется.</td>
+</tr>
+<tr class="even">
+<td>Периметр целевой системы</td>
+<td>Граница, охватывающая только внутренние домены; на канве отображается рамкой (3.5).</td>
+</tr>
+<tr class="odd">
+<td>ТКБ (доверенная вычислительная база)</td>
+<td>Множество доменов, содержащих хотя бы одну функцию, критичную хотя бы для одной цели безопасности (3.5).</td>
+</tr>
+<tr class="even">
+<td>НДБ</td>
+<td>Недоверенный домен: внутренний домен вне ТКБ; полупрозрачная красная заливка (3.5).</td>
+</tr>
+<tr class="odd">
+<td>ДДБ</td>
+<td>Доверенный домен безопасности: домен из ТКБ, все входящие стрелки зелёные (или входов нет); зелёная заливка (3.5).</td>
+</tr>
+<tr class="even">
+<td>ДДБПЦД</td>
+<td>Доверенный домен, повышающий целостность данных: домен из ТКБ, в который входит хотя бы одна красная стрелка; жёлтая заливка (3.5).</td>
+</tr>
+<tr class="odd">
+<td>Целостность потока</td>
+<td>Признак стрелки: зелёная — высокоцелостный поток из доверенного источника; красная — низкоцелостный поток (3.5).</td>
+</tr>
+<tr class="even">
+<td>Стоимость домена</td>
+<td>Величина C_домена по формуле раздела 3.3.</td>
+</tr>
+<tr class="odd">
+<td>Стоимость системы</td>
+<td>Сумма стоимостей всех доменов, C_системы.</td>
+</tr>
+<tr class="even">
+<td>Вес связи</td>
+<td>Атрибут связи «функция — цель»: mandatory (обязательная) или optional (необязательная), решение D4.</td>
+</tr>
+<tr class="odd">
+<td>architecture.yaml</td>
+<td>Файл описания функциональной архитектуры (раздел 6.1).</td>
+</tr>
+<tr class="even">
+<td>security.yaml</td>
+<td>Файл описания целей и функций безопасности (раздел 6.2).</td>
+</tr>
+<tr class="odd">
+<td>state.yaml</td>
+<td>Файл рабочего состояния — полный снимок сеанса студента (раздел 6.4).</td>
+</tr>
+<tr class="even">
+<td>PlantUML</td>
+<td>Текстовый формат диаграмм; в инструменте поддерживается фиксированное подмножество (раздел 6.3).</td>
+</tr>
+</tbody>
+</table>
+<p>Обозначения: C_блока — стоимость реализации блока; C_функции — стоимость реализации функции; S — сумма стоимостей функций, размещённых в домене; E_вх, E_исх — число входящих и исходящих стрелок домена; M — множитель связности; все стоимости измеряются в условных единицах стоимости и являются целыми числами.</p>
+<h2 id="sec-3-модель-предметной-области">3. Модель предметной области</h2>
+<h3 id="sec-31-сущности-и-атрибуты">3.1. Сущности и атрибуты</h3>
+<p>Модель данных состоит из шести сущностей. Имена полей фиксированы и используются в коде, файлах данных и схемах валидации без изменений.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Сущность</th>
+<th>Поле</th>
+<th>Тип</th>
+<th>Обязательность</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Block (блок / домен)</td>
+<td>id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный идентификатор, шаблон <code>^[a-z][a-z0-9-]{0,63}$</code></td>
+</tr>
+<tr class="even">
+<td>Block</td>
+<td>name</td>
+<td>string</td>
+<td>да</td>
+<td>Отображаемое имя, 1–80 символов</td>
+</tr>
+<tr class="odd">
+<td>Block</td>
+<td>cost</td>
+<td>integer</td>
+<td>да</td>
+<td>C_блока, целое число не меньше 0</td>
+</tr>
+<tr class="even">
+<td>Block</td>
+<td>position</td>
+<td>{x: number, y: number}</td>
+<td>нет</td>
+<td>Координаты узла на канве; при отсутствии назначаются автоматически</td>
+</tr>
+<tr class="odd">
+<td>Block</td>
+<td>external</td>
+<td>boolean</td>
+<td>нет</td>
+<td>Внешняя (смежная) система — вне периметра целевой системы (3.5); по умолчанию false</td>
+</tr>
+<tr class="even">
+<td>Block</td>
+<td>trusted</td>
+<td>boolean</td>
+<td>нет</td>
+<td>Доверенность внешней системы (3.5); по умолчанию false; для внутренних доменов не используется — их доверенность выводится из размещённых функций</td>
+</tr>
+<tr class="odd">
+<td>Edge (стрелка)</td>
+<td>id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный идентификатор, тот же шаблон</td>
+</tr>
+<tr class="even">
+<td>Edge</td>
+<td>from</td>
+<td>string (Block.id)</td>
+<td>да</td>
+<td>Источник стрелки</td>
+</tr>
+<tr class="odd">
+<td>Edge</td>
+<td>to</td>
+<td>string (Block.id)</td>
+<td>да</td>
+<td>Приёмник стрелки; <code>from</code> не равно <code>to</code></td>
+</tr>
+<tr class="even">
+<td>Edge</td>
+<td>label</td>
+<td>string</td>
+<td>нет</td>
+<td>Подпись стрелки, до 60 символов</td>
+</tr>
+<tr class="odd">
+<td>Goal (цель)</td>
+<td>id</td>
+<td>string</td>
+<td>да</td>
+<td>Тот же шаблон идентификатора</td>
+</tr>
+<tr class="even">
+<td>Goal</td>
+<td>name</td>
+<td>string</td>
+<td>да</td>
+<td>Отображаемое имя, 1–80 символов</td>
+</tr>
+<tr class="odd">
+<td>Goal</td>
+<td>description</td>
+<td>string</td>
+<td>нет</td>
+<td>Пояснение, до 500 символов</td>
+</tr>
+<tr class="even">
+<td>SecurityFunction (функция)</td>
+<td>id</td>
+<td>string</td>
+<td>да</td>
+<td>Тот же шаблон идентификатора</td>
+</tr>
+<tr class="odd">
+<td>SecurityFunction</td>
+<td>name</td>
+<td>string</td>
+<td>да</td>
+<td>Отображаемое имя, 1–100 символов</td>
+</tr>
+<tr class="even">
+<td>SecurityFunction</td>
+<td>cost</td>
+<td>integer</td>
+<td>да</td>
+<td>C_функции, целое число не меньше 0</td>
+</tr>
+<tr class="odd">
+<td>SecurityFunction</td>
+<td>implements</td>
+<td>массив связей</td>
+<td>нет</td>
+<td>Связи «функция — цель»: {goal: Goal.id, weight: mandatory | optional}</td>
+</tr>
+<tr class="even">
+<td>Placement (размещение)</td>
+<td>function</td>
+<td>string (SecurityFunction.id)</td>
+<td>да</td>
+<td>Размещённая функция</td>
+</tr>
+<tr class="odd">
+<td>Placement</td>
+<td>block</td>
+<td>string (Block.id)</td>
+<td>да</td>
+<td>Домен размещения</td>
+</tr>
+<tr class="even">
+<td>Project</td>
+<td>architecture</td>
+<td>{blocks: Block[], edges: Edge[]}</td>
+<td>да</td>
+<td>Текущая архитектура</td>
+</tr>
+<tr class="odd">
+<td>Project</td>
+<td>security</td>
+<td>{goals: Goal[], functions: SecurityFunction[]}</td>
+<td>да</td>
+<td>Цели и функции</td>
+</tr>
+<tr class="even">
+<td>Project</td>
+<td>assignments</td>
+<td>Placement[]</td>
+<td>да</td>
+<td>Размещения; не более одного на функцию</td>
+</tr>
+</tbody>
+</table>
+<p>Ограничения целостности модели: идентификаторы уникальны в пределах своего типа; в Project обязателен минимум 1 блок, 1 цель и 1 функция (решение зафиксировано, чтобы исключить вырожденные состояния); функция может не иметь связей с целями (предупреждение W-004); цель может не иметь реализующих функций (предупреждение W-003, такая цель всегда красная); граф архитектуры допускает циклы длиной больше одного ребра, петли (E-104) запрещены.</p>
+<p>Ограничения для внешних систем (3.5 v0.01.01): C_блока внешней системы фиксирован нулём и не редактируется; функции не размещаются во внешних системах; декомпозиция к ним не применяется; доверенность переключается в инспекторе только у внешних систем.</p>
+<h3 id="sec-32-правило-единственного-размещения">3.2. Правило единственного размещения</h3>
+<p>Функция безопасности в каждый момент времени размещена ровно в одном домене либо находится в пуле. Перетаскивание карточки из пула в домен создаёт размещение; перетаскивание из домена в домен перемещает его; кнопка «Убрать» возвращает функцию в пул и удаляет размещение. Повторное размещение той же функции в другой домен всегда означает перемещение, а не копирование. Это правило обеспечивает однозначность расчёта стоимости и покрытия.</p>
+<h3 id="sec-33-модель-стоимости-решение-d2">3.3. Модель стоимости (решение D2)</h3>
+<p>Стоимости всех объектов — целые числа в условных единицах. Расчёт выполняется по формуле:</p>
+<pre><code>C_домена = C_блока × S_eff × M × K,
+    где S = сумма C_функции всех функций, размещённых в домене;
+    S_eff = S, если S &gt; 0; иначе 1;
+    M = (E_вх + E_исх) / 2,  если (E_вх + E_исх) &gt;= 2;
+    M = 1,                   если (E_вх + E_исх) &lt; 2 (применяется только при S &gt; 0);
+    K — коэффициент доверия домена по разделу 3.5 v0.01.01;
+C_домена = C_блока × K, если S = 0 (домен без размещённых функций);
+C_системы = сумма C_домена по всем внутренним доменам; внешние системы
+в расчёте стоимости разработки не участвуют: их стоимость не определяется
+и не отображается (3.5 v0.01.01).</code></pre>
+<p>Коэффициенты доверия K (v0.01.01, раздел 3.5):</p>
+<table>
+<thead>
+<tr class="header">
+<th>Класс домена</th>
+<th>K</th>
+<th>Смысл</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>НДБ (недоверенный)</td>
+<td>0.1</td>
+<td>Дешёвый, но гарантий не даёт</td>
+</tr>
+<tr class="even">
+<td>ДДБ (доверенный)</td>
+<td>5</td>
+<td>Введён в ТКБ, входы высокоцелостные</td>
+</tr>
+<tr class="odd">
+<td>ДДБПЦД (доверенный, повышающий целостность)</td>
+<td>10</td>
+<td>Введён в ТКБ при низкоцелостных входах</td>
+</tr>
+</tbody>
+</table>
+<p>Правила применения формулы:</p>
+<ol type="1">
+<li>Результат произведения округляется вверх до целого (ceil); округление выполняется один раз, на итоговом произведении.</li>
+<li>Домен без размещённых функций стоит C_блока × K независимо от числа его стрелок.</li>
+<li>Изменение любого входа (стрелки, C_блока, состав или стоимость размещённых функций, доверенность) мгновенно пересчитывает стоимость затронутых доменов и C_системы.</li>
+<li>Декомпозиция не компенсируется: сумма стоимостей дочерних доменов может отличаться от стоимости исходного домена. Это свойство модели демонстрируется студенту как цена изоляции (решение D5).</li>
+<li>Отрицательные и дробные стоимости в файлах данных запрещены (коды ошибок E-102, E-207).</li>
+<li>Внешние системы (external) в формуле не участвуют: им не назначаются функции, их C_блока равен 0 и не отображается (3.5 v0.01.01).</li>
+</ol>
+<p>Зависимость множителя M от суммарного числа стрелок E:</p>
+<table>
+<thead>
+<tr class="header">
+<th>E = E_вх + E_исх</th>
+<th>0</th>
+<th>1</th>
+<th>2</th>
+<th>3</th>
+<th>4</th>
+<th>5</th>
+<th>6</th>
+<th>7</th>
+<th>8</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>M</td>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>1.5</td>
+<td>2</td>
+<td>2.5</td>
+<td>3</td>
+<td>3.5</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-34-правила-покрытия-целей-решение-d4">3.4. Правила покрытия целей (решение D4)</h3>
+<p>Для цели t обозначим: M(t) — множество функций, связанных с целью весом mandatory; O(t) — множество функций, связанных весом optional; функция считается размещённой, если для неё существует Placement. Статус цели вычисляется по правилам:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Условие</th>
+<th>Статус</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Цель не имеет ни одной связанной функции</td>
+<td>Красный (и предупреждение W-003)</td>
+</tr>
+<tr class="even">
+<td>M(t) непусто, размещены все функции M(t)</td>
+<td>Зелёный</td>
+</tr>
+<tr class="odd">
+<td>M(t) непусто, m &lt; |M(t)| и размещена хотя бы одна функция из M(t) ∪ O(t)</td>
+<td>Жёлтый</td>
+</tr>
+<tr class="even">
+<td>M(t) непусто, ни одна функция из M(t) ∪ O(t) не размещена</td>
+<td>Красный</td>
+</tr>
+<tr class="odd">
+<td>M(t) пусто, O(t) непусто, размещены все функции O(t)</td>
+<td>Зелёный</td>
+</tr>
+<tr class="even">
+<td>M(t) пусто, O(t) непусто, размещена часть функций O(t)</td>
+<td>Жёлтый</td>
+</tr>
+<tr class="odd">
+<td>M(t) пусто, O(t) непусто, не размещена ни одна</td>
+<td>Красный</td>
+</tr>
+</tbody>
+</table>
+<p>Дополнительные правила агрегирования:</p>
+<ol type="1">
+<li>Статус системы: красный, если есть хотя бы одна красная цель; иначе жёлтый, если есть хотя бы одна жёлтая; иначе зелёный.</li>
+<li>Статус домена: агрегат по целям всех функций, размещённых в домене; зелёный, если все эти цели зелёные; красный, если хотя бы одна красная; иначе жёлтый. Домен без размещённых функций — нейтральный (серый), на его статус влияние не оказывается.</li>
+<li>Карточка функции показывает точечные индикаторы по каждой связанной с ней цели; цвет точки равен текущему статусу этой цели.</li>
+<li>Необязательные функции (optional) не могут дать цели зелёный статус, пока не размещены все обязательные: они влияют только на жёлтый статус.</li>
+</ol>
+<h3 id="sec-35-модель-доверия-доменов-и-целостности-потоков-v00101">3.5. Модель доверия доменов и целостности потоков (v0.01.01)</h3>
+<p>Внутренние домены (без признака <code>external</code>) классифицируются по доверию; внешние системы классифицируются по явному признаку <code>trusted</code>. Класс внутреннего домена выводится автоматически из размещённых функций и цветов входящих стрелок — вручную он не назначается.</p>
+<ol type="1">
+<li>ТКБ (доверенная вычислительная база) — множество внутренних доменов, в которых размещена хотя бы одна функция, критичная хотя бы для одной цели безопасности. Функция считается критичной, если у неё есть хотя бы одна связь <code>implements</code> с целью (любой вес; решение D4 раздела 3.4).</li>
+<li>Классы внутренних доменов:</li>
+</ol>
+<table>
+<thead>
+<tr class="header">
+<th>Класс</th>
+<th>Условие</th>
+<th>Заливка узла</th>
+<th>K</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>НДБ</td>
+<td>Домен вне ТКБ (нет ни одной критичной функции)</td>
+<td>Полупрозрачная красная, текст чёрный</td>
+<td>0.1</td>
+</tr>
+<tr class="even">
+<td>ДДБ</td>
+<td>Домен в ТКБ и все входящие стрелки зелёные (в том числе при отсутствии входящих)</td>
+<td>Зелёная</td>
+<td>5</td>
+</tr>
+<tr class="odd">
+<td>ДДБПЦД</td>
+<td>Домен в ТКБ и есть хотя бы одна входящая красная стрелка</td>
+<td>Жёлтая</td>
+<td>10</td>
+</tr>
+</tbody>
+</table>
+<ol start="3" type="1">
+<li>Цвет стрелки определяется доверенностью источника потока: зелёный (высокоцелостный поток) — если источник ДДБ, ДДБПЦД или доверенная внешняя система; красный (низкоцелостный) — во всех остальных случаях, включая потоки из НДБ и недоверенных внешних систем.</li>
+<li>Внешние системы (признак <code>external</code>): недоверенная — по умолчанию, красная заливка, все её исходящие стрелки красные; доверенная (<code>trusted: true</code>) — зелёная заливка, исходящие стрелки зелёные. Внешние системы не получают функций, не декомпозируются, в ТКБ и в C_системы не входят.</li>
+<li>Рамка периметра целевой системы охватывает только внутренние домены; внешние системы располагаются за рамкой. Внешнюю систему нельзя перетащить или создать внутри рамки: позиция выносится за периметр автоматически.</li>
+<li>Раскраска (классы доменов, цвета стрелок, заливка внешних систем) пересчитывается автоматически после каждой операции и при загрузке файлов вместе со стоимостью и покрытием (Ф-18) — ручного обновления не требуется.</li>
+</ol>
+<h2 id="sec-4-функциональные-требования">4. Функциональные требования</h2>
+<h3 id="sec-41-загрузка-данных">4.1. Загрузка данных</h3>
+<ul>
+<li><strong>Ф-1.</strong> Загрузка файла <code>architecture.yaml</code> через диалог выбора файла. Архитектура заменяет текущую; все размещения сбрасываются в пул. Если на канве есть размещения или правки, инструмент запрашивает подтверждение замены.</li>
+<li><strong>Ф-2.</strong> Загрузка файла <code>security.yaml</code> через диалог выбора файла. Цели и функции заменяются; пул карточек перечитывается из нового списка; размещения функций, отсутствующих в новом списке, удаляются; размещения сохранившихся функций сохраняются, если целевые блоки существуют.</li>
+<li><strong>Ф-3.</strong> Загрузка архитектуры в формате PlantUML (фиксированное подмножество раздела 6.3) выполняет те же действия, что Ф-1.</li>
+<li><strong>Ф-4.</strong> Загрузка файла <code>state.yaml</code> восстанавливает полный сеанс: архитектуру, цели и функции, размещения. Замена выполняется целиком после подтверждения.</li>
+<li><strong>Ф-5.</strong> Кнопка «Демо-проект» открывает выбор одного из двух демонстрационных примеров — «Автономный коммунальный робот» (14.4.1) и «Безэкипажное судно-доставщик» (14.4.2) — и загружает его одной командой, без подтверждения, если проект пуст.</li>
+<li><strong>Ф-6.</strong> Каждый входной файл валидируется по разделу 6.5 до применения. При обнаружении ошибок загрузка отменяется целиком, текущий проект не изменяется, пользователю показывается список ошибок с кодами и номерами строк.</li>
+</ul>
+<h3 id="sec-42-пул-карточек-и-размещения">4.2. Пул карточек и размещения</h3>
+<ul>
+<li><strong>Ф-7.</strong> Пул карточек отображается на левой панели: имя, стоимость, точечные индикаторы целей, статус («свободна» либо «в: имя домена»). Фильтры статуса: «все», «свободные», «размещённые». Поиск по имени — в v1.</li>
+<li><strong>Ф-8.</strong> Перетаскивание карточки мышью из пула в домен создаёт размещение (HTML5 drag and drop, целевой объект — узел домена). Отпускание карточки вне домена отменяет операцию.</li>
+<li><strong>Ф-9.</strong> Перемещение функции из домена в домен: в v0 — через инспектор домена (выпадающий список «Переместить в…»), в v1 — прямым перетаскиванием карточки между узлами.</li>
+<li><strong>Ф-10.</strong> Кнопка «Убрать» у карточки внутри домена возвращает функцию в пул.</li>
+<li><strong>Ф-11.</strong> В пуле и в домене отображаются одни и те же данные карточки; переключение статуса происходит после каждой операции без ручного обновления.</li>
+</ul>
+<h3 id="sec-43-домены-стрелки-и-декомпозиция">4.3. Домены, стрелки и декомпозиция</h3>
+<ul>
+<li><strong>Ф-12.</strong> Канва React Flow отображает домены узлами. Узел внутреннего домена показывает: имя, класс доверия (НДБ, ДДБ, ДДБПЦД), C_блока, список размещённых карточек (у каждой — кнопка «Убрать»), значения S, M, K и C_домена, цветной индикатор статуса домена, кнопку «Декомпозировать» (только для внутренних доменов). Узел внешней системы (3.5) показывает имя, признак «внешняя», состояние доверенности и переключатель доверенности; стоимость не отображается.</li>
+<li><strong>Ф-13.</strong> Кнопка «+ Домен» добавляет пустой внутренний домен (C_блока по умолчанию 1, имя «Новый домен», автоматически уникальный id). Кнопка «+ Внешняя система» добавляет внешнюю систему (3.5): признак <code>external</code>, по умолчанию недоверенная, C_блока 0, позиция — за рамкой периметра. Параметры редактируются в инспекторе.</li>
+<li><strong>Ф-14.</strong> Новая стрелка создаётся перетаскиванием от порта узла-источника к порту узла-приёмника; подпись вводится в инспекторе стрелки. Удаление стрелки — выделением и клавишей Delete либо кнопкой в инспекторе.</li>
+<li><strong>Ф-15.</strong> Удаление домена выполняется из инспектора с подтверждением; вместе с доменом удаляются его стрелки, размещённые функции возвращаются в пул.</li>
+<li><strong>Ф-16.</strong> Кнопка «Декомпозировать» открывает диалог: число дочерних доменов k от 2 до 6; для каждого потомка — имя (по умолчанию «&lt;имя исходного&gt;.N») и C_блока (по умолчанию 1); каждой стрелке исходного домена назначается один потомок (выпадающий список, по умолчанию первый). При применении: исходный домен удаляется, потомки добавляются на тот же уровень (плоская модель D5), стрелки переподключаются по назначению, все функции исходного домена возвращаются в пул, выполняется пересчёт, операция записывается в историю.</li>
+<li><strong>Ф-17.</strong> Ограничения модели: не более 200 доменов, не более 500 стрелок; при превышении операции блокируются с сообщением.</li>
+</ul>
+<h3 id="sec-44-расчёты-и-индикация">4.4. Расчёты и индикация</h3>
+<ul>
+<li><strong>Ф-18.</strong> После каждой операции мгновенно пересчитываются: C_домена каждого внутреннего домена, C_системы, статусы всех целей, статусы доменов, статус системы, классы доверия доменов и цвета стрелок (3.5); порог отклика — 100 мс (раздел 9).</li>
+<li><strong>Ф-19.</strong> Панель целей отображается на левой панели под пулом карточек (5.1 v0.01.01): список всех целей со светофором и составом — обязательные и необязательные функции цели с отметками размещения.</li>
+<li><strong>Ф-20.</strong> Панель расчёта системы в правой панели под инспектором (5.1 v0.01.01, шрифты крупнее базовых): C_системы, число внутренних доменов и внешних систем, «размещено X из Y функций», «покрыто целей Z из N», статус системы, разбивка доменов по классам доверия с коэффициентами (НДБ ×0.1, ДДБ ×5, ДДБПЦД ×10).</li>
+</ul>
+<h3 id="sec-45-история-операций">4.5. История операций</h3>
+<ul>
+<li><strong>Ф-21.</strong> Отмена и повтор операций (Ctrl+Z / Ctrl+Y), глубина истории не менее 100 шагов. История охватывает: размещение, перемещение, удаление карточек; декомпозицию; добавление и удаление доменов и стрелок; правку имён, стоимостей и подписей.</li>
+</ul>
+<h3 id="sec-46-сохранение-и-экспорт">4.6. Сохранение и экспорт</h3>
+<ul>
+<li><strong>Ф-22.</strong> Автосохранение текущего проекта в localStorage (ключ <code>skib-lab-state-v1</code>) после каждой операции с задержкой не более 1 с; восстановление при повторном открытии страницы.</li>
+<li><strong>Ф-23.</strong> Кнопка «Сбросить проект» очищает localStorage и возвращает инструмент к пустому состоянию, с подтверждением.</li>
+<li><strong>Ф-24.</strong> Экспорт файлов: <code>state.yaml</code> — полный снимок сеанса (раздел 6.4); <code>architecture.yaml</code> — текущие блоки и стрелки с координатами; <code>architecture.puml</code> — та же архитектура в PlantUML. Файлы скачиваются средствами браузера.</li>
+<li><strong>Ф-25.</strong> Импорт <code>state.yaml</code> (Ф-4) заменяет весь проект после подтверждения.</li>
+</ul>
+<h3 id="sec-47-сообщения-и-обработка-ошибок">4.7. Сообщения и обработка ошибок</h3>
+<ul>
+<li><strong>Ф-26.</strong> Все сообщения об ошибках валидации показываются на панели валидации в верхнем правом углу с кодом, понятным текстом на русском языке и, если применимо, номером строки файла; например: «E-102: стоимость блока blk-link отрицательная (строка 12)».</li>
+<li><strong>Ф-27.</strong> Предупреждения (W-код) не блокируют загрузку и показываются отдельным списком; ошибки (E-код) блокируют применение файла (Ф-6).</li>
+</ul>
+<h2 id="sec-5-требования-к-интерфейсу-пользователя">5. Требования к интерфейсу пользователя</h2>
+<h3 id="sec-51-компоновка-окна">5.1. Компоновка окна</h3>
+<p>Рабочая область фиксированная (без мобильной вёрстки), минимальное разрешение 1280×720. Экран состоит из четырёх зон:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Зона</th>
+<th>Расположение</th>
+<th>Содержимое</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Верхняя панель</td>
+<td>Сверху, высота 48 px</td>
+<td>Кнопки: «Загрузить архитектуру…», «Загрузить цели и функции…», «Открыть состояние…», «Демо-проект» (выбор примера 14.4.1/14.4.2), «+ Домен», «+ Внешняя система», «Экспорт» (раскрывающийся список: architecture.yaml, PlantUML, state.yaml), «Сбросить проект», «Отменить», «Вернуть», переключатель темы (светлая/тёмная, по умолчанию тёмная); индикатор статуса валидации (чистый / предупреждения / ошибки)</td>
+</tr>
+<tr class="even">
+<td>Левая панель</td>
+<td>Слева, ширина 320 px</td>
+<td>Пул карточек (верх): карточки функций, фильтры статуса, счётчик «свободных/всего»; панель целей безопасности (низ, 5.1 v0.01.01) — светофор и состав каждой цели</td>
+</tr>
+<tr class="odd">
+<td>Канва</td>
+<td>Центр</td>
+<td>Узлы-домены и внешние системы (React Flow), рамка периметра целевой системы (3.5), стрелки, масштабирование 25–200 %, панорамирование</td>
+</tr>
+<tr class="even">
+<td>Правая панель</td>
+<td>Справа, ширина 340 px</td>
+<td>Инспектор: свойства выбранного объекта (домен, карточка, стрелка, внешняя система); под инспектором — панель расчёта системы (5.1 v0.01.01): C_системы, покрытие целей, размещения, разбивка доменов по классам доверия, статус системы — шрифты крупнее базовых</td>
+</tr>
+</tbody>
+</table>
+<p>Тема интерфейса (5.1 v0.01.01): тёмная по умолчанию; переключатель в верхней панели переводит светлый/тёмный режим без перезагрузки страницы; выбор сохраняется в localStorage (ключ <code>skib-theme</code>) и применяется до гидратации (без вспышки светлого фона). Все цвета интерфейса заданы токенами и адаптированы для обеих тем.</p>
+<h3 id="sec-52-узел-домена-и-карточка">5.2. Узел домена и карточка</h3>
+<p>Узел внутреннего домена — прямоугольник не менее 240×120 px: заголовок с именем, меткой класса доверия (НДБ / ДДБ / ДДБПЦД) и цветной точкой статуса, строка «Блок: C_блока · S: сумма · M: множитель · K: коэффициент доверия», строка «Домен: C_домена» полужирным шрифтом, кнопка «Декомпозировать» в правом верхнем углу, внутри узла перечисляются карточки размещённых функций. Узел внешней системы — за рамкой периметра: имя, признак «внешняя», состояние доверенности («доверенная»/«недоверенная») с переключателем; стоимость не отображается. Заливка узлов — по классу доверия (3.5, 5.3). Карточка — строка с именем, стоимостью, точечными индикаторами целей и кнопкой «Убрать». При выборе домена, карточки, стрелки или внешней системы инспектор показывает полные свойства и доступные действия.</p>
+<h3 id="sec-53-цветовая-система-статусов">5.3. Цветовая система статусов</h3>
+<p>Цвета фиксированы токенами; к каждому статусу прилагается не только цвет, но и графический либо текстовый признак (доступность для людей с нарушением восприятия цвета):</p>
+<table>
+<thead>
+<tr class="header">
+<th>Статус</th>
+<th>Цвет</th>
+<th>Признак-дублёр</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Красный (цель не покрыта)</td>
+<td>#D32F2F</td>
+<td>Иконка «крест» и подпись «не покрыта»</td>
+</tr>
+<tr class="even">
+<td>Жёлтый (частично)</td>
+<td>#F9A825</td>
+<td>Иконка «половина круга» и подпись «частично»</td>
+</tr>
+<tr class="odd">
+<td>Зелёный (полностью)</td>
+<td>#43A047</td>
+<td>Иконка «галочка» и подпись «полностью»</td>
+</tr>
+<tr class="even">
+<td>Нейтральный (домен без функций)</td>
+<td>#9E9E9E</td>
+<td>Подпись «нет функций»</td>
+</tr>
+</tbody>
+</table>
+<p>Цвета доверия (3.5 v0.01.01) — заливка узлов и цвет стрелок; к каждому также прилагается текстовый признак:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Элемент</th>
+<th>Цвет</th>
+<th>Признак-дублёр</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>НДБ / недоверенная внешняя система</td>
+<td>Полупрозрачная красная заливка</td>
+<td>Метка «НДБ» либо «недоверенная»</td>
+</tr>
+<tr class="even">
+<td>ДДБ / доверенная внешняя система</td>
+<td>Зелёная заливка</td>
+<td>Метка «ДДБ» либо «доверенная»</td>
+</tr>
+<tr class="odd">
+<td>ДДБПЦД</td>
+<td>Жёлтая заливка</td>
+<td>Метка «ДДБПЦД»</td>
+</tr>
+<tr class="even">
+<td>Стрелка высокоцелостного потока</td>
+<td>Зелёная линия</td>
+<td>Подпись потока у узла-приёмника</td>
+</tr>
+<tr class="odd">
+<td>Стрелка низкоцелостного потока</td>
+<td>Красная линия</td>
+<td>Подпись потока у узла-приёмника</td>
+</tr>
+<tr class="even">
+<td>Рамка периметра</td>
+<td>Штриховая рамка с подписью «Периметр целевой системы»</td>
+<td>Заголовок рамки</td>
+</tr>
+</tbody>
+</table>
+<p>Язык интерфейса — русский; все строки интерфейса собраны в едином модуле словаря <code>src/i18n/ru.ts</code> (без строк, разбросанных по компонентам), что обеспечивает готовность к локализации в v1.</p>
+<h2 id="sec-6-спецификация-форматов-данных">6. Спецификация форматов данных</h2>
+<h3 id="sec-61-файл-architectureyaml">6.1. Файл architecture.yaml</h3>
+<p>Кодировка UTF-8, размер не более 5 МБ. Схема полей:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Поле</th>
+<th>Тип</th>
+<th>Обязательность</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>version</td>
+<td>integer</td>
+<td>да</td>
+<td>Значение 1</td>
+</tr>
+<tr class="even">
+<td>system.name</td>
+<td>string</td>
+<td>нет</td>
+<td>Имя системы, до 100 символов</td>
+</tr>
+<tr class="odd">
+<td>system.description</td>
+<td>string</td>
+<td>нет</td>
+<td>Описание, до 500 символов</td>
+</tr>
+<tr class="even">
+<td>blocks</td>
+<td>array</td>
+<td>да</td>
+<td>Не менее 1 блока</td>
+</tr>
+<tr class="odd">
+<td>blocks[].id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный, <code>^[a-z][a-z0-9-]{0,63}$</code></td>
+</tr>
+<tr class="even">
+<td>blocks[].name</td>
+<td>string</td>
+<td>да</td>
+<td>Имя блока, 1–80 символов</td>
+</tr>
+<tr class="odd">
+<td>blocks[].cost</td>
+<td>integer</td>
+<td>да</td>
+<td>C_блока, не меньше 0; для внешних систем фиксируется нулём</td>
+</tr>
+<tr class="even">
+<td>blocks[].position</td>
+<td>object</td>
+<td>нет</td>
+<td>{x, y} — целые числа</td>
+</tr>
+<tr class="odd">
+<td>blocks[].external</td>
+<td>boolean</td>
+<td>нет</td>
+<td>Признак внешней (смежной) системы (3.5); по умолчанию false</td>
+</tr>
+<tr class="even">
+<td>blocks[].trusted</td>
+<td>boolean</td>
+<td>нет</td>
+<td>Доверенность внешней системы (3.5); по умолчанию false</td>
+</tr>
+<tr class="odd">
+<td>edges</td>
+<td>array</td>
+<td>да</td>
+<td>Допустим пустой массив</td>
+</tr>
+<tr class="even">
+<td>edges[].id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный, тот же шаблон</td>
+</tr>
+<tr class="odd">
+<td>edges[].from, edges[].to</td>
+<td>string</td>
+<td>да</td>
+<td>Существующие id блоков; from не равно to</td>
+</tr>
+<tr class="even">
+<td>edges[].label</td>
+<td>string</td>
+<td>нет</td>
+<td>Подпись, до 60 символов</td>
+</tr>
+</tbody>
+</table>
+<p>Пример (сокращённый; полный демонстрационный файл примера 1 — Приложение А):</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">system</span><span class="kw">:</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Автономный коммунальный робот&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">blocks</span><span class="kw">:</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Модуль связи&quot;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">420</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">340</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> ext-ctrl</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Диспетчерский пункт&quot;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">0</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">external</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">trusted</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">1180</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">120</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="fu">edges</span><span class="kw">:</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-disp-link</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> ext-ctrl</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;команды диспетчера&quot;</span></span></code></pre></div>
+<h3 id="sec-62-файл-securityyaml">6.2. Файл security.yaml</h3>
+<p>Кодировка UTF-8, размер не более 5 МБ. Схема полей:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Поле</th>
+<th>Тип</th>
+<th>Обязательность</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>version</td>
+<td>integer</td>
+<td>да</td>
+<td>Значение 1</td>
+</tr>
+<tr class="even">
+<td>goals</td>
+<td>array</td>
+<td>да</td>
+<td>Не менее 1 цели</td>
+</tr>
+<tr class="odd">
+<td>goals[].id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный, <code>^[a-z][a-z0-9-]{0,63}$</code></td>
+</tr>
+<tr class="even">
+<td>goals[].name</td>
+<td>string</td>
+<td>да</td>
+<td>Имя цели, 1–80 символов</td>
+</tr>
+<tr class="odd">
+<td>goals[].description</td>
+<td>string</td>
+<td>нет</td>
+<td>Пояснение, до 500 символов</td>
+</tr>
+<tr class="even">
+<td>functions</td>
+<td>array</td>
+<td>да</td>
+<td>Не менее 1 функции</td>
+</tr>
+<tr class="odd">
+<td>functions[].id</td>
+<td>string</td>
+<td>да</td>
+<td>Уникальный, тот же шаблон</td>
+</tr>
+<tr class="even">
+<td>functions[].name</td>
+<td>string</td>
+<td>да</td>
+<td>Имя функции, 1–100 символов</td>
+</tr>
+<tr class="odd">
+<td>functions[].cost</td>
+<td>integer</td>
+<td>да</td>
+<td>C_функции, не меньше 0</td>
+</tr>
+<tr class="even">
+<td>functions[].implements</td>
+<td>array</td>
+<td>нет</td>
+<td>Связи «функция — цель»</td>
+</tr>
+<tr class="odd">
+<td>functions[].implements[].goal</td>
+<td>string</td>
+<td>да</td>
+<td>Существующий id цели</td>
+</tr>
+<tr class="even">
+<td>functions[].implements[].weight</td>
+<td>string</td>
+<td>да</td>
+<td><code>mandatory</code> или <code>optional</code></td>
+</tr>
+</tbody>
+</table>
+<p>Пример (сокращённый; полный демонстрационный файл примера 1 — Приложение Б):</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">goals</span><span class="kw">:</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-cmd</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Достоверность команд&quot;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">functions</span><span class="kw">:</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-auth</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Аутентификация команд диспетчера&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-cmd</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span></code></pre></div>
+<h3 id="sec-63-представление-архитектуры-в-plantuml">6.3. Представление архитектуры в PlantUML</h3>
+<p>Поддерживается фиксированное подмножество синтаксиса PlantUML (решение D7). Стоимость блока записывается в стереотипе <code>&lt;&lt;cost: N&gt;&gt;</code>; внешние системы — стереотипами <code>&lt;&lt;external&gt;&gt;</code> (недоверенная) и <code>&lt;&lt;external-trusted&gt;&gt;</code> (доверенная, 3.5 v0.01.01). Грамматика подмножества:</p>
+<pre><code>файл       ::= &quot;@startuml&quot; { строка } &quot;@enduml&quot;
+строка     ::= объявление | связь | игнорируемая-строка
+объявление ::= &quot;[&quot; имя &quot;]&quot; [ &quot;&lt;&lt;cost:&quot; число &quot;&gt;&gt;&quot; | &quot;&lt;&lt;external&gt;&gt;&quot; | &quot;&lt;&lt;external-trusted&gt;&gt;&quot; ]
+связь      ::= &quot;[&quot; имя &quot;]&quot; ( &quot;--&gt;&quot; | &quot;-&gt;&quot; ) &quot;[&quot; имя &quot;]&quot; [ &quot;:&quot; подпись ]</code></pre>
+<p>Правила разбора: имена компонентов уникальны (E-302) и сопоставляются блокам по полю name; компонент без стереотипа стоимости получает C_блока = 0 с предупреждением; компонент со стереотипом <code>&lt;&lt;external&gt;&gt;</code> или <code>&lt;&lt;external-trusted&gt;&gt;</code> — внешняя система (C_блока 0, признак external, trusted — только для external-trusted); стрелка на необъявленный компонент — ошибка E-303; отсутствие @startuml или @enduml — ошибка E-304; строки, не входящие в подмножество (skinparam, note, package, title, алиасы <code>as</code>), пропускаются с предупреждением W-002 при первом вхождении каждого типа конструкции; ошибка разбора строки — E-301 с номером строки. Экспорт в PlantUML выполняется по той же грамматике, порядок блоков — порядок их объявления в модели. Полный демонстрационный файл — Приложение В.</p>
+<h3 id="sec-64-файл-рабочего-состояния-stateyaml">6.4. Файл рабочего состояния state.yaml</h3>
+<p>Файл самодостаточен: содержит архитектуру, цели и функции и размещения, поэтому сдача работы одним файлом полностью описывает решение студента (решение D8).</p>
+<table>
+<thead>
+<tr class="header">
+<th>Поле</th>
+<th>Тип</th>
+<th>Обязательность</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>version</td>
+<td>integer</td>
+<td>да</td>
+<td>Значение 1; иное значение — ошибка E-401</td>
+</tr>
+<tr class="even">
+<td>architecture</td>
+<td>object</td>
+<td>да</td>
+<td>Та же схема, что architecture.yaml, включая position</td>
+</tr>
+<tr class="odd">
+<td>security</td>
+<td>object</td>
+<td>да</td>
+<td>Та же схема, что security.yaml</td>
+</tr>
+<tr class="even">
+<td>assignments</td>
+<td>array</td>
+<td>да</td>
+<td>Размещения {function, block}; оба id обязаны существовать (E-402)</td>
+</tr>
+<tr class="odd">
+<td>meta.savedAt</td>
+<td>string</td>
+<td>нет</td>
+<td>Момент сохранения в формате ISO 8601</td>
+</tr>
+<tr class="even">
+<td>meta.source</td>
+<td>string</td>
+<td>нет</td>
+<td>Происхождение проекта (имена исходных файлов)</td>
+</tr>
+</tbody>
+</table>
+<p>Пример структуры:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">architecture</span><span class="kw">:</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">blocks</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at"> ... </span><span class="kw">]</span><span class="co">      # включая external: true / trusted: true для внешних систем</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">edges</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at"> ... </span><span class="kw">]</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">security</span><span class="kw">:</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">goals</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at"> ... </span><span class="kw">]</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">functions</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at"> ... </span><span class="kw">]</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="fu">assignments</span><span class="kw">:</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">function</span><span class="kw">:</span><span class="at"> fn-auth</span><span class="kw">,</span><span class="at"> </span><span class="fu">block</span><span class="kw">:</span><span class="at"> blk-link </span><span class="kw">}</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="fu">meta</span><span class="kw">:</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">savedAt</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;2026-11-10T12:00:00Z&quot;</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">source</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;architecture.yaml + security.yaml&quot;</span></span></code></pre></div>
+<h3 id="sec-65-валидация-входных-файлов">6.5. Валидация входных файлов</h3>
+<p>Валидация выполняется в фиксированном порядке: 1) синтаксический разбор YAML; 2) проверка схемы (библиотека zod) — типы, обязательность, диапазоны; 3) проверка ссылочной целостности и уникальности; 4) семантические предупреждения. Ошибка любого шага останавливает валидацию и блокирует применение файла (Ф-6). Итог проверки — объект {errors: [{code, message, path?, line?}], warnings: [...]}.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Код</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>E-001</td>
+<td>Файл не является корректным YAML (с номером строки из парсера)</td>
+</tr>
+<tr class="even">
+<td>E-002</td>
+<td>Структура не соответствует схеме: отсутствует обязательное поле или неверный тип (с путём к полю)</td>
+</tr>
+<tr class="odd">
+<td>E-101</td>
+<td>Дубликат id блока</td>
+</tr>
+<tr class="even">
+<td>E-102</td>
+<td>Стоимость блока вне диапазона (не целое число или меньше 0)</td>
+</tr>
+<tr class="odd">
+<td>E-103</td>
+<td>Стрелка ссылается на несуществующий блок</td>
+</tr>
+<tr class="even">
+<td>E-104</td>
+<td>Петля: from равно to</td>
+</tr>
+<tr class="odd">
+<td>E-105</td>
+<td>Список blocks пуст</td>
+</tr>
+<tr class="even">
+<td>E-106</td>
+<td>id не соответствует шаблону <code>^[a-z][a-z0-9-]{0,63}$</code></td>
+</tr>
+<tr class="odd">
+<td>E-201</td>
+<td>Дубликат id цели</td>
+</tr>
+<tr class="even">
+<td>E-202</td>
+<td>Дубликат id функции</td>
+</tr>
+<tr class="odd">
+<td>E-203</td>
+<td>Список goals пуст</td>
+</tr>
+<tr class="even">
+<td>E-204</td>
+<td>Список functions пуст</td>
+</tr>
+<tr class="odd">
+<td>E-205</td>
+<td>Связь implements ссылается на несуществующую цель</td>
+</tr>
+<tr class="even">
+<td>E-206</td>
+<td>Вес связи отличен от mandatory и optional</td>
+</tr>
+<tr class="odd">
+<td>E-207</td>
+<td>Стоимость функции вне диапазона</td>
+</tr>
+<tr class="even">
+<td>E-301</td>
+<td>Строка PlantUML не распознана (с номером строки)</td>
+</tr>
+<tr class="odd">
+<td>E-302</td>
+<td>Дубликат имени компонента в PlantUML</td>
+</tr>
+<tr class="even">
+<td>E-303</td>
+<td>Стрелка ссылается на необъявленный компонент</td>
+</tr>
+<tr class="odd">
+<td>E-304</td>
+<td>Отсутствует @startuml или @enduml</td>
+</tr>
+<tr class="even">
+<td>E-401</td>
+<td>state.yaml: неподдерживаемая версия (version не равен 1)</td>
+</tr>
+<tr class="odd">
+<td>E-402</td>
+<td>state.yaml: placement ссылается на отсутствующую функцию или блок</td>
+</tr>
+<tr class="even">
+<td>E-403</td>
+<td>state.yaml: отсутствует обязательный раздел (architecture, security, assignments)</td>
+</tr>
+<tr class="odd">
+<td>W-001</td>
+<td>Неизвестные поля игнорируются (с перечнем путей)</td>
+</tr>
+<tr class="even">
+<td>W-002</td>
+<td>PlantUML: неподдерживаемая конструкция пропущена (тип конструкции)</td>
+</tr>
+<tr class="odd">
+<td>W-003</td>
+<td>Цель не имеет реализующих функций (всегда красная)</td>
+</tr>
+<tr class="even">
+<td>W-004</td>
+<td>Функция не имеет связей с целями</td>
+</tr>
+<tr class="odd">
+<td>W-005</td>
+<td>Компонент PlantUML без стереотипа стоимости: назначена C_блока = 0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-66-требования-к-экспорту-и-обратной-загрузке">6.6. Требования к экспорту и обратной загрузке</h3>
+<p>Экспортированный файл обязан загружаться инструментом обратно без ошибок и давать структурно эквивалентную модель (round-trip): для architecture.yaml и PlantUML эквивалентны блоки, стрелки, стоимости и подписи (координаты position сохраняются в architecture.yaml и не входят в сравнение для PlantUML); для state.yaml эквивалентен весь проект. Порядок ключей и массивов при сравнении не учитывается. Это требование проверяется автотестами (T-Y-10, T-S-01) и входит в приёмочный чек-лист (14.2).</p>
+<h2 id="sec-7-алгоритмы">7. Алгоритмы</h2>
+<h3 id="sec-71-расчёт-стоимости">7.1. Расчёт стоимости</h3>
+<p>Алгоритм выполняется после каждой операции (Ф-18) и при загрузке файлов; на тех же данных работает алгоритм доверия 3.5 (пересчёт раскраски). Сложность O(|B| + |F| + |E|).</p>
+<pre><code>функция domainCost(block, funcsIn, eIn, eOut, K):
+    S = сумма cost всех funcsIn
+    если S == 0:
+        вернуть ceil(block.cost * K)            # домен без функций
+    E = eIn + eOut
+    M = (E / 2), если E &gt;= 2, иначе 1
+    вернуть ceil(block.cost * S * M * K)        # округление вверх, один раз
+
+функция recalcCosts(project):
+    trust = computeTrust(project)               # 3.5 v0.01.01: классы доменов и цвета стрелок
+    для каждого внутреннего блока b:
+        C[b] = domainCost(b, функции в b, число входящих,
+                          число исходящих стрелок, K[b] из trust)
+    для каждой внешней системы: стоимость не определяется (не отображается)
+    C_system = сумма C по всем внутренним блокам</code></pre>
+<h3 id="sec-72-расчёт-покрытия">7.2. Расчёт покрытия</h3>
+<pre><code>функция goalStatus(goal, functions, placements):
+    M = функции с (goal, mandatory);  O = функции с (goal, optional)
+    если M и O пусты:  вернуть RED                  # + предупреждение W-003
+    m = число размещённых из M;  o = число размещённых из O
+    если M непуст:
+        если m == |M|:                  вернуть GREEN
+        если (m + o) &gt; 0:               вернуть YELLOW
+        иначе:                          вернуть RED
+    если o == |O|:                      вернуть GREEN
+    если o &gt; 0:                         вернуть YELLOW
+    вернуть RED
+
+функция recalcCoverage(project):
+    для каждой цели t: status[t] = goalStatus(t, ...)
+    для каждого домена d:
+        цели всех функций d; пусто -&gt; NEUTRAL,
+        иначе: GREEN, если все GREEN; RED, если есть RED; иначе YELLOW
+    status_system = RED, если есть RED; иначе YELLOW, если есть YELLOW; иначе GREEN</code></pre>
+<h3 id="sec-73-декомпозиция-домена">7.3. Декомпозиция домена</h3>
+<pre><code>функция decompose(project, blockId, children, edgeAssign):
+    # children: массив из k (2..6) записей {name, cost}; edgeAssign: каждой стрелке
+    # исходного домена назначен ровно один потомок
+    проверки (до применения, модель не изменяется при отказе):
+        blockId существует; 2 &lt;= k &lt;= 6;
+        имена потомков непустые и не совпадают с именами других блоков;
+        cost каждого потомка — целое &gt;= 0;
+        каждая стрелка blockId присутствует в edgeAssign ровно один раз
+    транзакция (восстанавливается по undo):
+        снять все размещения функций blockId -&gt; вернуть функции в пул
+        удалить blockId и его стрелки
+        добавить потомков (position: рядом с исходным доменом, со смещением)
+        создать стрелки потомков по edgeAssign (сохраняя подписи и направление)
+    пересчитать стоимости и покрытие; записать шаг в историю</code></pre>
+<p>Повторная декомпозиция полученных доменов разрешена: плоская модель не имеет понятия глубины (D5), единственное ограничение — лимит числа доменов (Ф-17).</p>
+<h3 id="sec-74-валидация-файлов">7.4. Валидация файлов</h3>
+<p>Порядок и правила валидации — в разделе 6.5. Каждый код ошибки имеет единственное место возникновения; сообщения формируются из таблицы кодов, без конкатенации произвольных технических текстов.</p>
+<h2 id="sec-8-технические-требования">8. Технические требования</h2>
+<h3 id="sec-81-технологический-стек-решение-d6">8.1. Технологический стек (решение D6)</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Компонент</th>
+<th>Выбор</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Язык</td>
+<td>TypeScript 5, режим strict</td>
+<td>Весь код проекта</td>
+</tr>
+<tr class="even">
+<td>Платформа</td>
+<td>Next.js 16 (App Router, статический экспорт <code>output: "export"</code>), Turbopack</td>
+<td>Сборка статического каталога <code>out/</code>, dev-сервер</td>
+</tr>
+<tr class="odd">
+<td>Среда исполнения</td>
+<td>Node.js 22+ (базовый образ node:22-alpine)</td>
+<td>Требование vitest 5 и toolchain сборки; устраняет предупреждения EBADENGINE (решение D18)</td>
+</tr>
+<tr class="even">
+<td>UI</td>
+<td>React 19</td>
+<td>Компоненты интерфейса</td>
+</tr>
+<tr class="odd">
+<td>Канва</td>
+<td>React Flow (@xyflow/react 12)</td>
+<td>Узлы, стрелки, перетаскивание</td>
+</tr>
+<tr class="even">
+<td>Разбор YAML</td>
+<td>js-yaml 5</td>
+<td>Парсинг architecture.yaml, security.yaml, state.yaml</td>
+</tr>
+<tr class="odd">
+<td>Схемы</td>
+<td>zod 4</td>
+<td>Валидация структур (раздел 6.5)</td>
+</tr>
+<tr class="even">
+<td>Состояние</td>
+<td>zustand 5</td>
+<td>Хранилище проекта и история операций</td>
+</tr>
+<tr class="odd">
+<td>Unit-тесты</td>
+<td>Vitest 5 (покрытие v8)</td>
+<td>Тесты движка и парсеров</td>
+</tr>
+<tr class="even">
+<td>E2E-тесты</td>
+<td>Playwright 1.65</td>
+<td>Сценарии раздела 11.3</td>
+</tr>
+<tr class="odd">
+<td>Качество кода</td>
+<td>ESLint 9 (включая react-hooks), Prettier</td>
+<td>Линт и форматирование</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-82-слои-приложения-и-запреты">8.2. Слои приложения и запреты</h3>
+<p>Код разделён на слои с односторонними зависимостями: <code>src/engine</code> — чистые функции модели, стоимости, покрытия, декомпозиции (без доступа к DOM, localStorage и сети); <code>src/io</code> — парсеры и сериализаторы четырёх форматов и zod-схемы (без доступа к React и DOM); <code>src/store</code> — хранилище zustand и история операций; <code>src/ui</code> — компоненты React (без бизнес-расчётов); <code>src/i18n</code> — словарь строк. Приложение не выполняет сетевых запросов к внешним адресам: после первой загрузки страницы оно полностью автономно (раздел 9). Все вычисления и разбор файлов выполняются на клиенте.</p>
+<h3 id="sec-83-структура-репозитория">8.3. Структура репозитория</h3>
+<p>Полное дерево репозитория приведено в Приложении Д. Обязательные файлы корня: <code>package.json</code> с <code>package-lock.json</code> (воспроизводимая установка), <code>next.config.ts</code>, <code>vitest.config.ts</code>, <code>playwright.config.ts</code> и <code>playwright.firefox.config.ts</code>, <code>eslint.config.mjs</code>, <code>Makefile</code>, <code>Dockerfile</code>, <code>.dockerignore</code>, <code>docker-compose.yml</code>, <code>README.md</code>, <code>CHANGELOG.md</code>, каталог <code>nginx/</code> с конфигурацией, каталоги <code>src/</code>, <code>tests/</code>, <code>docs/</code>, <code>samples/</code>.</p>
+<h2 id="sec-9-нефункциональные-требования">9. Нефункциональные требования</h2>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Требование</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>НФ-1</td>
+<td>Пересчёт стоимостей и покрытия после любой операции — не более 100 мс при максимальной модели (200 доменов, 500 стрелок, 100 функций)</td>
+</tr>
+<tr class="even">
+<td>НФ-2</td>
+<td>Начальная загрузка страницы — не более 2 с на типовом ноутбуке; объём начального пакета — не более 1 МБ в gzip</td>
+</tr>
+<tr class="odd">
+<td>НФ-3</td>
+<td>Поддерживаемые браузеры: Chromium (Chrome, Edge) и Firefox — две последние мажорные версии; минимальное разрешение 1280×720</td>
+</tr>
+<tr class="even">
+<td>НФ-4</td>
+<td>Полная автономия: отсутствие внешних CDN, телеметрии и сетевых запросов после загрузки страницы</td>
+</tr>
+<tr class="odd">
+<td>НФ-5</td>
+<td>Приватность: данные пользователя существуют только в браузере (localStorage) и в экспортированных файлах; сбор и передача данных отсутствуют</td>
+</tr>
+<tr class="even">
+<td>НФ-6</td>
+<td>Автосохранение и восстановление сеанса после перезагрузки страницы (Ф-22); ошибки загрузки файлов не приводят к потере текущего проекта (Ф-6)</td>
+</tr>
+<tr class="odd">
+<td>НФ-7</td>
+<td>Лимит размера загружаемого файла — 5 МБ; превышение — понятное сообщение, файл не применяется</td>
+</tr>
+<tr class="even">
+<td>НФ-8</td>
+<td>Локализация: интерфейс на русском языке; строки централизованы в <code>src/i18n/ru.ts</code></td>
+</tr>
+<tr class="odd">
+<td>НФ-9</td>
+<td>Доступность: статусы различимы без опоры только на цвет (раздел 5.3); все кнопки доступны с клавиатуры</td>
+</tr>
+<tr class="even">
+<td>НФ-10</td>
+<td>Горячие клавиши: Ctrl+Z — отмена, Ctrl+Y — повтор, Delete — удаление выбранной стрелки</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-10-требования-к-развёртыванию">10. Требования к развёртыванию</h2>
+<h3 id="sec-101-варианты-развёртывания">10.1. Варианты развёртывания</h3>
+<p>Инструмент не имеет серверной части, поэтому любой вариант развёртывания сводится к доставке статических файлов. Поддерживаются четыре варианта; рекомендуемый для компьютерного класса и демонстраций — вариант В3 (Docker).</p>
+<table>
+<thead>
+<tr class="header">
+<th>Вариант</th>
+<th>Назначение</th>
+<th>Требования к среде</th>
+<th>Ограничения</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>В1. Статические файлы (dist/) на готовом веб-сервере или CDN</td>
+<td>Публикация студентам без Docker: любой веб-сервер, GitHub Pages, S3-совместимое хранилище</td>
+<td>Доступ к каталогу публикации</td>
+<td>Базовый путь задаётся при сборке (BASE_PATH); пересборка при смене пути</td>
+</tr>
+<tr class="even">
+<td>В2. Локальный запуск разработчика</td>
+<td>Разработка и отладка</td>
+<td>Node.js 20+ и npm</td>
+<td>Не для эксплуатации; порт 5173 (dev) или 4173 (preview)</td>
+</tr>
+<tr class="odd">
+<td>В3. Локально в Docker-контейнере</td>
+<td>Основной способ развёртывания в учебном классе, проверка сборки, приёмка</td>
+<td>Docker Engine 24+ (или совместимый Podman 4+)</td>
+<td>Порт 8080; серверного состояния нет, данные живут в браузере</td>
+</tr>
+<tr class="even">
+<td>В4. Веб-сервер организации за обратным прокси</td>
+<td>Интеграция в портал вуза в подпапке</td>
+<td>nginx/Apache с прокси-правилами</td>
+<td>Нужны согласования конфигурации прокси; BASE_PATH при сборке</td>
+</tr>
+</tbody>
+</table>
+<p>Во всех вариантах приложение обращается только к собственным статическим ресурсам; тома, базы данных и служебные контейнеры не требуются. Состояние пользователя хранится в localStorage браузера и привязано к origin: при смене адреса публикации (например, при переходе с В3 на В4) автосохранённые проекты студентов не переносятся — это ограничение указывается в документации администратора.</p>
+<h3 id="sec-102-требования-к-dockerfile">10.2. Требования к Dockerfile</h3>
+<p>В репозитории обязателен рабочий Dockerfile, собирающий исполняемый образ локально без доступа к сети, кроме загрузки базовых образов и пакетов npm. Обязательные свойства:</p>
+<ol type="1">
+<li>Многоэтапная сборка: этап builder на базовом образе <code>node:22-alpine</code> (установка зависимостей по <code>package-lock.json</code> командой <code>npm ci</code>, сборка <code>npm run build</code>), этап runtime на образе <code>nginx:1.27-alpine</code>, копирование статического каталога <code>out/</code> в каталог обслуживания nginx. Node 22 (не 20) — требование devDependencies (vitest 5): на Node 20 <code>npm ci</code> выводит предупреждения EBADENGINE (решение D18).</li>
+<li>Наладка <code>nginx/nginx.conf</code> из репозитория: прослушивание порта 8080 (непривилегированный); резервный маршрут SPA (<code>try_files ... /index.html</code>); endpoint <code>/healthz</code> с ответом <code>200 ok</code>; сжатие gzip для текстовых типов; заголовки кэширования <code>Cache-Control: public, max-age=31536000, immutable</code> для <code>/assets/</code> и <code>Cache-Control: no-cache</code> для <code>index.html</code>; заголовки безопасности <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy: no-referrer</code>, <code>Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:</code> (допуск <code>unsafe-inline</code> для стилей связан с инлайновыми стилями React Flow и фиксируется в комментарии к конфигурации).</li>
+<li>Запуск без привилегий root: конфигурация nginx в режиме непривилегированного пользователя (pid и временные каталоги в /tmp), процесс master не от root.</li>
+<li>HEALTHCHECK образа: обращение к <code>http://127.0.0.1:8080/healthz</code> средствами wget.</li>
+<li>Аргумент сборки <code>BASE_PATH</code> (по умолчанию <code>/</code>) передаётся в сборку (<code>next.config.ts</code> читает переменную окружения BASE_PATH и задаёт basePath/assetPrefix); значение отличное от корня используется для вариантов В1 и В4.</li>
+<li>Метаданные OCI (<code>org.opencontainers.image.title</code>, <code>.version</code>, <code>.description</code>); версия инструмента передаётся как <code>NEXT_PUBLIC_APP_VERSION</code> и отображается в интерфейсе (для v0.01.01 — 0.01.01).</li>
+<li>Файл <code>.dockerignore</code> исключает как минимум: <code>node_modules</code>, <code>out</code>, <code>.next</code>, <code>.git</code>, <code>tests</code>, <code>playwright-report</code>, <code>coverage</code>, <code>docs</code>.</li>
+<li>Целевые показатели: размер образа не более 60 МБ; время сборки на типовой машине не более 5 минут без кэша образов.</li>
+</ol>
+<p>Эскиз итоговой конфигурации nginx — Приложение Е.</p>
+<h3 id="sec-103-требования-к-makefile">10.3. Требования к Makefile</h3>
+<p>Makefile — единая точка входа для сборки, тестирования и запуска; каждая цель печатает выполняемые команды; цель без аргументов — <code>help</code>. Обязательные цели:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Цель</th>
+<th>Действие</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>help (по умолчанию)</td>
+<td>Список целей с краткими описаниями</td>
+</tr>
+<tr class="even">
+<td>install</td>
+<td>Установка зависимостей: <code>npm ci</code></td>
+</tr>
+<tr class="odd">
+<td>dev</td>
+<td>Запуск dev-сервера Next.js: <code>npm run dev</code> (порт задаётся переменной PORT, по умолчанию 3000)</td>
+</tr>
+<tr class="even">
+<td>build</td>
+<td>Производственная сборка: <code>npm run build</code> (статический каталог out/)</td>
+</tr>
+<tr class="odd">
+<td>preview</td>
+<td>Запуск собранной версии локально: <code>serve out -s</code> (порт PORT, по умолчанию 4173)</td>
+</tr>
+<tr class="even">
+<td>lint</td>
+<td>ESLint и проверка типов <code>tsc --noEmit</code></td>
+</tr>
+<tr class="odd">
+<td>test-unit</td>
+<td>Unit-тесты Vitest без покрытия</td>
+</tr>
+<tr class="even">
+<td>test-unit-coverage</td>
+<td>Unit-тесты с отчётом покрытия и порогами раздела 11.2</td>
+</tr>
+<tr class="odd">
+<td>test-e2e</td>
+<td>E2E-тесты Playwright (webServer поднимает preview автоматически)</td>
+</tr>
+<tr class="even">
+<td>test</td>
+<td>Последовательное выполнение test-unit и test-e2e</td>
+</tr>
+<tr class="odd">
+<td>check</td>
+<td>lint + test (полная локальная проверка перед сдачей)</td>
+</tr>
+<tr class="even">
+<td>docker-build</td>
+<td>Сборка образа: <code>$(DOCKER) build --build-arg BASE_PATH=$(BASE_PATH) -t $(IMAGE):$(TAG) .</code></td>
+</tr>
+<tr class="odd">
+<td>docker-run</td>
+<td>Запуск образа на переднем плане: <code>$(DOCKER) run --rm -p $(PORT):8080 $(IMAGE):$(TAG)</code></td>
+</tr>
+<tr class="even">
+<td>docker-start</td>
+<td>Запуск в фоне с именем контейнера skib-lab</td>
+</tr>
+<tr class="odd">
+<td>docker-stop</td>
+<td>Остановка и удаление контейнера skib-lab</td>
+</tr>
+<tr class="even">
+<td>docker-logs</td>
+<td>Логи контейнера skib-lab</td>
+</tr>
+<tr class="odd">
+<td>docker-shell</td>
+<td>Оболочка sh в контейнере для диагностики</td>
+</tr>
+<tr class="even">
+<td>clean</td>
+<td>Удаление артефактов сборки и отчётов (out, coverage, playwright-report, test-results, .next)</td>
+</tr>
+<tr class="odd">
+<td>distclean</td>
+<td>clean + удаление node_modules</td>
+</tr>
+</tbody>
+</table>
+<p>Переменные Makefile: <code>DOCKER ?= docker</code> (переопределяется на podman без правки файла), <code>IMAGE ?= skib-lab</code>, <code>TAG ?= 0.01.01</code>, <code>PORT ?= 8080</code> (для контейнерного запуска; тот же PORT передаётся dev-серверу и preview, где по умолчанию 3000 и 4173 соответственно), <code>BASE_PATH ?= /</code>. Цели с префиксом docker- проверяют доступность Docker и выводят понятную инструкцию при его отсутствии; цели тестирования не требуют Docker. docker-compose.yml дублирует сценарий В3 для удобства (сервис app: сборка из текущего каталога, публикация <code>$(PORT):8080</code>); требования к compose не расширяют требования к Dockerfile.</p>
+<h3 id="sec-104-конфигурационные-параметры">10.4. Конфигурационные параметры</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Параметр</th>
+<th>Где действует</th>
+<th>По умолчанию</th>
+<th>Назначение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PORT</td>
+<td>Makefile (dev, preview, docker-run), docker-compose, webServer E2E-конфигураций</td>
+<td>8080 (docker) / 3000 (dev) / 4173 (preview)</td>
+<td>Публикуемый порт хоста; внутренний порт контейнера фиксирован (8080); dev-сервер Next.js слушает <code>next dev -p ${PORT:-3000}</code></td>
+</tr>
+<tr class="even">
+<td>BASE_PATH</td>
+<td>Аргумент сборки Docker, next.config.ts</td>
+<td>/</td>
+<td>Базовый путь для публикации в подпапке (В1, В4)</td>
+</tr>
+<tr class="odd">
+<td>NEXT_PUBLIC_APP_VERSION</td>
+<td>Сборка (Dockerfile)</td>
+<td>0.01.01</td>
+<td>Отображается в интерфейсе</td>
+</tr>
+<tr class="even">
+<td>IMAGE, TAG, DOCKER</td>
+<td>Makefile</td>
+<td>skib-lab, 0.01.01, docker</td>
+<td>Имя образа, тег, исполняемый файл контейнерного рантайма</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-105-обновление-и-откат">10.5. Обновление и откат</h3>
+<p>Обновление выполняется пересборкой образа с новым тегом (docker-build с TAG версии из CHANGELOG.md) и перезапуском контейнера; миграций нет. Файлы state.yaml совместимы в пределах major-версии схемы (<code>version: 1</code>); изменение схемы будет означать новую major-версию и требовать обратной совместимости импорта (будущая версия обязана читать <code>version: 1</code>). Откат — запуск образа предыдущего тега.</p>
+<h3 id="sec-106-приёмочные-проверки-развёртывания">10.6. Приёмочные проверки развёртывания</h3>
+<p>Проверки выполняются администратором после развёртывания любого варианта (полный чек-лист — в docs/deployment-guide.md): 1) <code>curl http://localhost:8080/healthz</code> возвращает <code>200 ok</code>; 2) страница открывается в браузере без ошибок в консоли; 3) кнопка «Демо-проект» загружает пример и стоимости совпадают с разделом 14.4; 4) после перезагрузки страницы состояние восстанавливается; 5) экспорт state.yaml скачивается и повторно импортируется без ошибок.</p>
+<h2 id="sec-11-требования-к-тестированию">11. Требования к тестированию</h2>
+<h3 id="sec-111-стратегия">11.1. Стратегия</h3>
+<p>Применяется классическая пирамида тестов. Движок и парсеры (<code>src/engine</code>, <code>src/io</code>) — чистые функции без DOM, поэтому покрываются unit-тестами Vitest с обязательными порогами покрытия. Интерфейс проверяется E2E-сценариями Playwright против dev-сервера Next.js (webServer конфигурации Playwright; порт — переменная PORT, по умолчанию 3000, переопределяется для параллельных прогонов). Компонентные тесты допустимы, но не обязательны. Все тесты выполняются локально командами Makefile (раздел 10.3) и не требуют сети, кроме однократной установки зависимостей и браузеров Playwright; внешние сервисы не используются.</p>
+<h3 id="sec-112-unit-тесты-движка-и-парсеров">11.2. Unit-тесты движка и парсеров</h3>
+<p>Тесты размещаются в каталоге <code>tests/unit</code>, именование файлов <code>*.test.ts</code>. Обязательные кейсы с фиксированными ожиданиями:</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Кейс</th>
+<th>Ожидаемый результат</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>T-C-01</td>
+<td>Коэффициенты доверия по классам (3.5)</td>
+<td>НДБ 0.1, ДДБ 5, ДДБПЦД 10</td>
+</tr>
+<tr class="even">
+<td>T-C-02</td>
+<td>Домен без функций (S = 0), любые стрелки</td>
+<td>C_домена = ceil(C_блока × K)</td>
+</tr>
+<tr class="odd">
+<td>T-C-03</td>
+<td>E = 1, НДБ с функцией</td>
+<td>M = 1; C_домена = ceil(C_блока × S × 0.1)</td>
+</tr>
+<tr class="even">
+<td>T-C-04</td>
+<td>ДДБ: блок 4, функции 3+4, E = 3</td>
+<td>M = 1.5; C_домена = 210 (4 × 7 × 1.5 × 5)</td>
+</tr>
+<tr class="odd">
+<td>T-C-05</td>
+<td>ДДБПЦД: блок 3, функция 3, E = 3</td>
+<td>3 × 3 × 1.5 × 10 = 135; C_домена = 135</td>
+</tr>
+<tr class="even">
+<td>T-C-06</td>
+<td>Округление</td>
+<td>Один раз на итоговом произведении (ceil)</td>
+</tr>
+<tr class="odd">
+<td>T-C-07</td>
+<td>E = 0, есть функции</td>
+<td>M = 1 (изолированный домен не бесплатный)</td>
+</tr>
+<tr class="even">
+<td>T-C-08</td>
+<td>Внешний домен (external)</td>
+<td>domainCost = 0, в C_системы не входит</td>
+</tr>
+<tr class="odd">
+<td>T-C-09</td>
+<td>Модель из контрольного примера 14.4.1 (шаг 1)</td>
+<td>C_системы = 486</td>
+</tr>
+<tr class="even">
+<td>T-C-10</td>
+<td>Пересчёт после декомпозиции</td>
+<td>Стоимости потомков по формуле 7.1; компенсации нет</td>
+</tr>
+<tr class="odd">
+<td>T-C-11</td>
+<td>C_блока = 0 при наличии функций</td>
+<td>C_домена = 0</td>
+</tr>
+<tr class="even">
+<td>T-C-12</td>
+<td>Крупные значения (до 10^9)</td>
+<td>Результат — целое число без потери точности</td>
+</tr>
+<tr class="odd">
+<td>T-P-01</td>
+<td>Все mandatory размещены</td>
+<td>Цель зелёная</td>
+</tr>
+<tr class="even">
+<td>T-P-02</td>
+<td>Размещена часть mandatory</td>
+<td>Цель жёлтая</td>
+</tr>
+<tr class="odd">
+<td>T-P-03</td>
+<td>Ничего не размещено</td>
+<td>Цель красная</td>
+</tr>
+<tr class="even">
+<td>T-P-04</td>
+<td>Размещена только optional при незавершённых mandatory</td>
+<td>Цель жёлтая, не зелёная</td>
+</tr>
+<tr class="odd">
+<td>T-P-05</td>
+<td>Цель только с optional: все / часть / ноль</td>
+<td>Зелёная / жёлтая / красная</td>
+</tr>
+<tr class="even">
+<td>T-P-06</td>
+<td>Цель без связей</td>
+<td>Красная + предупреждение W-003</td>
+</tr>
+<tr class="odd">
+<td>T-P-07</td>
+<td>Агрегат системы</td>
+<td>По правилу худшего статуса (3.4)</td>
+</tr>
+<tr class="even">
+<td>T-P-08</td>
+<td>Агрегат домена</td>
+<td>По правилам 3.4; без функций — нейтральный</td>
+</tr>
+<tr class="odd">
+<td>T-P-09</td>
+<td>Перемещение карточки между доменами</td>
+<td>Статусы целей не меняются; агрегаты доменов меняются</td>
+</tr>
+<tr class="even">
+<td>T-Y-01</td>
+<td>Валидный architecture.yaml</td>
+<td>Модель соответствует схеме</td>
+</tr>
+<tr class="odd">
+<td>T-Y-02</td>
+<td>Файл не является YAML</td>
+<td>E-001 с номером строки</td>
+</tr>
+<tr class="even">
+<td>T-Y-03</td>
+<td>Дубликат id блока</td>
+<td>E-101</td>
+</tr>
+<tr class="odd">
+<td>T-Y-04</td>
+<td>Отрицательная стоимость блока</td>
+<td>E-102</td>
+</tr>
+<tr class="even">
+<td>T-Y-05</td>
+<td>Стрелка на несуществующий блок</td>
+<td>E-103</td>
+</tr>
+<tr class="odd">
+<td>T-Y-06</td>
+<td>Пустой список goals</td>
+<td>E-203</td>
+</tr>
+<tr class="even">
+<td>T-Y-07</td>
+<td>implements на несуществующую цель</td>
+<td>E-205</td>
+</tr>
+<tr class="odd">
+<td>T-Y-08</td>
+<td>Вес связи вне перечня</td>
+<td>E-206</td>
+</tr>
+<tr class="even">
+<td>T-Y-09</td>
+<td>Неизвестные поля в YAML</td>
+<td>Предупреждение W-001, загрузка успешна</td>
+</tr>
+<tr class="odd">
+<td>T-Y-10</td>
+<td>Round-trip: сериализация, затем разбор</td>
+<td>Структурная эквивалентность (6.6)</td>
+</tr>
+<tr class="even">
+<td>T-U-01</td>
+<td>Базовый разбор PlantUML</td>
+<td>Блоки и стрелки распознаны</td>
+</tr>
+<tr class="odd">
+<td>T-U-02</td>
+<td>Стереотип <code>&lt;&lt;cost: 5&gt;&gt;</code></td>
+<td>C_блока = 5</td>
+</tr>
+<tr class="even">
+<td>T-U-03</td>
+<td>Подпись стрелки</td>
+<td>Подпись сохранена</td>
+</tr>
+<tr class="odd">
+<td>T-U-04</td>
+<td>Некорректная строка</td>
+<td>E-301 с номером строки</td>
+</tr>
+<tr class="even">
+<td>T-U-05</td>
+<td>Дубликат имени компонента</td>
+<td>E-302</td>
+</tr>
+<tr class="odd">
+<td>T-U-06</td>
+<td>notes и skinparam в файле</td>
+<td>W-002, остальные данные разобраны</td>
+</tr>
+<tr class="even">
+<td>T-D-01</td>
+<td>Отказ по параметрам декомпозиции</td>
+<td>Модель не изменена (транзакционность 7.3)</td>
+</tr>
+<tr class="odd">
+<td>T-D-02</td>
+<td>Распределение стрелок по потомкам</td>
+<td>Направления и подписи сохранены</td>
+</tr>
+<tr class="even">
+<td>T-D-03</td>
+<td>Функции декомпозированного домена</td>
+<td>Все вернулись в пул</td>
+</tr>
+<tr class="odd">
+<td>T-D-04</td>
+<td>Отмена декомпозиции (undo)</td>
+<td>Модель идентична исходной</td>
+</tr>
+<tr class="even">
+<td>T-S-01</td>
+<td>Round-trip state.yaml</td>
+<td>Полная эквивалентность проекта</td>
+</tr>
+<tr class="odd">
+<td>T-S-02</td>
+<td>version = 2 в state.yaml</td>
+<td>E-401</td>
+</tr>
+<tr class="even">
+<td>T-S-03</td>
+<td>assignment на отсутствующую функцию</td>
+<td>E-402</td>
+</tr>
+<tr class="odd">
+<td>T-T-01</td>
+<td>Стартовая архитектура без размещений</td>
+<td>Все внутренние домены НДБ, все стрелки красные (3.5)</td>
+</tr>
+<tr class="even">
+<td>T-T-02</td>
+<td>Критичная функция вводит домен в ТКБ; функция без связей implements — нет</td>
+<td>Домен с критичной функцией — доверенный; прочие — НДБ</td>
+</tr>
+<tr class="odd">
+<td>T-T-03</td>
+<td>Исходящие стрелки доверенного домена</td>
+<td>Все зелёные (высокоцелостные потоки)</td>
+</tr>
+<tr class="even">
+<td>T-T-04</td>
+<td>Доверенный домен с входящей красной стрелкой</td>
+<td>ДДБПЦД (жёлтый)</td>
+</tr>
+<tr class="odd">
+<td>T-T-05</td>
+<td>Доверенный домен только с зелёными входами (или без входов)</td>
+<td>ДДБ (зелёный)</td>
+</tr>
+<tr class="even">
+<td>T-T-06</td>
+<td>Недоверенная внешняя система (по умолчанию)</td>
+<td>Красная; её исходящие стрелки красные</td>
+</tr>
+<tr class="odd">
+<td>T-T-07</td>
+<td>Доверенная внешняя система (trusted: true)</td>
+<td>Зелёная; её исходящие стрелки зелёные</td>
+</tr>
+<tr class="even">
+<td>T-T-08</td>
+<td>Коэффициенты доверия применимы к классам</td>
+<td>НДБ 0.1, ДДБ 5, ДДБПЦД 10</td>
+</tr>
+<tr class="odd">
+<td>T-T-09</td>
+<td>Рамка периметра</td>
+<td>Охватывает только внутренние домены</td>
+</tr>
+<tr class="even">
+<td>T-T-10</td>
+<td>Внешняя система с позицией внутри рамки</td>
+<td>Выносится за периметр автоматически</td>
+</tr>
+</tbody>
+</table>
+<p>Пороги покрытия (проверяются <code>make test-unit-coverage</code>, провайдер v8): агрегированно по <code>src/engine</code> и <code>src/io</code> — не менее 90 % строк, ветвей, функций и операторов; слой <code>src/store</code> — не менее 70 %. Пороги задаются в конфигурации Vitest и считаются нарушением сборки при недостижении.</p>
+<h3 id="sec-113-e2e-тесты-интерфейса">11.3. E2E-тесты интерфейса</h3>
+<p>Сценарии размещаются в каталоге <code>tests/e2e</code>, именование файлов <code>*.spec.ts</code>; браузер Chromium, окно 1280×800; при падении сохраняются скриншот и trace. Обязательные сценарии:</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Сценарий</th>
+<th>Основные шаги и ожидания</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Э-01</td>
+<td>Старт и пример 1</td>
+<td>Открытие страницы; «Демо-проект» → «Автономный коммунальный робот»; 4 внутренних домена + 2 внешние системы + рамка периметра; 7 карточек; C_системы = 4 (ceil(C_блока × 0.1) по каждому домену); все 5 целей красные</td>
+</tr>
+<tr class="even">
+<td>Э-02</td>
+<td>Загрузка файлов</td>
+<td>Загрузка architecture.yaml и security.yaml примера 1 через диалоги; узлы и пул заполнены</td>
+</tr>
+<tr class="odd">
+<td>Э-02b</td>
+<td>Загрузка PlantUML</td>
+<td>Загрузка architecture.puml эквивалентна YAML (Ф-3), включая внешние системы</td>
+</tr>
+<tr class="even">
+<td>Э-03</td>
+<td>Размещение карточки</td>
+<td>Перетаскивание fn-auth в blk-link; C_домена blk-link 1 → 120 (2 × 3 × 2 × 10, ДДБПЦД); C_системы 4 → 123</td>
+</tr>
+<tr class="odd">
+<td>Э-04</td>
+<td>Возврат карточки</td>
+<td>Кнопка «Убрать» у карточки; C_домена возвращается к 1, домен снова НДБ</td>
+</tr>
+<tr class="even">
+<td>Э-05</td>
+<td>Декомпозиция</td>
+<td>Размещение fn-sanitize в blk-plan (C_домена = 120, ДДБПЦД); «Декомпозировать» на 2; появились «Планировщик маршрута.1» и «.2»; карточка вернулась в пул</td>
+</tr>
+<tr class="odd">
+<td>Э-06</td>
+<td>Переходы светофора</td>
+<td>Цель «Достоверность телеметрии»: красная → жёлтая после fn-sanitize → зелёная после fn-sign</td>
+</tr>
+<tr class="even">
+<td>Э-06b</td>
+<td>Автоматическая раскраска доверия</td>
+<td>Снятие критичной карточки возвращает домен из ДДБ/ДДБПЦД в НДБ без ручного обновления</td>
+</tr>
+<tr class="odd">
+<td>Э-07</td>
+<td>Восстановление сеанса</td>
+<td>Размещения шага 1 (C_системы = 486); перезагрузка страницы; состояние, стоимости и статусы идентичны</td>
+</tr>
+<tr class="even">
+<td>Э-08</td>
+<td>Экспорт и повторный импорт</td>
+<td>Скачивание state.yaml; импорт того же файла; модель эквивалентна, включая внешние системы</td>
+</tr>
+<tr class="odd">
+<td>Э-09</td>
+<td>Некорректный файл</td>
+<td>Импорт повреждённого YAML; панель ошибок с кодами; текущий проект не изменён</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-114-тестовые-данные">11.4. Тестовые данные</h3>
+<p>Фикстуры размещаются в <code>tests/fixtures/robot/</code> и <code>tests/fixtures/vessel/</code> (примеры 14.4.1 и 14.4.2; Приложения А–В) и дублируются для пользовательской загрузки в <code>src/samples/robot/</code> и <code>src/samples/vessel/</code>: <code>architecture.yaml</code>, <code>security.yaml</code>, <code>architecture.puml</code>, <code>state.yaml</code> (готовое размещение шага 1 соответствующего примера). Строки-источники данных — <code>src/samples/robot/content.ts</code> и <code>src/samples/vessel/content.ts</code>; файлы фикстур генерируются скриптом <code>scripts/emit-fixtures.ts</code> и сверяются unit-тестом <code>fixtures.test.ts</code>. Набор <code>invalid/</code> — 10 файлов, каждый ровно с одним дефектом по кодам E-001, E-101, E-102, E-103, E-104, E-106, E-203, E-205, E-206, E-401.</p>
+<h3 id="sec-115-критерии-прохождения-и-отчётность">11.5. Критерии прохождения и отчётность</h3>
+<p>Критерий готовности кода: <code>make check</code> выполняется на чистом клоне без предупреждений — lint, проверка типов, unit-тесты с порогами 11.2, E2E-сценарии 11.3. Артефакты (<code>playwright-report/</code>, <code>coverage/</code>, <code>test-results/</code>) исключены из git (.gitignore) и пересоздаются при запуске. Отчёт о дефекте — по шаблону docs/testing-guide.md (раздел 12.2).</p>
+<h2 id="sec-12-требования-к-документации-проекта">12. Требования к документации проекта</h2>
+<h3 id="sec-121-состав-документации">12.1. Состав документации</h3>
+<p>Документация хранится в репозитории и поставляется вместе с кодом; язык — русский, термины — по разделу 2, версии документов совпадают с версией релиза и фиксируются в CHANGELOG.md.</p>
+<table>
+<thead>
+<tr class="header">
+<th>Документ</th>
+<th>Путь</th>
+<th>Аудитория</th>
+<th>Обязательность</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Обзор и быстрый старт</td>
+<td>README.md</td>
+<td>Все роли</td>
+<td>Обязателен</td>
+</tr>
+<tr class="even">
+<td>Руководство пользователя</td>
+<td>docs/user-guide.md</td>
+<td>Студент</td>
+<td>Обязателен</td>
+</tr>
+<tr class="odd">
+<td>Руководство преподавателя</td>
+<td>docs/teacher-guide.md</td>
+<td>Преподаватель</td>
+<td>Обязателен</td>
+</tr>
+<tr class="even">
+<td>Руководство разработчика</td>
+<td>docs/developer-guide.md</td>
+<td>Разработчик</td>
+<td>Обязателен</td>
+</tr>
+<tr class="odd">
+<td>Руководство тестировщика</td>
+<td>docs/testing-guide.md</td>
+<td>Тестировщик</td>
+<td>Обязателен</td>
+</tr>
+<tr class="even">
+<td>Руководство по развёртыванию</td>
+<td>docs/deployment-guide.md</td>
+<td>Администратор</td>
+<td>Обязателен</td>
+</tr>
+<tr class="odd">
+<td>История изменений</td>
+<td>CHANGELOG.md</td>
+<td>Все роли</td>
+<td>Обязателен</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-122-обязательное-содержание-документов">12.2. Обязательное содержание документов</h3>
+<p><strong>README.md</strong>: назначение инструмента; скриншот основного экрана; быстрый старт в трёх командах (<code>make install</code>, <code>make dev</code> либо <code>make docker-build &amp;&amp; make docker-run</code>); таблица ссылок на документы по ролям; текущая версия и статус.</p>
+<p><strong>docs/user-guide.md</strong> (студент): 1) запуск инструмента и восстановление сеанса; 2) описание зон интерфейса (раздел 5) с расшифровкой светофора и стоимостей; 3) загрузка файлов и «Демо-проект»; 4) работа с пулом: размещение, перемещение, возврат карточек; 5) декомпозиция домена и её влияние на стоимость; 6) панель целей и чтение статусов; 7) сохранение, экспорт и сдача state.yaml; 8) горячие клавиши; 9) типовые учебные сценарии; 10) частые вопросы и сообщения об ошибках. Не менее 5 скриншотов актуальной версии.</p>
+<p><strong>docs/teacher-guide.md</strong> (преподаватель): 1) методика составления security.yaml: выбор целей, подбор функций, назначение весов mandatory/optional (с примерами); 2) методика составления architecture.yaml и вариантов заданий; 3) сценарий занятия (тайминг на 90 минут: выдача, проектирование, защита решения); 4) три готовых варианта заданий, среди них: «достичь полного покрытия при минимальной C_системы», «сравнить два варианта декомпозиции по стоимости», «найти и закрыть непокрытую цель»; 5) проверка работ: импорт state.yaml студента, контрольные точки оценивания — полнота покрытия, величина C_системы относительно заданного бюджета, обоснованность декомпозиции; 6) приложения-шаблоны как исходные заготовки; 7) частые вопросы студентов.</p>
+<p><strong>docs/developer-guide.md</strong> (разработчик): 1) архитектура слоёв (8.2) и поток данных; 2) установка среды разработки (Node.js 20+, npm, команда <code>make install &amp;&amp; make dev</code>); 3) структура каталогов (Приложение Д) и назначение каждого модуля; 4) спецификация модели и форматов (ссылки на разделы 3 и 6 как на источник истины); 5) соглашения: TypeScript strict, правила ESLint, формат коммитов (Conventional Commits), версии по semver; 6) пошаговый пример добавления новой функции в движок (от типа модели до unit-теста); 7) процедура выпуска версии (CHANGELOG.md, тег, сборка образа).</p>
+<p><strong>docs/testing-guide.md</strong> (тестировщик): 1) пирамида тестов и что где проверяется (11.1); 2) запуск: <code>make test-unit</code>, <code>make test-unit-coverage</code>, <code>make test-e2e</code>, <code>make check</code>; 3) структура тестов и фикстур (11.2–11.4) с разбором одного unit-теста стоимости построчно; 4) как добавить новый кейс (шаблон теста) и новый E2E-сценарий; 5) отладка падений E2E: отчёт Playwright, скриншоты, trace; 6) шаблон отчёта о дефекте с обязательными полями (версия, шаги воспроизведения, ожидание/факт, файл-фикстура, логи).</p>
+<p><strong>docs/deployment-guide.md</strong> (администратор): 1) обзор вариантов развёртывания В1–В4 (таблица 10.1) и критерии выбора; 2) Docker: сборка, запуск, остановка, просмотр логов, healthcheck, обновление версии и откат (10.5); 3) Makefile: назначение целей и переменных (10.3–10.4), включая случай Podman (<code>make DOCKER=podman ...</code>); 4) публикация в подпапке: BASE_PATH, пример конфигурации nginx с прокси (В4) и копированием файлов (В1); 5) чек-лист проверки после развёртывания (10.6) в форме пошаговой инструкции; 6) диагностика типовых проблем: порт занят, несоответствие BASE_PATH и адреса публикации, устаревший кэш index.html, ограничения localStorage при смене origin; 7) требования к среде и известные ограничения (нет серверного состояния, данные в браузере).</p>
+<h3 id="sec-123-требования-к-качеству-документации">12.3. Требования к качеству документации</h3>
+<ol type="1">
+<li>Каждая команда приводится одной копируемой строкой с пояснением результата.</li>
+<li>Все ссылки между документами и на разделы ТЗ — относительные и рабочие; проверка ссылок входит в приёмочный чек-лист.</li>
+<li>Скриншоты в user-guide и teacher-guide соответствуют текущей версии интерфейса.</li>
+<li>В каждом документе есть раздел «Частые вопросы» или «Диагностика проблем».</li>
+<li>Документы не дублируют спецификацию полностью, а ссылаются на её разделы: источник истины — данный ТЗ.</li>
+</ol>
+<h2 id="sec-13-версии-и-этапность">13. Версии и этапность</h2>
+<p>Данное ТЗ описывает версию v0 полностью; отдельные требования с пометкой версии относятся к более поздним выпускам. Соответствие версий:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Версия</th>
+<th>Состав</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>v0</td>
+<td>Модель, стоимость, покрытие, пул и размещения, декомпозиция, undo/redo, автосохранение, импорт/экспорт architecture.yaml, security.yaml, state.yaml, PlantUML (раздел 6.3); Dockerfile, Makefile, docker-compose (раздел 10); unit- и E2E-тесты (раздел 11); все документы раздела 12</td>
+</tr>
+<tr class="even">
+<td>v0.01.01 (текущая)</td>
+<td>Модель доверия доменов и целостности потоков с автоматической раскраской (3.5), коэффициенты доверия K в формуле стоимости (3.3, 7.1), внешние (смежные) системы и рамка периметра (3.1, 3.5, 6.1, 6.3, 6.4), перестановка панелей и переключение темы интерфейса (5.1), два демонстрационных примера (14.4, Приложения А–В), unit-кейсы T-T-01–T-T-10 и обновлённые T-C (11.2), обновлённые E2E-сценарии (11.3), базовый образ node:22-alpine и переменная PORT для dev/preview (10.2–10.4)</td>
+</tr>
+<tr class="odd">
+<td>v1</td>
+<td>Прямое перетаскивание карточек между доменами (Ф-9), поиск в пуле, перетаскивание файлов на канву, экспорт сводного отчёта о покрытии и стоимости в YAML, английская локализация, компонентные тесты, E2E в Firefox и WebKit, CI (GitHub Actions: lint, тесты, сборка образа)</td>
+</tr>
+<tr class="even">
+<td>v2</td>
+<td>Сравнение вариантов решения (снимки проекта и таблица различий), режим преподавателя с оцениванием внутри инструмента, параметризация множителя M, мобильная вёрстка, экспорт отчёта в PDF</td>
+</tr>
+</tbody>
+</table>
+<p>Метки (v1) и (v2) в тексте разделов 4 и 5 указывают на требования, переносимые в соответствующую версию; их реализация в v0 не требуется и не является отклонением.</p>
+<h2 id="sec-14-порядок-контроля-и-приёмки">14. Порядок контроля и приёмки</h2>
+<h3 id="sec-141-средства-контроля">14.1. Средства контроля</h3>
+<p>Приёмка выполняется по трём направлениям: автоматические проверки (<code>make check</code> на чистом клоне: lint, типы, unit-тесты с порогами 11.2, E2E-сценарии 11.3); сборка и запуск контейнера (10.2, 10.6); ручной прогон контрольных примеров (14.4) с сопоставлением чисел, классов доверия и статусов.</p>
+<h3 id="sec-142-чек-лист-приёмки">14.2. Чек-лист приёмки</h3>
+<table>
+<thead>
+<tr class="header">
+<th>Пункт</th>
+<th>Метод проверки</th>
+<th>Критерий</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>make check на чистом клоне</td>
+<td>Все проверки зелёные, пороги покрытия выполнены</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>docker-build, docker-run</td>
+<td>Образ собирается, контейнер запускается, /healthz возвращает 200 ok</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Контрольные примеры 14.4.1 и 14.4.2</td>
+<td>Все числа, классы доверия и статусы совпадают с таблицами</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>E2E-сценарий Э-08 и тест T-Y-10</td>
+<td>Round-trip экспорт-импорт эквивалентен (6.6), включая внешние системы</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>Панель ошибок</td>
+<td>Каждый код из 6.5 воспроизводится фикстурами invalid/</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>НФ-1</td>
+<td>Пересчёт не ощутим (менее 100 мс) при максимальной модели</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>НФ-2, НФ-4</td>
+<td>Начальный пакет не более 1 МБ gzip; внешних сетевых запросов нет (инспектор сети)</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Раздел 12</td>
+<td>Шесть документов + README + CHANGELOG присутствуют, ссылки работают</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td>Раздел 10.3</td>
+<td>Все цели Makefile выполняются; help выводит список</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td>Проверка в двух браузерах</td>
+<td>Chrome и Firefox: сценарии Э-01–Э-04 выполняются</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td>Раскраска доверия (3.5)</td>
+<td>Размещение критичной функции перекрашивает домен и исходящие стрелки без ручного обновления; коэффициенты применяются к стоимости</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td>Тема интерфейса (5.1)</td>
+<td>Тёмная по умолчанию; переключение без перезагрузки; выбор сохраняется</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sec-143-порядок-прогона-контрольных-примеров">14.3. Порядок прогона контрольных примеров</h3>
+<p>Контрольные примеры используют демонстрационные комплекты примера 1 (Приложения А и Б; 7 карточек, 5 целей) и примера 2 (14.4.2; 7 карточек, 4 цели). Прогон: 1) очистить проект; 2) «Демо-проект» → выбрать пример — сверить начальное состояние; 3) разместить карточки шага 1 (перечислены в таблице) — сверить C_домена, классы доверия, статусы целей и C_системы; 4) снять одну критичную карточку — убедиться, что раскраска и стоимость обновились автоматически (3.5, 6 правил).</p>
+<h3 id="sec-144-демонстрационные-примеры">14.4. Демонстрационные примеры</h3>
+<h4 id="sec-1441-пример-1--автономный-коммунальный-робот">14.4.1. Пример 1 — «Автономный коммунальный робот»</h4>
+<p>Состав: 4 внутренних домена (Подсистема восприятия — C_блока 3, Планировщик маршрута — 4, Привод движения — 3, Модуль связи — 2) и 2 внешние системы: Диспетчерский пункт (доверенная) и Зарядная станция (недоверенная, по умолчанию). Цели — 5, карточки — 7. Проверяемые состояния:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Состояние</th>
+<th>C_домена по доменам (класс доверия)</th>
+<th>C_системы</th>
+<th>Статусы целей</th>
+<th>Статус системы</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>После загрузки (ничего не размещено)</td>
+<td>perc 1, plan 1, drive 1, link 1 — все НДБ (ceil(C_блока × 0.1))</td>
+<td>4</td>
+<td>Все 5 красные</td>
+<td>Красный</td>
+</tr>
+<tr class="even">
+<td>Шаг 1: fn-auth и fn-sign в blk-link; fn-sanitize и fn-geofence в blk-plan; fn-estop в blk-drive</td>
+<td>link 200 (ДДБПЦД), plan 240 (ДДБПЦД), drive 45 (ДДБ), perc 1 (НДБ)</td>
+<td>486</td>
+<td>g-cmd, g-telem, g-safe, g-route — зелёные; g-charge (Безопасность зарядки) — красная</td>
+<td>Красный</td>
+</tr>
+</tbody>
+</table>
+<p>Пояснения к расчёту шага 1: blk-link — C_блока 2, S = 3+2 = 5, E = 4 (2 входа, 2 выхода), M = 2, вход от недоверенной Зарядной станции остаётся красным → ДДБПЦД, K = 10, C_домена = 2 × 5 × 2 × 10 = 200; blk-plan — C_блока 4, S = 4, E = 3, M = 1.5, вход от НДБ (восприятие) красный → ДДБПЦД, K = 10, C_домена = 240; blk-drive — C_блока 3, S = 3, E = 1, M = 1, вход от доверенного планировщика зелёный → ДДБ, K = 5, C_домена = 45; blk-perc без функций — НДБ, ceil(3 × 0.1) = 1. Промежуточные состояния Э-03 (только fn-auth в blk-link: C_домена = 120, C_системы = 123) и Э-05 (fn-sanitize в blk-plan: C_домена = 120) проверяются E2E-сценариями.</p>
+<h4 id="sec-1442-пример-2--безэкипажное-судно-доставщик-речная-акватория">14.4.2. Пример 2 — «Безэкипажное судно-доставщик» (речная акватория)</h4>
+<p>Состав: 4 внутренних домена (Радиосвязь — C_блока 2, Навигационный вычислитель — 4, Подсистема расхождения — 3, Контроль груза — 2) и 2 внешние системы: Береговой пост (СУДС) — доверенная, Оператор шлюза — недоверенная. Цели — 4, карточки — 7. Проверяемые состояния:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Состояние</th>
+<th>C_домена по доменам (класс доверия)</th>
+<th>C_системы</th>
+<th>Статусы целей</th>
+<th>Статус системы</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>После загрузки</td>
+<td>nav 1, avoid 1, cargo 1, radio 1 — все НДБ</td>
+<td>4</td>
+<td>Все 4 красные</td>
+<td>Красный</td>
+</tr>
+<tr class="even">
+<td>Шаг 1: fn-ais и fn-auth-shore в blk-radio; fn-collision в blk-avoid; fn-route-check в blk-nav; fn-cargo-seal в blk-cargo</td>
+<td>radio 200 (ДДБПЦД), nav 80 (ДДБ), avoid 60 (ДДБ), cargo 30 (ДДБ)</td>
+<td>370</td>
+<td>Все 4 зелёные</td>
+<td>Зелёный</td>
+</tr>
+</tbody>
+</table>
+<p>Пояснения к расчёту шага 1: blk-radio — C_блока 2, S = 2+3 = 5, E = 4, M = 2, вход от недоверенного Оператора шлюза остаётся красным → ДДБПЦД, K = 10, C_домена = 200; blk-nav — C_блока 4, S = 2, E = 4 (2 входа, 2 выхода), M = 2, входы от доверенного радио зелёные → ДДБ, K = 5, C_домена = 80; blk-avoid — C_блока 3, S = 4, E = 2, M = 1, ДДБ, K = 5, C_домена = 60; blk-cargo — C_блока 2, S = 3, E = 2, M = 1, ДДБ, K = 5, C_домена = 30. Пример показывает полную картину доверия: все домены в ТКБ, но домен с недоверенного входа платит двойную цену (ДДБПЦД против ДДБ).</p>
+<p>Результатом приёмки являются: тег <code>v0.01.01</code> в репозитории, собранный образ с тегом из раздела 10.4, отчёт покрытия, заполненный чек-лист 14.2.</p>
+<h2 id="sec-приложение-а-демонстрационный-architectureyaml-пример-1">Приложение А. Демонстрационный architecture.yaml (пример 1)</h2>
+<div class="sourceCode" id="cb9"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">system</span><span class="kw">:</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Автономный коммунальный робот&quot;</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Пример 1: уборка и полив городской территории, взаимодействие со смежными системами&quot;</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">blocks</span><span class="kw">:</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> blk-perc</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Подсистема восприятия&quot;</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">60</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">200</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> blk-plan</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Планировщик маршрута&quot;</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">4</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">420</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">120</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> blk-drive</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Привод движения&quot;</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">780</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">200</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Модуль связи&quot;</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">420</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">340</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> ext-ctrl</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Диспетчерский пункт&quot;</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">0</span></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">external</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">trusted</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">1180</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">120</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> ext-charge</span></span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Зарядная станция&quot;</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">0</span></span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">external</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">position</span><span class="kw">:</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">x</span><span class="kw">:</span><span class="at"> </span><span class="dv">1180</span><span class="kw">,</span><span class="at"> </span><span class="fu">y</span><span class="kw">:</span><span class="at"> </span><span class="dv">340</span><span class="at"> </span><span class="kw">}</span></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a><span class="fu">edges</span><span class="kw">:</span></span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-disp-link</span></span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> ext-ctrl</span></span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;команды диспетчера&quot;</span></span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-charge-link</span></span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> ext-charge</span></span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;статус зарядки&quot;</span></span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-link-plan</span></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-plan</span></span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;очищенные команды&quot;</span></span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-perc-plan</span></span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> blk-perc</span></span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-plan</span></span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;данные среды&quot;</span></span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-plan-drive</span></span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> blk-plan</span></span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> blk-drive</span></span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;маршрут&quot;</span></span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> e-link-ctrl</span></span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">from</span><span class="kw">:</span><span class="at"> blk-link</span></span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">to</span><span class="kw">:</span><span class="at"> ext-ctrl</span></span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">label</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;телеметрия&quot;</span></span></code></pre></div>
+<h2 id="sec-приложение-б-демонстрационный-securityyaml-пример-1">Приложение Б. Демонстрационный security.yaml (пример 1)</h2>
+<div class="sourceCode" id="cb10"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">version</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">goals</span><span class="kw">:</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-safe</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Безопасность пешеходов&quot;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Робот не травмирует людей на обслуживаемой территории&quot;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-cmd</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Достоверность команд&quot;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Исполняются только подлинные команды диспетчера&quot;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-telem</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Достоверность телеметрии&quot;</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Телеметрия передаётся без искажений и подмен&quot;</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-route</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Сохранность маршрута&quot;</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Маршрут не искажается и выводит к точке возврата&quot;</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> g-charge</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Безопасность зарядки&quot;</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Зарядка начинается только при безопасных параметрах&quot;</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="fu">functions</span><span class="kw">:</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-auth</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Аутентификация команд диспетчера&quot;</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-cmd</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-sanitize</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Контроль целостности входных данных&quot;</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-cmd</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> optional </span><span class="kw">}</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-telem</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-estop</span></span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Аварийный останов&quot;</span></span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">3</span></span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-safe</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-geofence</span></span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Геоограничение&quot;</span></span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-safe</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> optional </span><span class="kw">}</span></span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-route</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-sign</span></span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Подписывание телеметрии&quot;</span></span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-telem</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-charge-guard</span></span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Контроль параметров зарядки&quot;</span></span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">2</span></span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-charge</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> mandatory </span><span class="kw">}</span></span>
+<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> fn-log</span></span>
+<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Журналирование событий&quot;</span></span>
+<span id="cb10-53"><a href="#cb10-53" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">cost</span><span class="kw">:</span><span class="at"> </span><span class="dv">1</span></span>
+<span id="cb10-54"><a href="#cb10-54" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">implements</span><span class="kw">:</span></span>
+<span id="cb10-55"><a href="#cb10-55" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> </span><span class="kw">{</span><span class="at"> </span><span class="fu">goal</span><span class="kw">:</span><span class="at"> g-telem</span><span class="kw">,</span><span class="at"> </span><span class="fu">weight</span><span class="kw">:</span><span class="at"> optional </span><span class="kw">}</span></span></code></pre></div>
+<h2 id="sec-приложение-в-демонстрационный-architecturepuml-пример-1">Приложение В. Демонстрационный architecture.puml (пример 1)</h2>
+<p>Эквивалент Приложения А в подмножестве PlantUML (раздел 6.3):</p>
+<pre class="plantuml"><code>@startuml
+[Подсистема восприятия] &lt;&lt;cost: 3&gt;&gt;
+[Планировщик маршрута] &lt;&lt;cost: 4&gt;&gt;
+[Привод движения] &lt;&lt;cost: 3&gt;&gt;
+[Модуль связи] &lt;&lt;cost: 2&gt;&gt;
+[Диспетчерский пункт] &lt;&lt;external-trusted&gt;&gt;
+[Зарядная станция] &lt;&lt;external&gt;&gt;
+[Диспетчерский пункт] --&gt; [Модуль связи] : команды диспетчера
+[Зарядная станция] --&gt; [Модуль связи] : статус зарядки
+[Модуль связи] --&gt; [Планировщик маршрута] : очищенные команды
+[Подсистема восприятия] --&gt; [Планировщик маршрута] : данные среды
+[Планировщик маршрута] --&gt; [Привод движения] : маршрут
+[Модуль связи] --&gt; [Диспетчерский пункт] : телеметрия
+@enduml</code></pre>
+<p>Аналогичный комплект примера 2 «Безэкипажное судно-доставщик» поставляется в каталогах <code>samples/vessel/</code> и <code>tests/fixtures/vessel/</code>.</p>
+<h2 id="sec-приложение-г-реестр-принятых-решений">Приложение Г. Реестр принятых решений</h2>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Решение</th>
+<th>Обоснование</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>D1</td>
+<td>Карточка — визуальное представление функции безопасности; пул строится из security.yaml</td>
+<td>Устраняет терминологический конфликт черновика («событие безопасности» не может быть средством защиты)</td>
+</tr>
+<tr class="even">
+<td>D2</td>
+<td>Формула стоимости 3.3: произведение с множителем связности; домен без функций стоит C_блока; округление вверх</td>
+<td>Устраняет неопределённости черновика: нулевые и одинарные стрелки не удешевляют домен, «стоимость системы» формализована</td>
+</tr>
+<tr class="odd">
+<td>D3</td>
+<td>Поле «сложность» исключено из модели; сохранена стоимость реализации</td>
+<td>Стоимость инкапсулирует трудоёмкость; меньше атрибутов — меньше ошибок ввода</td>
+</tr>
+<tr class="even">
+<td>D4</td>
+<td>Связи «функция — цель» с весом mandatory/optional; правила светофора 3.4</td>
+<td>Позволяет отличать обязательный и вспомогательный состав функций; правила формализованы для автотестов</td>
+</tr>
+<tr class="odd">
+<td>D5</td>
+<td>Декомпозиция плоская: домен заменяется 2–6 доменами того же уровня; без иерархии</td>
+<td>Соответствует принятой модели; цена изоляции демонстрируется через рост C_системы</td>
+</tr>
+<tr class="even">
+<td>D6</td>
+<td>Стек: Vite, React, React Flow, js-yaml, zod, zustand; без серверной части</td>
+<td>Статическое приложение покрывает все сценарии; данные остаются у пользователя</td>
+</tr>
+<tr class="odd">
+<td>D7</td>
+<td>Двойной формат архитектуры: architecture.yaml и PlantUML; оба импортируются и экспортируются; синхронизации «на лету» нет</td>
+<td>Знакомый преподавателям формат диаграмм без затрат на двустороннюю текстовую синхронизацию</td>
+</tr>
+<tr class="even">
+<td>D8</td>
+<td>Хранение: localStorage и самодостаточный state.yaml</td>
+<td>Сдача работы одним файлом; восстановление сеанса после перезагрузки</td>
+</tr>
+<tr class="odd">
+<td>D9</td>
+<td>ГОСТ Р 72118-2025 и ГОСТ ISO/IEC TS 19249-2021 — контекст курса, в интерфейс не включаются</td>
+<td>Стандарты не задают проверяемых правил расчёта; интерфейс остаётся предметным</td>
+</tr>
+<tr class="even">
+<td>D10</td>
+<td>Этапность v0/v1/v2 (раздел 13)</td>
+<td>Ядро отделяется от удобств разработки и расширений</td>
+</tr>
+<tr class="odd">
+<td>D11</td>
+<td>Развёртывание: четыре варианта; Docker-образ (multi-stage, без root, порт 8080, /healthz) и Makefile как единая точка команд</td>
+<td>Воспроизводимое развёртывание в классе и на приёмке одной командой</td>
+</tr>
+<tr class="even">
+<td>D12</td>
+<td>Автотесты: Vitest с порогом 90 % для engine и io (агрегированно), Playwright с одиннадцатью сценариями (Э-01…Э-09, включая Э-02b и Э-06b)</td>
+<td>Движок проверяется численно фиксированными кейсами; интерфейс — сквозными прогонами</td>
+</tr>
+<tr class="odd">
+<td>D13</td>
+<td>Документация: шесть документов по ролям плюс README и CHANGELOG</td>
+<td>Каждая роль получает собственную инструкцию без чтения всего ТЗ</td>
+</tr>
+<tr class="even">
+<td>D14</td>
+<td>Модель доверия v0.01.01: классы НДБ/ДДБ/ДДБПЦД выводятся автоматически из размещения критичных функций и цветов входящих стрелок; раскраска обновляется без ручного обновления (3.5)</td>
+<td>Наглядно связывает размещение функций, доверие и целостность потоков; правила формализованы для автотестов (T-T-01–T-T-10)</td>
+</tr>
+<tr class="odd">
+<td>D15</td>
+<td>Коэффициенты доверия в формуле стоимости: НДБ 0.1, ДДБ 5, ДДБПЦД 10 (3.3, 7.1)</td>
+<td>Доверенный домен дороже — студент «платит» за гарантии; фиксированные множители делают расчёт воспроизводимым и проверяемым</td>
+</tr>
+<tr class="even">
+<td>D16</td>
+<td>Внешние (смежные) системы — отдельный тип <code>external</code> вне периметра: без функций, без стоимости, доверенность по явному признаку <code>trusted</code>; рамка периметра на канве (3.5, 6.1, 6.3)</td>
+<td>Фиксирует границу целевой системы; потоки от недоверенных смежных систем остаются низкоцелостными</td>
+</tr>
+<tr class="odd">
+<td>D17</td>
+<td>Тема интерфейса: тёмная по умолчанию, переключение без перезагрузки, выбор в localStorage (5.1)</td>
+<td>Эргономика длительной работы; класс применяется до гидратации без вспышки фона</td>
+</tr>
+<tr class="even">
+<td>D18</td>
+<td>Базовый образ сборки node:22-alpine; PORT — общая переменная dev/preview/docker-run (10.2–10.4)</td>
+<td>vitest 5 требует Node не ниже 22 (EBADENGINE на Node 20); единая переменная порта упрощает класс и параллельные прогоны E2E</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-приложение-д-структура-репозитория">Приложение Д. Структура репозитория</h2>
+<pre class="text"><code>skib-lab/
+├── README.md                     # обзор и быстрый старт
+├── CHANGELOG.md
+├── LICENSE
+├── Makefile                      # цели раздела 10.3
+├── Dockerfile                    # требования раздела 10.2 (node:22-alpine)
+├── .dockerignore
+├── .nvmrc                        # 22
+├── docker-compose.yml
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── eslint.config.mjs
+├── next.config.ts                # output: &quot;export&quot;, BASE_PATH
+├── vitest.config.ts              # пороги покрытия 11.2
+├── playwright.config.ts          # Chromium, webServer — dev-сервер (PORT)
+├── playwright.firefox.config.ts  # точечный прогон в Firefox
+├── nginx/
+│   └── nginx.conf                # эскиз в Приложении Е
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── app/                      # App Router: layout.tsx, page.tsx, globals.css
+│   ├── i18n/
+│   │   └── ru.ts                 # словарь строк интерфейса
+│   ├── engine/
+│   │   ├── types.ts              # сущности раздела 3.1 (включая external/trusted)
+│   │   ├── trust.ts              # модель доверия 3.5, рамка периметра
+│   │   ├── cost.ts               # алгоритм 7.1 (коэффициент K)
+│   │   ├── coverage.ts           # алгоритм 7.2
+│   │   ├── decompose.ts          # алгоритм 7.3
+│   │   ├── limits.ts             # лимиты Ф-17
+│   │   └── index.ts
+│   ├── io/
+│   │   ├── schema.ts             # zod-схемы (включая external/trusted)
+│   │   ├── errors.ts             # коды раздела 6.5
+│   │   ├── archYaml.ts           # architecture.yaml
+│   │   ├── securityYaml.ts       # security.yaml
+│   │   ├── plantuml.ts           # подмножество 6.3 (стереотипы external)
+│   │   ├── stateFile.ts          # state.yaml
+│   │   ├── validate.ts
+│   │   └── index.ts
+│   ├── store/
+│   │   └── projectStore.ts       # zustand + история операций + addExternalDomain
+│   ├── ui/
+│   │   ├── TopBar.tsx            # включая переключатель темы
+│   │   ├── PoolPanel.tsx
+│   │   ├── GoalsPanel.tsx        # цели на левой панели (5.1)
+│   │   ├── Canvas.tsx            # включая рамку периметра
+│   │   ├── DomainNode.tsx        # класс доверия, K, заливка
+│   │   ├── InspectorPanel.tsx    # включая свойства внешней системы
+│   │   ├── SummaryPanel.tsx      # расчёт системы под инспектором (5.1)
+│   │   ├── DecomposeDialog.tsx
+│   │   ├── ValidationPanel.tsx
+│   │   ├── status.tsx
+│   │   └── theme.ts              # тема: тёмная по умолчанию (5.1)
+│   └── samples/
+│       ├── robot/                # пример 1 (14.4.1, Приложения А–В)
+│       │   ├── content.ts        # строки-источник данных
+│       │   ├── architecture.yaml
+│       │   ├── architecture.puml
+│       │   ├── security.yaml
+│       │   └── state.yaml
+│       └── vessel/               # пример 2 (14.4.2)
+│           └── …
+├── tests/
+│   ├── unit/
+│   │   ├── cost.test.ts          # T-C-01…T-C-12
+│   │   ├── trust.test.ts         # T-T-01…T-T-10
+│   │   ├── coverage.test.ts      # T-P-01…T-P-09
+│   │   ├── decompose.test.ts     # T-D-01…T-D-04
+│   │   ├── archYaml.test.ts      # T-Y-01…T-Y-10
+│   │   ├── securityYaml.test.ts  # T-S-01…T-S-03
+│   │   ├── plantuml.test.ts
+│   │   ├── fixtures.test.ts      # единый источник данных примеров
+│   │   ├── store.test.ts
+│   │   ├── edge.test.ts
+│   │   └── api.test.ts
+│   ├── e2e/
+│   │   ├── load.spec.ts          # Э-01, Э-03, Э-04
+│   │   ├── export.spec.ts        # Э-02, Э-02b, Э-08, Э-09
+│   │   ├── decompose.spec.ts     # Э-05
+│   │   ├── coverage.spec.ts      # Э-06, Э-06b
+│   │   └── persistence.spec.ts   # Э-07
+│   └── fixtures/
+│       ├── robot/                # пример 1 (Приложения А–В, state.yaml шага 1)
+│       ├── vessel/               # пример 2
+│       └── invalid/              # 10 файлов — по одному дефекту на файл
+├── samples/                      # файлы примеров для ручной загрузки (robot, vessel)
+└── docs/
+        ├── user-guide.md
+        ├── teacher-guide.md
+        ├── developer-guide.md
+        ├── testing-guide.md
+        └── deployment-guide.md</code></pre>
+<h2 id="sec-приложение-е-эскиз-nginxconf">Приложение Е. Эскиз nginx.conf</h2>
+<p>Эскиз закрепляет требования 10.2; при генерации кода допускаются уточнения, не меняющие наблюдаемое поведение:</p>
+<pre class="nginx"><code>worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events { worker_connections 1024; }
+
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  access_log /dev/stdout;
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path /tmp/proxy_temp;
+  fastcgi_temp_path /tmp/fastcgi_temp;
+  uwsgi_temp_path /tmp/uwsgi_temp;
+  scgi_temp_path /tmp/scgi_temp;
+
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+
+  server {
+    listen 8080;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # CSP: unsafe-inline для стилей требуется инлайновым стилям React Flow
+    add_header Content-Security-Policy &quot;default-src &#39;self&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;; img-src &#39;self&#39; data:&quot; always;
+    add_header X-Content-Type-Options &quot;nosniff&quot; always;
+    add_header X-Frame-Options &quot;DENY&quot; always;
+    add_header Referrer-Policy &quot;no-referrer&quot; always;
+
+    location = /healthz { return 200 &quot;ok\n&quot;; }
+
+    location /assets/ { add_header Cache-Control &quot;public, max-age=31536000, immutable&quot;; }
+
+    location / { try_files $uri $uri/ /index.html; add_header Cache-Control &quot;no-cache&quot;; }
+  }
+}</code></pre>
+<h2 id="sec-приложение-ж-эскиз-makefile">Приложение Ж. Эскиз Makefile</h2>
+<p>Эскиз закрепляет перечень целей 10.3; тела целей могут уточняться при генерации кода:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode makefile"><code class="sourceCode makefile"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="dt">DOCKER</span> <span class="ch">?=</span><span class="st"> docker</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="dt">IMAGE</span>  <span class="ch">?=</span><span class="st"> skib-lab</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="dt">TAG</span>    <span class="ch">?=</span><span class="st"> 0.01.01</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="dt">PORT</span>   <span class="ch">?=</span><span class="st"> 8080</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="dt">BASE_PATH</span> <span class="ch">?=</span><span class="st"> /</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="ot">.PHONY:</span><span class="dt"> help install dev build preview lint test-unit test-unit-coverage </span><span class="ch">\</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="dt">        test-e2e test check docker-build docker-run docker-start docker-stop </span><span class="ch">\</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="dt">        docker-logs docker-shell clean distclean</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="dv">help:</span><span class="dt"> </span><span class="co">## список целей (по умолчанию)</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="dv">install:</span><span class="dt"> </span><span class="co">## установка зависимостей (npm ci)</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="dv">dev:</span><span class="dt"> </span><span class="co">## dev-сервер Next.js, порт PORT (по умолчанию 3000)</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="dv">build:</span><span class="dt"> </span><span class="co">## производственная сборка (статический каталог out/)</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="dv">preview:</span><span class="dt"> </span><span class="co">## локальный запуск собранной версии, порт PORT (по умолчанию 4173)</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a><span class="dv">lint:</span><span class="dt"> </span><span class="co">## eslint и tsc --noEmit</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a><span class="dv">test-unit:</span><span class="dt"> </span><span class="co">## unit-тесты Vitest</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="dv">test-unit-coverage:</span><span class="dt"> </span><span class="co">## unit-тесты с покрытием и порогами</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a><span class="dv">test-e2e:</span><span class="dt"> </span><span class="co">## E2E-тесты Playwright (webServer поднимает dev-сервер сам)</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a><span class="dv">test:</span><span class="dt"> </span><span class="co">## test-unit затем test-e2e</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a><span class="dv">check:</span><span class="dt"> </span><span class="co">## lint затем test — полная локальная проверка</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-build:</span><span class="dt"> </span><span class="co">## сборка образа $(IMAGE):$(TAG)</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-run:</span><span class="dt"> </span><span class="co">## запуск образа на переднем плане, порт $(PORT)</span></span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-start:</span><span class="dt"> </span><span class="co">## запуск в фоне с именем skib-lab</span></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-stop:</span><span class="dt"> </span><span class="co">## остановка и удаление skib-lab</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-logs:</span><span class="dt"> </span><span class="co">## логи контейнера skib-lab</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a><span class="dv">docker-shell:</span><span class="dt"> </span><span class="co">## оболочка sh внутри контейнера</span></span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a><span class="dv">clean:</span><span class="dt"> </span><span class="co">## удаление out, coverage, playwright-report, test-results, .next</span></span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a><span class="dv">distclean:</span><span class="dt"> </span><span class="co">## clean плюс удаление node_modules</span></span></code></pre></div>
+
+</main>
+</body>
+</html>

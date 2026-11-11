@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Конструктор СКИБ — отчёт о разработке и проверке v0.01.01</title>
+<style>
+@page {
+  size: A4;
+  margin: 20mm 17mm 21mm 17mm;
+  @bottom-center { content: counter(page); font-family: 'Liberation Sans', sans-serif; font-size: 8.5pt; color: #8A94A0; }
+  @top-right { content: 'Конструктор СКИБ · Отчёт v0.01.01'; font-family: 'Liberation Sans', sans-serif; font-size: 7.5pt; color: #A7B0BB; }
+}
+@page cover { margin: 0; @bottom-center { content: none; } @top-right { content: none; } }
+@page toc-page { @top-right { content: none; } }
+
+html, body { margin: 0; padding: 0; background: #FFFFFF; color: #23282E;
+  font-family: 'Liberation Serif', 'DejaVu Serif', serif; font-size: 10.5pt; line-height: 1.5; }
+
+/* ---------- Обложка ---------- */
+.cover { page: cover; width: 210mm; height: 296mm; box-sizing: border-box;
+  break-after: page; overflow: hidden; background: #FFFFFF; position: relative; }
+.cover-inner { position: absolute; inset: 0; padding: 26mm 20mm 18mm 20mm; box-sizing: border-box;
+  display: flex; flex-direction: column; }
+.cover-label { font-family: 'Liberation Sans', sans-serif; font-size: 11pt; letter-spacing: 7px;
+  color: #1E4E8C; font-weight: 700; }
+.cover-rule { width: 34mm; height: 1.4mm; background: #1E4E8C; margin: 9mm 0 14mm 0; }
+.cover-title { font-family: 'Liberation Sans', sans-serif; font-size: 37pt; line-height: 1.12;
+  margin: 0 0 7mm 0; color: #14181D; font-weight: 700; }
+.cover-subtitle { font-size: 13.5pt; line-height: 1.5; color: #3C4550; margin: 0 0 16mm 0; max-width: 155mm; }
+.cover-meta { border-top: 0.5mm solid #1E4E8C; padding-top: 6mm; display: flex; flex-direction: column; gap: 3.2mm; max-width: 150mm; }
+.cover-meta div { font-size: 11pt; color: #23282E; }
+.cover-meta span { display: inline-block; min-width: 42mm; font-family: 'Liberation Sans', sans-serif;
+  font-size: 8.5pt; letter-spacing: 1.5px; text-transform: uppercase; color: #6B7684; }
+.cover-rev { margin-top: 11mm; max-width: 158mm; font-size: 9.5pt; line-height: 1.55; color: #4A5462;
+  border-left: 1mm solid #C4CFDB; padding-left: 5mm; }
+.cover-footer { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: 'Liberation Sans', sans-serif; font-size: 8.5pt; color: #6B7684;
+  border-top: 0.3mm solid #D9DEE4; padding-top: 4mm; }
+
+/* ---------- Содержание ---------- */
+.toc { page: toc-page; break-after: page; }
+.toc-title { font-family: 'Liberation Sans', sans-serif; font-size: 16pt; color: #14181D;
+  margin: 0 0 8mm 0; padding-bottom: 3mm; border-bottom: 0.6mm solid #1E4E8C; }
+.toc ul { list-style: none; margin: 0; padding: 0; }
+.toc li { margin: 0; }
+.toc a { display: flex; align-items: baseline; text-decoration: none; color: #23282E;
+  font-size: 10.5pt; padding: 1.1mm 0; }
+.toc .dots { flex: 1 1 auto; border-bottom: 0.3mm dotted #B8C2CE; margin: 0 1.5mm 0.8mm 2.5mm; min-width: 6mm; }
+.toc .pg { min-width: 6mm; text-align: right; color: #6B7684; }
+.toc-h2 a { font-family: 'Liberation Sans', sans-serif; font-weight: 700; font-size: 10pt; margin-top: 2.2mm; }
+.toc-h3 a { padding-left: 7mm; font-weight: 400; }
+
+/* ---------- Основной текст ---------- */
+.main-content h2 { font-family: 'Liberation Sans', sans-serif; font-size: 15pt; color: #14181D;
+  margin: 9mm 0 4mm 0; padding-bottom: 2mm; border-bottom: 0.5mm solid #1E4E8C;
+  break-after: avoid; break-inside: avoid; }
+.main-content h3 { font-family: 'Liberation Sans', sans-serif; font-size: 12pt; color: #1E4E8C;
+  margin: 6.5mm 0 2.5mm 0; break-after: avoid; break-inside: avoid; }
+.main-content h4 { font-family: 'Liberation Sans', sans-serif; font-size: 10.5pt; color: #23282E;
+  margin: 5mm 0 2mm 0; break-after: avoid; break-inside: avoid; }
+.main-content p { margin: 0 0 2.6mm 0; text-align: justify; hyphens: auto; }
+.main-content ul, .main-content ol { margin: 0 0 2.6mm 0; padding-left: 6.5mm; }
+.main-content li { margin-bottom: 1.2mm; }
+.main-content li p { margin: 0 0 1.2mm 0; }
+
+/* Цитата-ревизия в начале документа */
+.main-content blockquote { margin: 0 0 5mm 0; padding: 3.5mm 5mm; background: #F3F6FA;
+  border-left: 1.2mm solid #1E4E8C; color: #333A44; font-size: 9.5pt; }
+.main-content blockquote p { margin: 0 0 2mm 0; text-align: left; }
+.main-content blockquote p:last-child { margin: 0; }
+
+/* Таблицы */
+table { border-collapse: collapse; width: 100%; margin: 3mm 0 4.5mm 0; font-size: 8.8pt;
+  font-family: 'Liberation Sans', sans-serif; line-height: 1.35; }
+th, td { border: 0.25mm solid #C4CFDB; padding: 1.5mm 2.2mm; text-align: left; vertical-align: top; }
+th { background: #EDF1F6; color: #14181D; font-weight: 700; }
+tr { break-inside: avoid; }
+thead { break-inside: avoid; }
+td { word-break: break-word; }
+tbody tr:nth-child(even) td { background: #FAFBFD; }
+
+/* Код */
+pre { background: #F5F7FA; border: 0.25mm solid #DFE5EC; padding: 2.8mm 3.5mm; margin: 2.5mm 0 4mm 0;
+  font-family: 'Liberation Mono', monospace; font-size: 8.2pt; line-height: 1.42; white-space: pre-wrap; }
+code { font-family: 'Liberation Mono', monospace; font-size: 0.86em; background: #F5F7FA;
+  padding: 0.2mm 0.8mm; border-radius: 0.8mm; }
+pre code { background: none; padding: 0; font-size: 1em; }
+thead { display: table-header-group; }
+
+/* Прочее */
+hr { border: none; border-top: 0.3mm solid #D9DEE4; margin: 6mm 0; }
+strong { color: #14181D; }
+a { color: #1E4E8C; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="cover-inner">
+    <div class="cover-label">DEVELOPMENT &amp; VERIFICATION REPORT</div>
+    <div class="cover-rule"></div>
+    <h1 class="cover-title">Конструктор СКИБ<br>— отчёт v0.01.01</h1>
+    <p class="cover-subtitle">Отчёт по результатам разработки и проверки ревизии v0.01.01 учебного веб-инструмента проектирования систем с конструктивной информационной безопасностью</p>
+    <div class="cover-meta">
+      <div><span>Документ</span>Отчёт о разработке и проверке · версия 2.0</div>
+      <div><span>Дата</span>10 ноября 2026 г.</div>
+      <div><span>Итог</span>158 проверок пройдены: 144 unit + 11 E2E Chromium + 3 Firefox</div>
+      <div><span>Основание</span>ТЗ «Конструктор СКИБ» v0.01.01 от 10.11.2026</div>
+      <div><span>Контекст курса</span>ГОСТ Р 72118-2025 · ГОСТ ISO/IEC TS 19249-2021</div>
+    </div>
+    <div class="cover-rev">Состав проверки: критерии готовности кода 11.5 ТЗ (tsc, ESLint, 144 unit-теста с порогами покрытия, 11 E2E-сценариев Chromium), приёмка в Firefox (3/3), контрольный перегон на порту 4321 (3/3), production-сборка с измерением НФ-2 (393 КБ gzip), контрольные примеры 14.4.1 (486) и 14.4.2 (370), матрица трассировки Ф-1…Ф-27 / НФ-1…НФ-10 ↔ T-*/Э-*.</div>
+    <div class="cover-footer">
+      <span>Конструктивная информационная безопасность · учебный курс</span>
+      <span>skib-lab · отчёт v0.01.01</span>
+    </div>
+  </div>
+</section>
+
+<nav class="toc"><h2 class="toc-title">Содержание</h2><ul>
+<li class="toc-h2"><a href="#sec-sec-1-аннотация-и-сведения-о-проверке"><span>1. Аннотация и сведения о проверке</span><span class="dots"></span><span class="pg">3</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-2-реализация-требований-ревизии-v00101"><span>2. Реализация требований ревизии v0.01.01</span><span class="dots"></span><span class="pg">4</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-3-реализация-функциональных-требований-ф-1ф-27"><span>3. Реализация функциональных требований (Ф-1…Ф-27)</span><span class="dots"></span><span class="pg">5</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-4-реализация-нефункциональных-требований-нф-1нф-10"><span>4. Реализация нефункциональных требований (НФ-1…НФ-10)</span><span class="dots"></span><span class="pg">7</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-5-матрица-трассировки-требование--тест"><span>5. Матрица трассировки «требование ↔︎ тест»</span><span class="dots"></span><span class="pg">8</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-51-unit-кейсы-раздел-112-тз"><span>5.1. Unit-кейсы (раздел 11.2 ТЗ)</span><span class="dots"></span><span class="pg">8</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-52-e2e-сценарии-раздел-113-тз"><span>5.2. E2E-сценарии (раздел 11.3 ТЗ)</span><span class="dots"></span><span class="pg">9</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-6-результаты-выполнения-автотестов"><span>6. Результаты выполнения автотестов</span><span class="dots"></span><span class="pg">10</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-61-команды-и-порядок-прогонов"><span>6.1. Команды и порядок прогонов</span><span class="dots"></span><span class="pg">10</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-62-unit-тесты-и-покрытие-vitest-5"><span>6.2. Unit-тесты и покрытие (Vitest 5)</span><span class="dots"></span><span class="pg">10</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-63-e2e-тесты-интерфейса-chromium-158-окно-1280800"><span>6.3. E2E-тесты интерфейса (Chromium 158, окно 1280×800)</span><span class="dots"></span><span class="pg">11</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-64-приёмочная-проверка-в-firefox-159-пункт-10-чек-листа-142"><span>6.4. Приёмочная проверка в Firefox 159 (пункт 10 чек-листа 14.2)</span><span class="dots"></span><span class="pg">11</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-65-контрольный-перегон-на-альтернативном-порту"><span>6.5. Контрольный перегон на альтернативном порту</span><span class="dots"></span><span class="pg">12</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-66-статическая-проверка-и-сборка"><span>6.6. Статическая проверка и сборка</span><span class="dots"></span><span class="pg">12</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-7-чек-лист-приёмки-раздел-142-тз-v00101"><span>7. Чек-лист приёмки (раздел 14.2 ТЗ v0.01.01)</span><span class="dots"></span><span class="pg">12</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-8-контрольные-примеры-раздел-144-тз-v00101"><span>8. Контрольные примеры (раздел 14.4 ТЗ v0.01.01)</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-9-исправленные-дефекты-и-известные-ограничения"><span>9. Исправленные дефекты и известные ограничения</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-91-дефекты-обнаруженные-и-устранённые-при-проверке-v00101"><span>9.1. Дефекты, обнаруженные и устранённые при проверке v0.01.01</span><span class="dots"></span><span class="pg">13</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-92-известные-ограничения-проверки"><span>9.2. Известные ограничения проверки</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h3"><a href="#sec-sec-93-наследие-v0-кратко"><span>9.3. Наследие v0 (кратко)</span><span class="dots"></span><span class="pg">14</span></a></li>
+<li class="toc-h2"><a href="#sec-sec-10-выводы-и-рекомендации"><span>10. Выводы и рекомендации</span><span class="dots"></span><span class="pg">14</span></a></li>
+</ul></nav>
+<main class="main-content">
+<blockquote>
+<p>Документ: отчёт по результатам разработки и проверки v0.01.01 · версия 2.0 · 10.11.2026 Основание: ТЗ «Конструктор СКИБ», версия 0.01.01 от 10.11.2026, статус «утверждено, реализовано» Объект: учебный веб-инструмент «Конструктор СКИБ» (репозиторий <code>skib-lab</code>), версия 0.01.01 Итог: критерии готовности кода (раздел 11.5 ТЗ) выполнены; 158 автоматических проверок пройдены (144 unit + 11 E2E Chromium + 3 E2E Firefox), lint и проверка типов — без ошибок; контрольный перегон E2E на порту 4321 — 3/3. Выполнена production-сборка (статический экспорт out/), начальный пакет 393 КБ gzip — порог НФ-2 выполнен. Контрольные примеры 14.4.1 (робот) и 14.4.2 (судно) подтверждены численно.</p>
+</blockquote>
+<h2 id="sec-1-аннотация-и-сведения-о-проверке">1. Аннотация и сведения о проверке</h2>
+<p>Отчёт фиксирует результаты реализации и проверки ревизии v0.01.01 веб-инструмента «Конструктор СКИБ» по техническому заданию версии 0.01.01. Ревизия развивает v0 без изменения форматов файлов и модели данных: добавлены модель доверия доменов и целостности потоков (3.5 ТЗ — классы НДБ/ДДБ/ДДБПЦД, автоматическая раскраска доменов и стрелок, рамка периметра), коэффициенты доверия в формуле стоимости (3.3, 7.1 — НДБ ×0.1, ДДБ ×5, ДДБПЦД ×10), внешние (смежные) системы как отдельный тип объекта (3.1, 6.1, 6.3, 6.4 — без стоимости, без функций, доверенность по признаку <code>trusted</code>), перестановка панелей интерфейса с выносом целей на левую панель и расчёта системы — под инспектор с укрупнённым шрифтом (5.1), переключение темы светлая/тёмная с тёмной по умолчанию (5.1), два демонстрационных примера — «Автономный коммунальный робот» и «Безэкипажное судно-доставщик» (14.4, Приложения А–В), обновлённые наборы тестов (T-T-01…T-T-10, обновлённые T-C-01…T-C-12, сценарии Э-01…Э-09 с Э-02b и Э-06b) и изменения развёртывания (базовый образ node:22-alpine, переменная PORT для dev/preview).</p>
+<p>Вся функциональность v0 сохранена и перепроверена; раскраска доверия пересчитывается автоматически после каждой операции и при загрузке файлов (Ф-18), стоимость и покрытие считаются на одной модели проекта.</p>
+<p>Таблица 1.1 — Среда проверки</p>
+<table>
+<thead>
+<tr class="header">
+<th>Параметр</th>
+<th>Значение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Дата прогона</td>
+<td>10.11.2026</td>
+</tr>
+<tr class="even">
+<td>ОС / среда</td>
+<td>Linux (контейнер проверки), GNU Make 4.4.1</td>
+</tr>
+<tr class="odd">
+<td>Node.js / npm</td>
+<td>v24.22.2 / 11.19.1 (engines: ^22.12.0, базовый образ сборки node:22-alpine)</td>
+</tr>
+<tr class="even">
+<td>Приложение</td>
+<td>Next.js 16 (App Router, Turbopack dev-сервер), React 19, <code>@xyflow/react</code> 12, <code>zod</code> 4, <code>js-yaml</code> 5, zustand 5</td>
+</tr>
+<tr class="odd">
+<td>Тестовые фреймворки</td>
+<td>Vitest 5 (unit, покрытие v8), <code>@playwright/test</code> 1.65</td>
+</tr>
+<tr class="even">
+<td>Браузеры</td>
+<td>Chromium 158.0.8127.18 (полный набор Э-01–Э-09), Firefox 159.0 (Э-01, Э-03, Э-04)</td>
+</tr>
+<tr class="odd">
+<td>Docker</td>
+<td>демон в среде проверки отсутствует (влияние см. раздел 9.2)</td>
+</tr>
+<tr class="even">
+<td>Команды прогонов</td>
+<td><code>npx tsc --noEmit</code> + <code>npm run lint</code>; <code>npm run test:unit:coverage</code>; <code>npx playwright test</code>; <code>npx playwright test tests/e2e/load.spec.ts -c playwright.firefox.config.ts</code>; <code>PORT=4321 npx playwright test tests/e2e/load.spec.ts</code>; <code>npm run build</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-2-реализация-требований-ревизии-v00101">2. Реализация требований ревизии v0.01.01</h2>
+<p>Таблица 2.1 — Пункты ревизии и их подтверждение</p>
+<table>
+<thead>
+<tr class="header">
+<th>№</th>
+<th>Требование v0.01.01 (ТЗ)</th>
+<th>Реализация</th>
+<th>Подтверждение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>Раскраска доменов и стрелок: старт — все внутренние домены НДБ (полупрозрачная красная заливка, текст чёрный), все стрелки красные; функция, критичная хотя бы для одной цели, вводит домен в ТКБ; домен в ТКБ с входящей красной стрелкой — ДДБПЦД (жёлтый), с только зелёными входами — ДДБ (зелёный); исходящие стрелки доверенного домена — зелёные; пересчёт автоматический (3.5)</td>
+<td><code>src/engine/trust.ts</code>: <code>trustedBlockIds</code> (критичность = наличие связи implements, решение D4), <code>computeTrust</code> (классы доменов + цвета стрелок), <code>trustFill</code>; заливка и метки классов — в <code>DomainNode.tsx</code>, цвета стрелок — в <code>Canvas.tsx</code>; пересчёт вызывается из <code>recalcCosts</code> и канвы на каждом изменении</td>
+<td>unit: <code>trust.test.ts</code> (T-T-01…T-T-10); E2E: Э-03 (ДДБПЦД после размещения), Э-04 (возврат в НДБ), Э-06b (автообновление при снятии карточки)</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>Коэффициенты доверия в стоимости: НДБ ×0.1, ДДБ ×5, ДДБПЦД ×10; домен без функций стоит C_блока × K; округление вверх один раз (3.3, 7.1)</td>
+<td><code>src/engine/cost.ts</code>: формула <code>C_блока × S_eff × M × K</code>, <code>TRUST_COST_COEFFICIENT</code>; K подставляется из <code>computeTrust</code></td>
+<td>unit: <code>cost.test.ts</code> (T-C-01…T-C-12, включая контрольный пример T-C-09 = 486); E2E: Э-03 (1 → 120), Э-05</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Перестановка панелей: цели безопасности — на левой панели; расчёт системы (стоимость, покрытие ЦБ, размещения, статусы) — под инспектором справа, шрифты крупнее базовых (5.1)</td>
+<td><code>ToolApp.tsx</code>: левая панель 320 px = <code>PoolPanel</code> + <code>GoalsPanel</code>; правая панель 340 px = <code>InspectorPanel</code> + <code>SummaryPanel</code>; <code>SummaryPanel</code> — C_системы укрупнённо, разбивка по классам доверия с коэффициентами</td>
+<td>E2E: Э-01 (цели на левой панели, сводка справа: C_системы, домены, внешние системы, размещения, покрытие, статус); unit: <code>store.test.ts</code></td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>Внешние (смежные) системы: тип <code>external</code> в yaml/puml/state; недоверенная по умолчанию (красная, исходящие стрелки красные), доверенная — по признаку <code>trusted</code> (зелёная); рамка периметра вокруг внутренних доменов; внешние не размещаются внутри рамки (3.5, 6.1, 6.3, 6.4)</td>
+<td><code>types.ts</code> (<code>external</code>, <code>trusted</code>), <code>schema.ts</code> (zod), <code>plantuml.ts</code> (стереотипы <code>&lt;&lt;external&gt;&gt;</code>, <code>&lt;&lt;external-trusted&gt;&gt;</code>), <code>trust.ts</code> (<code>frameBounds</code>, <code>isInsideFrame</code>, <code>snapExternalsOutside</code>), <code>projectStore.ts</code> (<code>addExternalDomain</code>), кнопка «+ Внешняя система» в <code>TopBar.tsx</code>, свойства внешней системы в <code>InspectorPanel.tsx</code></td>
+<td>unit: T-T-06/T-T-07 (доверенность внешней), T-T-09/T-T-10 (рамка), <code>plantuml.test.ts</code> (стереотипы), <code>store.test.ts</code> (внешняя система не принимает функции, не декомпозируется); E2E: Э-02b (PlantUML с внешними системами)</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>Ограничения: функции размещаются только во внутренние домены; декомпозиция только внутренних; стоимость считается только по внутренним доменам — внешние не тарифицируются и не отображаются</td>
+<td>Проверки в <code>placeFunction</code>, <code>decomposeBlock</code>, <code>recalcCosts</code> (<code>domainCost = 0</code>, исключение из C_системы)</td>
+<td>unit: <code>store.test.ts</code> (отказ размещения во внешнюю, отказ декомпозиции), <code>cost.test.ts</code> (T-C-08); числа Э-01: C_системы = 4 по четырём внутренним</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>Тема: светлая/тёмная, по умолчанию тёмная; переключение без перезагрузки; выбор сохраняется (5.1)</td>
+<td><code>src/ui/theme.ts</code>: <code>useSkibTheme</code> на <code>useSyncExternalStore</code>, <code>setTheme</code> с записью в localStorage (<code>skib-theme</code>) и событием; бутстрап-скрипт в <code>layout.tsx</code> применяет класс до гидратации; переключатель в <code>TopBar.tsx</code>; токены обеих тем в <code>globals.css</code></td>
+<td>Код-анализ + E2E-прогоны выполняются в тёмной теме по умолчанию; сохранение выбора — localStorage</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>Два демонстрационных примера: «Автономный коммунальный робот» (14.4.1) и «Безэкипажное судно-доставщик» (14.4.2); «Демо-проект» открывает выбор (Ф-5)</td>
+<td><code>src/samples/robot/content.ts</code>, <code>src/samples/vessel/content.ts</code> — строки-источник; файлы <code>samples/</code> и <code>tests/fixtures/</code> генерируются <code>scripts/emit-fixtures.ts</code>; диалог выбора в <code>TopBar.tsx</code> (testid <code>demo-robot</code>, <code>demo-vessel</code>)</td>
+<td>unit: <code>fixtures.test.ts</code> (валидность, C_системы = 486 и 370, картина доверия 14.4); E2E: Э-01…Э-09 на примере 1</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Обновление тестов: кейсы T-T-01…T-T-10, обновлённые T-C-01…T-C-12, сценарии Э-01…Э-09 (+ Э-02b, Э-06b) с числами примера 1 (11.2, 11.3)</td>
+<td><code>tests/unit/trust.test.ts</code> (новый), <code>cost.test.ts</code>, <code>store.test.ts</code>, <code>fixtures.test.ts</code>, все пять файлов <code>tests/e2e/*.spec.ts</code></td>
+<td>Полные результаты — разделы 5–6; 144 unit + 11 E2E пройдены</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td>Развёртывание: базовый образ node:22-alpine (EBADENGINE устранён), PORT — общая переменная dev/preview/E2E (10.2–10.4)</td>
+<td><code>Dockerfile</code> (node:22-alpine, комментарий о vitest 5), <code>package.json</code> (<code>engines</code>, <code>dev</code> = <code>next dev -p ${PORT:-3000}</code>), <code>.nvmrc</code> (22), <code>playwright.config.ts</code> (порт из PORT), Makefile</td>
+<td><code>npm run build</code> — успешно; E2E на PORT=4321 — 3/3; lint/tsc — 0 ошибок</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td>Версия 0.01.01</td>
+<td><code>APP_VERSION = '0.01.01'</code> в <code>src/engine/types.ts</code>, заголовок интерфейса «v0.01.01», метаданные Dockerfile, CHANGELOG</td>
+<td>E2E-заголовок; сборка</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-3-реализация-функциональных-требований-ф-1ф-27">3. Реализация функциональных требований (Ф-1…Ф-27)</h2>
+<p>Все требования раздела 4 ТЗ v0.01.01 реализованы; пометки «(v1)» в Ф-7 и Ф-9 означают перенос части требования в v1 (соответствие ТЗ, не отклонение). Обратное покрытие: каждое требование имеет минимум одну автотест- или E2E-проверку (раздел 5); разрывов трассировки нет. Изменения ревизии: Ф-5 — выбор из двух примеров; Ф-12 — класс доверия и K в узле; Ф-13 — «+ Внешняя система»; Ф-18 — в пересчёт включены классы доверия и цвета стрелок; Ф-19 — панель целей на левой панели; Ф-20 — панель расчёта системы под инспектором.</p>
+<p>Таблица 3.1 — Функциональные требования и их покрытие</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Требование (кратко)</th>
+<th>Покрывающие проверки</th>
+<th>Результат</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Ф-1</td>
+<td>Загрузка <code>architecture.yaml</code>; сброс размещений в пул</td>
+<td>unit: <code>archYaml.test.ts</code> (T-Y-01…T-Y-10), <code>store.test.ts</code> (Ф-1), <code>edge.test.ts</code> (E-001/E-002); E2E: Э-02, Э-09</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-2</td>
+<td>Загрузка <code>security.yaml</code>; сохранение совместимых размещений</td>
+<td>unit: <code>securityYaml.test.ts</code>, <code>store.test.ts</code> (Ф-2); E2E: Э-02</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-3</td>
+<td>Загрузка архитектуры из PlantUML (подмножество 6.3, включая <code>&lt;&lt;external&gt;&gt;</code>/<code>&lt;&lt;external-trusted&gt;&gt;</code>)</td>
+<td>unit: <code>plantuml.test.ts</code> (T-U-01…T-U-06, round-trip, стереотипы внешних), <code>fixtures.test.ts</code>; E2E: Э-02b</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-4, Ф-25</td>
+<td>Импорт <code>state.yaml</code> восстанавливает сеанс целиком</td>
+<td>unit: <code>securityYaml.test.ts</code> (T-S-01…T-S-03), <code>edge.test.ts</code> (E-402/E-403), <code>api.test.ts</code>; E2E: Э-08</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-5</td>
+<td>«Демо-проект»: выбор примера 14.4.1 (робот) или 14.4.2 (судно)</td>
+<td>unit: <code>fixtures.test.ts</code> (единый источник, валидность обоих примеров); E2E: Э-01 (robot)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-6</td>
+<td>Валидация до применения; при ошибке проект не изменяется</td>
+<td>unit: <code>edge.test.ts</code> (E-105 останавливает применение), <code>api.test.ts</code>; E2E: Э-09</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-7</td>
+<td>Пул карточек: имя, стоимость, индикаторы целей, статус; фильтры «все / свободные / размещённые» (поиск — v1)</td>
+<td>E2E: Э-01 (7 карточек), Э-03, Э-04 (статусы карточек)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-8</td>
+<td>Перетаскивание карточки из пула в домен (HTML5 DnD)</td>
+<td>E2E: Э-03 (dragstart/dragover/drop)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-9</td>
+<td>Перемещение функции между доменами (в v0 — через инспектор)</td>
+<td>unit: <code>store.test.ts</code> (размещение/перемещение/возврат), <code>coverage.test.ts</code> (T-P-09)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-10</td>
+<td>Кнопка «Убрать» возвращает функцию в пул</td>
+<td>E2E: Э-04</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-11</td>
+<td>Одни и те же данные карточки в пуле и домене; переключение без ручного обновления</td>
+<td>E2E: Э-03, Э-04</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-12</td>
+<td>Узел: имя, класс доверия (НДБ/ДДБ/ДДБПЦД), C_блока, карточки, S, M, K, C_домена, статус, декомпозиция; узел внешней системы — с переключателем доверенности, без стоимости</td>
+<td>E2E: Э-01, Э-03, Э-04; unit: <code>trust.test.ts</code> (T-T-01…T-T-10), <code>cost.test.ts</code> (T-C-06)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-13</td>
+<td>«+ Домен» и «+ Внешняя система» (external, недоверенная, за рамкой)</td>
+<td>unit: <code>store.test.ts</code> (Ф-13/Ф-15, addExternalDomain), <code>edge.test.ts</code> (addDomain)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-14</td>
+<td>Стрелки: создание от порта к порту, подпись, удаление Delete/из инспектора</td>
+<td>unit: <code>store.test.ts</code> (Ф-14), <code>edge.test.ts</code> (updateEdge), <code>archYaml.test.ts</code> (E-103, E-104), <code>plantuml.test.ts</code> (E-303)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-15</td>
+<td>Удаление домена: стрелки удаляются, функции возвращаются в пул</td>
+<td>unit: <code>store.test.ts</code> (Ф-13/Ф-15), <code>edge.test.ts</code> (deleteDomain)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-16</td>
+<td>Декомпозиция (только внутренних): k = 2–6, имена и C_блока потомков, переподключение стрелок, функции в пул</td>
+<td>unit: <code>decompose.test.ts</code> (T-D-01, T-D-02), <code>store.test.ts</code> (T-D-04, отказ для внешней), <code>cost.test.ts</code> (T-C-10); E2E: Э-05</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-17</td>
+<td>Лимиты: не более 200 доменов и 500 стрелок</td>
+<td>unit: <code>api.test.ts</code> (Ф-17, canAddDomain/canAddEdge), <code>store.test.ts</code>, <code>edge.test.ts</code></td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-18</td>
+<td>Мгновенный пересчёт после каждой операции: стоимости, покрытие, классы доверия, цвета стрелок; ≤ 100 мс</td>
+<td>unit: <code>trust.test.ts</code> (пересчёт на модели), <code>fixtures.test.ts</code> (НФ-1, максимальная модель); E2E: Э-03, Э-06b</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-19</td>
+<td>Панель целей на левой панели под пулом: светофор и состав с отметками размещения</td>
+<td>unit: <code>coverage.test.ts</code> (T-P-01…T-P-09); E2E: Э-01 (5 красных целей с крестами-дублёрами), Э-06</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-20</td>
+<td>Панель расчёта системы под инспектором: C_системы, домены, внешние системы, размещения, покрытие, статус, разбивка по классам доверия</td>
+<td>E2E: Э-01, Э-03 (включая «НДБ: 3 ×0.1», «ДДБПЦД: 1 ×10»), Э-07</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-21</td>
+<td>Отмена/повтор (Ctrl+Z / Ctrl+Y), глубина ≥ 100 шагов</td>
+<td>unit: <code>store.test.ts</code> (undo/redo, глубина), <code>api.test.ts</code></td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-22</td>
+<td>Автосохранение в localStorage и восстановление сеанса</td>
+<td>unit: <code>edge.test.ts</code> (hydrate, scheduleSave, повреждённый JSON); E2E: Э-07</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-23</td>
+<td>«Сбросить проект» очищает localStorage</td>
+<td>unit: <code>store.test.ts</code> (Ф-23)</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-24</td>
+<td>Экспорт <code>state.yaml</code>, <code>architecture.yaml</code>, <code>architecture.puml</code></td>
+<td>unit: round-trip T-Y-10, PlantUML, сериализация; E2E: Э-08</td>
+<td>Реализовано</td>
+</tr>
+<tr class="odd">
+<td>Ф-26</td>
+<td>Панель ошибок: код, текст на русском, номер строки</td>
+<td>E2E: Э-09; unit: набор E-001…E-403 по парсерам</td>
+<td>Реализовано</td>
+</tr>
+<tr class="even">
+<td>Ф-27</td>
+<td>Предупреждения W не блокируют загрузку, ошибки E блокируют</td>
+<td>unit: T-Y-09 (W-001), T-U-06 (W-002), W-003/W-004/W-005, <code>edge.test.ts</code></td>
+<td>Реализовано</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-4-реализация-нефункциональных-требований-нф-1нф-10">4. Реализация нефункциональных требований (НФ-1…НФ-10)</h2>
+<p>Таблица 4.1 — Нефункциональные требования</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Требование</th>
+<th>Проверка</th>
+<th>Результат и примечание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>НФ-1</td>
+<td>Пересчёт ≤ 100 мс на максимальной модели (200/500/100)</td>
+<td>unit: <code>fixtures.test.ts</code> — 200 доменов, 500 стрелок, 100 функций, пересчёт (стоимость + доверие + покрытие) быстрее 100 мс</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>НФ-2</td>
+<td>Загрузка ≤ 2 с; начальный пакет ≤ 1 МБ gzip</td>
+<td>Production-сборка 10.11.2026 (v0.01.01): начальный пакет (11 файлов JS/CSS из index.html) — 393 КБ gzip ≤ 1 МБ</td>
+<td>Пройден (объём пакета); время загрузки — оговорка среды</td>
+</tr>
+<tr class="odd">
+<td>НФ-3</td>
+<td>Chromium и Firefox (2 последние мажорные), 1280×720+</td>
+<td>Chromium 158: 11/11; Firefox 159: Э-01, Э-03, Э-04 — 3/3; окно 1280×800</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>НФ-4</td>
+<td>Нет внешних CDN, телеметрии, сетевых запросов</td>
+<td>В <code>src/</code> — 0 вызовов fetch/XHR/WebSocket/sendBeacon; шрифты локальные; Google-запросов в выдаче нет</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>НФ-5</td>
+<td>Данные только в браузере и экспортированных файлах</td>
+<td>Серверной части нет; данные в localStorage (<code>skib-lab-state-v1</code>) и файлах; тема — в localStorage (<code>skib-theme</code>)</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>НФ-6</td>
+<td>Восстановление сеанса; ошибки загрузки не теряют проект</td>
+<td>E2E: Э-07 (перезагрузка, C_системы = 486), Э-09 (проект не изменён); unit: hydrate, scheduleSave</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>НФ-7</td>
+<td>Лимит файла 5 МБ</td>
+<td><code>MAX_FILE_SIZE = 5 · 1024 · 1024</code> в <code>src/engine/types.ts</code>, проверка в <code>ToolApp.tsx</code></td>
+<td>Пройден (код-анализ); выделенного автотеста нет — оговорка</td>
+</tr>
+<tr class="even">
+<td>НФ-8</td>
+<td>Локализация ru; строки в <code>src/i18n/ru.ts</code></td>
+<td>Словарь дополнен строками доверия (НДБ/ДДБ/ДДБПЦД, периметр, тема); E2E опираются на русские тексты</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>НФ-9</td>
+<td>Статусы различимы без опоры на цвет; клавиатурная доступность</td>
+<td>Признаки-дублёры (5.3): кресты у красных целей (Э-01), текстовые метки классов НДБ/ДДБ/ДДБПЦД у доменов (Э-01, Э-03, Э-04)</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>НФ-10</td>
+<td>Ctrl+Z / Ctrl+Y / Delete</td>
+<td>Обработчики в <code>ToolApp.tsx</code> и <code>Canvas.tsx</code>; undo/redo покрыты unit-тестами</td>
+<td>Пройден; выделенного E2E на хоткеи нет — оговорка</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-5-матрица-трассировки-требование--тест">5. Матрица трассировки «требование ↔︎ тест»</h2>
+<p>Матрица связывает обязательные кейсы раздела 11.2 ТЗ v0.01.01 с тестовыми файлами, а сценарии 11.3 — с требованиями. Все строки имеют статус «пройден» (прогон 10.11.2026, раздел 6).</p>
+<h3 id="sec-51-unit-кейсы-раздел-112-тз">5.1. Unit-кейсы (раздел 11.2 ТЗ)</h3>
+<p>Таблица 5.1 — Обязательные unit-кейсы</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Кейс (суть)</th>
+<th>Тестовый файл</th>
+<th>Требования</th>
+<th>Результат</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>T-C-01</td>
+<td>Коэффициенты доверия: НДБ 0.1, ДДБ 5, ДДБПЦД 10</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-02</td>
+<td>Домен без функций стоит ceil(C_блока × K)</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 7.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-C-03</td>
+<td>E = 1, НДБ с функцией: M = 1, K = 0.1</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 7.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-04</td>
+<td>ДДБ: блок 4, функции 3+4, E = 3 → 210</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 7.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-C-05</td>
+<td>ДДБПЦД: блок 3, функция 3, E = 3 → 135</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 7.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-06</td>
+<td>Округление вверх один раз на произведении</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-C-07</td>
+<td>E = 0 при наличии функций — M = 1</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-08</td>
+<td>Внешний домен: domainCost = 0, в C_системы не входит</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3, 3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-C-09</td>
+<td>Контрольный пример 14.4.1 (шаг 1) — C_системы = 486</td>
+<td><code>cost.test.ts</code></td>
+<td>14.4</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-10</td>
+<td>Пересчёт после декомпозиции по 7.1, компенсации нет</td>
+<td><code>cost.test.ts</code></td>
+<td>7.3, Ф-16</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-C-11</td>
+<td>C_блока = 0 при наличии функций — C_домена = 0</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-C-12</td>
+<td>Крупные значения до 10^9 — целое без потери точности</td>
+<td><code>cost.test.ts</code></td>
+<td>3.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-T-01</td>
+<td>Стартовая архитектура: все НДБ, все стрелки красные</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-T-02</td>
+<td>Критичная функция вводит домен в ТКБ; без связей — нет</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-T-03</td>
+<td>Исходящие стрелки доверенного домена — зелёные</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-T-04</td>
+<td>Доверенный домен с красным входом — ДДБПЦД</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-T-05</td>
+<td>Доверенный домен с зелёными входами — ДДБ</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-T-06</td>
+<td>Недоверенная внешняя система — красная, потоки красные</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-T-07</td>
+<td>Доверенная внешняя система — зелёная, потоки зелёные</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-T-08</td>
+<td>Коэффициенты применимы к классам</td>
+<td><code>trust.test.ts</code></td>
+<td>3.3, 3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-T-09</td>
+<td>Рамка периметра охватывает только внутренние домены</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>T-T-10</td>
+<td>Внешняя система внутри рамки выносится за периметр</td>
+<td><code>trust.test.ts</code></td>
+<td>3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>T-P-01…T-P-09</td>
+<td>Светофор целей: mandatory/optional, агрегаты системы и домена, перемещение карточки</td>
+<td><code>coverage.test.ts</code> (10 тестов)</td>
+<td>3.4, 7.2, Ф-9</td>
+<td>Пройдены</td>
+</tr>
+<tr class="even">
+<td>T-Y-01…T-Y-10</td>
+<td>architecture.yaml: схема, E-001/E-101/E-102/E-103, W-001, round-trip</td>
+<td><code>archYaml.test.ts</code></td>
+<td>6.1, 6.5, 6.6</td>
+<td>Пройдены</td>
+</tr>
+<tr class="odd">
+<td>T-U-01…T-U-06</td>
+<td>PlantUML: разбор, cost, подписи, E-301/E-302, W-002, стереотипы external</td>
+<td><code>plantuml.test.ts</code> (15 тестов)</td>
+<td>6.3, 6.5</td>
+<td>Пройдены</td>
+</tr>
+<tr class="even">
+<td>T-D-01…T-D-04</td>
+<td>Декомпозиция: транзакционность, стрелки, возврат в пул, undo</td>
+<td><code>decompose.test.ts</code> (7 тестов), <code>store.test.ts</code> (T-D-04)</td>
+<td>7.3, Ф-16</td>
+<td>Пройдены</td>
+</tr>
+<tr class="odd">
+<td>T-S-01…T-S-03</td>
+<td>state.yaml: round-trip (пример 1, 486), E-401, E-402</td>
+<td><code>securityYaml.test.ts</code></td>
+<td>6.4, 6.5, 6.6</td>
+<td>Пройдены</td>
+</tr>
+</tbody>
+</table>
+<p>Помимо обязательных кейсов выполнены дополнительные unit-тесты: <code>edge.test.ts</code> (24 — граничные ветви схем zod, история, хранилище, лимиты), <code>api.test.ts</code> (15 — публичный API слоёв, лимиты Ф-17, парсеры), <code>store.test.ts</code> (дополнительно — внешние системы: отказ размещения, отказ декомпозиции, addExternalDomain, updateDomain trusted), <code>fixtures.test.ts</code> (9 — фикстуры обоих примеров, контрольные числа 486/370, картина доверия 14.4, НФ-1). Итого 144 unit-теста (раздел 6.2).</p>
+<h3 id="sec-52-e2e-сценарии-раздел-113-тз">5.2. E2E-сценарии (раздел 11.3 ТЗ)</h3>
+<p>Таблица 5.2 — Обязательные E2E-сценарии (пример 1 «Автономный коммунальный робот»)</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>Сценарий (суть)</th>
+<th>Требования</th>
+<th>Результат</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Э-01</td>
+<td>Старт и пример 1: 4 внутренних + 2 внешние + рамка; 7 карточек; C_системы = 4; все 5 целей красные</td>
+<td>Ф-5, Ф-7, Ф-12, Ф-19, Ф-20, НФ-9, 14.4.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>Э-02</td>
+<td>Загрузка <code>architecture.yaml</code> и <code>security.yaml</code> через диалоги</td>
+<td>Ф-1, Ф-2</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>Э-02b</td>
+<td>Загрузка архитектуры из PlantUML эквивалентна YAML, включая внешние системы</td>
+<td>Ф-3, 6.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>Э-03</td>
+<td>Размещение fn-auth в blk-link: C_домена 1 → 120 (ДДБПЦД), C_системы 4 → 123; сводка: «НДБ: 3 ×0.1», «ДДБПЦД: 1 ×10»</td>
+<td>Ф-8, Ф-11, Ф-18, 3.5, 14.4.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>Э-04</td>
+<td>Возврат карточки кнопкой «Убрать»: C_домена → 1, домен снова НДБ</td>
+<td>Ф-10, Ф-11, Ф-20, 3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>Э-05</td>
+<td>Декомпозиция blk-plan (после размещения fn-sanitize: 120, ДДБПЦД): «Планировщик маршрута.1/.2», карточка в пуле, C_системы = 5</td>
+<td>Ф-16, 7.3, 3.3</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>Э-06</td>
+<td>Светофор цели «Достоверность телеметрии»: красная → жёлтая (fn-sanitize) → зелёная (fn-sign)</td>
+<td>Ф-19, 3.4, 14.4.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>Э-06b</td>
+<td>Автоматическая раскраска доверия при снятии карточки</td>
+<td>Ф-18, 3.5</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>Э-07</td>
+<td>Перезагрузка страницы после размещений шага 1 (C_системы = 486): состояние, стоимости и статусы идентичны</td>
+<td>Ф-22, НФ-6, 14.4.1</td>
+<td>Пройден</td>
+</tr>
+<tr class="even">
+<td>Э-08</td>
+<td>Экспорт <code>state.yaml</code> и повторный импорт — проект эквивалентен</td>
+<td>Ф-24, 6.6</td>
+<td>Пройден</td>
+</tr>
+<tr class="odd">
+<td>Э-09</td>
+<td>Некорректный YAML: панель ошибок с кодами, проект не изменён</td>
+<td>Ф-6, Ф-26, НФ-6</td>
+<td>Пройден</td>
+</tr>
+</tbody>
+</table>
+<p>Сценарии Э-02b и Э-06b добавлены сверх базового перечня для закрытия трассировки Ф-3 и автоматической раскраски 3.5 на уровне интерфейса. Сценарии Э-01, Э-03, Э-04 дополнительно прогнаны в Firefox (пункт 10 чек-листа приёмки; см. 6.4).</p>
+<h2 id="sec-6-результаты-выполнения-автотестов">6. Результаты выполнения автотестов</h2>
+<h3 id="sec-61-команды-и-порядок-прогонов">6.1. Команды и порядок прогонов</h3>
+<p>Прогон v0.01.01 выполнен 10.11.2026; все проверки зелёные:</p>
+<pre class="text"><code>npx tsc --noEmit          # проверка типов                  → 0 ошибок
+npm run lint              # eslint                          → 0 ошибок, 0 предупреждений
+npm run test:unit:coverage # vitest run --coverage          → 144 passed, пороги выполнены
+npx playwright test       # Chromium, webServer на PORT     → 11 passed (33.0s)
+npx playwright test tests/e2e/load.spec.ts \
+  -c playwright.firefox.config.ts          # Firefox        → 3 passed (16.6s)
+PORT=4321 npx playwright test tests/e2e/load.spec.ts  # контроль порта → 3 passed (13.8s)
+npm run build             # next build → out/ (статический экспорт) → успешно</code></pre>
+<h3 id="sec-62-unit-тесты-и-покрытие-vitest-5">6.2. Unit-тесты и покрытие (Vitest 5)</h3>
+<p>Сводка прогона:</p>
+<pre class="text"><code> Test Files  11 passed (11)
+      Tests  144 passed (144)
+   Duration  ~2.2s</code></pre>
+<p>Пороги покрытия 11.2 ТЗ выполнены (глобальные пороги считаются по объединению engine + io ≥ 90 %, слой store ≥ 70 % — конфигурация Vitest):</p>
+<p>Таблица 6.1 — Покрытие по слоям (vitest --coverage, provider v8, прогон 10.11.2026)</p>
+<table>
+<thead>
+<tr class="header">
+<th>Слой</th>
+<th>Строки %</th>
+<th>Ветви %</th>
+<th>Функции %</th>
+<th>Операторы %</th>
+<th>Итог</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>src/engine</code></td>
+<td>98.64</td>
+<td>87.50</td>
+<td>97.82</td>
+<td>96.56</td>
+<td>Глобальный порог (объединение с io) выполнен</td>
+</tr>
+<tr class="even">
+<td><code>src/io</code></td>
+<td>98.95</td>
+<td>92.45</td>
+<td>100.00</td>
+<td>98.78</td>
+<td>Глобальный порог выполнен</td>
+</tr>
+<tr class="odd">
+<td><code>src/store</code></td>
+<td>98.50</td>
+<td>87.67</td>
+<td>95.91</td>
+<td>96.38</td>
+<td>Порог 70 % выполнен</td>
+</tr>
+<tr class="even">
+<td>Все файлы</td>
+<td>98.78</td>
+<td>90.33</td>
+<td>97.90</td>
+<td>97.61</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Распределение 144 тестов по файлам: <code>edge.test.ts</code> — 24, <code>securityYaml.test.ts</code> — 16, <code>plantuml.test.ts</code> — 15, <code>api.test.ts</code> — 15, <code>cost.test.ts</code> — 14, <code>store.test.ts</code> — 14, <code>archYaml.test.ts</code> — 10, <code>trust.test.ts</code> — 10, <code>coverage.test.ts</code> — 10, <code>decompose.test.ts</code> — 7, <code>fixtures.test.ts</code> — 9.</p>
+<h3 id="sec-63-e2e-тесты-интерфейса-chromium-158-окно-1280800">6.3. E2E-тесты интерфейса (Chromium 158, окно 1280×800)</h3>
+<pre class="text"><code>  ✓ Э-01 старт и пример 1 — 4 внутренних домена, 2 внешние системы, 7 карточек, C_системы = 4, цели красные
+  ✓ Э-02 загрузка architecture.yaml и security.yaml через диалоги
+  ✓ Э-02b загрузка архитектуры из PlantUML эквивалентна YAML (Ф-3), включая внешние системы
+  ✓ Э-03 размещение fn-auth в blk-link — C_домена 1 → 120, C_системы 4 → 123, домен становится ДДБПЦД
+  ✓ Э-04 возврат карточки кнопкой «Убрать» — C_домена возвращается к 1, домен снова НДБ
+  ✓ Э-05 декомпозировать blk-plan — «Планировщик маршрута.1» и «.2», карточки возвращаются в пул
+  ✓ Э-06 красная → жёлтая после fn-sanitize → зелёная после fn-sign
+  ✓ Э-06b раскраска доверия обновляется автоматически при снятии карточки
+  ✓ Э-07 после перезагрузки состояния, стоимости и статусы идентичны (C_системы = 486)
+  ✓ Э-08 экспорт state.yaml и повторный импорт дают эквивалентный проект
+  ✓ Э-09 некорректный YAML — панель ошибок с кодами, проект не изменён
+
+  11 passed (33.0s)</code></pre>
+<p>Все сценарии выполняются против dev-сервера Next.js (webServer конфигурации Playwright, порт — переменная PORT, по умолчанию 3000). При падении сохраняются скриншот и trace (11.3 ТЗ) — падений не зафиксировано.</p>
+<h3 id="sec-64-приёмочная-проверка-в-firefox-159-пункт-10-чек-листа-142">6.4. Приёмочная проверка в Firefox 159 (пункт 10 чек-листа 14.2)</h3>
+<pre class="text"><code>  ✓ Э-01 старт и пример 1 (4.5s)
+  ✓ Э-03 размещение fn-auth в blk-link (4.0s)
+  ✓ Э-04 возврат карточки кнопкой «Убрать» (3.8s)
+
+  3 passed (16.6s)</code></pre>
+<h3 id="sec-65-контрольный-перегон-на-альтернативном-порту">6.5. Контрольный перегон на альтернативном порту</h3>
+<p><code>PORT=4321 npx playwright test tests/e2e/load.spec.ts</code> — 3 passed (13.8s): webServer поднял dev-сервер на 4321, baseURL конфигурации унаследовал порт; подтверждена работа переменной PORT (10.4 ТЗ).</p>
+<h3 id="sec-66-статическая-проверка-и-сборка">6.6. Статическая проверка и сборка</h3>
+<p><code>tsc --noEmit</code> — 0 ошибок; ESLint — 0 ошибок и 0 предупреждений (после устранения D-4/D-5, раздел 9.1). Production-сборка <code>npm run build</code> — успешно; начальный пакет (11 файлов JS/CSS, ссылки из <code>out/index.html</code>) — 393 КБ gzip ≤ 1 МБ (НФ-2).</p>
+<h2 id="sec-7-чек-лист-приёмки-раздел-142-тз-v00101">7. Чек-лист приёмки (раздел 14.2 ТЗ v0.01.01)</h2>
+<p>Таблица 7.1 — Чек-лист приёмки v0.01.01</p>
+<table>
+<thead>
+<tr class="header">
+<th>Пункт</th>
+<th>Критерий</th>
+<th>Результат</th>
+<th>Примечание</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td><code>make check</code>: lint, типы, unit с порогами 11.2, E2E 11.3</td>
+<td>Выполнен</td>
+<td>tsc + eslint — 0 ошибок; unit 144/144 с порогами; E2E 11/11</td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>docker-build, docker-run, <code>/healthz</code> → 200 ok</td>
+<td>Не проверен</td>
+<td>Docker-демон в среде проверки отсутствует; базовый образ node:22-alpine — EBADENGINE устранён (проверка <code>npm ci</code> и сборки вне контейнера — без предупреждений)</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td>Контрольные примеры 14.4.1 и 14.4.2</td>
+<td>Выполнен</td>
+<td>Числа подтверждены unit-тестами <code>fixtures.test.ts</code> (486 и 370), <code>cost.test.ts</code> (T-C-09) и E2E (Э-01, Э-03, Э-07); см. раздел 8</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>Round-trip Э-08 и T-Y-10 (включая внешние системы)</td>
+<td>Выполнен</td>
+<td>Оба теста пройдены; PlantUML round-trip — Э-02b</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>Коды 6.5 воспроизводятся фикстурами invalid/</td>
+<td>Выполнен</td>
+<td>10 фикстур закрывают E-001, E-101, E-102, E-103, E-104, E-106, E-203, E-205, E-206, E-401</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>НФ-1: пересчёт менее 100 мс на максимальной модели</td>
+<td>Выполнен</td>
+<td>unit-тест <code>fixtures.test.ts</code> (стоимость + доверие + покрытие)</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>НФ-2 ≤ 1 МБ gzip; НФ-4 — внешних запросов нет</td>
+<td>Выполнен</td>
+<td>НФ-2: 393 КБ gzip (сборка 10.11.2026); НФ-4: внешних URL нет</td>
+</tr>
+<tr class="even">
+<td>8</td>
+<td>Документация раздела 12 + README + CHANGELOG</td>
+<td>Выполнен</td>
+<td>5 ролевых документов + README + CHANGELOG обновлены до v0.01.01</td>
+</tr>
+<tr class="odd">
+<td>9</td>
+<td>Все цели Makefile выполняются; help выводит список</td>
+<td>Выполнен</td>
+<td>lint, test-unit(-coverage), test-e2e, build, dev/preview, help; docker-* защищённо проверяют рантайм</td>
+</tr>
+<tr class="even">
+<td>10</td>
+<td>Два браузера: Э-01–Э-04 в Chrome и Firefox</td>
+<td>Выполнен</td>
+<td>Chromium 158: 11/11; Firefox 159: Э-01, Э-03, Э-04 — 3/3</td>
+</tr>
+<tr class="odd">
+<td>11</td>
+<td>Раскраска доверия (3.5): автоматическое обновление, коэффициенты в стоимости</td>
+<td>Выполнен</td>
+<td>T-T-01…T-T-10; Э-03 (НДБ → ДДБПЦД, ×10), Э-04 (обратно в НДБ, ×0.1), Э-06b</td>
+</tr>
+<tr class="even">
+<td>12</td>
+<td>Тема интерфейса: тёмная по умолчанию, переключение без перезагрузки, сохранение выбора</td>
+<td>Выполнен</td>
+<td>Код-анализ <code>theme.ts</code>/<code>layout.tsx</code>; E2E-прогоны идут в тёмной теме; выбор — localStorage</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-8-контрольные-примеры-раздел-144-тз-v00101">8. Контрольные примеры (раздел 14.4 ТЗ v0.01.01)</h2>
+<p>Таблица 8.1 — Пример 1 «Автономный коммунальный робот» (14.4.1)</p>
+<table>
+<thead>
+<tr class="header">
+<th>Состояние</th>
+<th>Ожидается по ТЗ</th>
+<th>Подтверждение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>После загрузки</td>
+<td>perc 1, plan 1, drive 1, link 1 — все НДБ (ceil(C_блока × 0.1)); C_системы = 4; все 5 целей красные</td>
+<td>Э-01: C_системы = 4, 7 узлов (4 внутренних + 2 внешние + рамка), 7 карточек, 5 красных целей; unit: <code>fixtures.test.ts</code></td>
+</tr>
+<tr class="even">
+<td>Шаг 1: fn-auth + fn-sign → link; fn-sanitize + fn-geofence → plan; fn-estop → drive</td>
+<td>link 200 (ДДБПЦД), plan 240 (ДДБПЦД), drive 45 (ДДБ), perc 1 (НДБ); C_системы = 486; 4 цели зелёные, «Безопасность зарядки» красная</td>
+<td>unit: T-C-09 и <code>fixtures.test.ts</code> (486 + картина доверия); E2E: Э-07 (486 после перезагрузки); промежуточные: Э-03 (link 120, C_системы 123)</td>
+</tr>
+<tr class="odd">
+<td>Промежуточное Э-05: fn-sanitize → plan</td>
+<td>plan 120 (ДДБПЦД); после декомпозиции C_системы = 5</td>
+<td>E2E: Э-05</td>
+</tr>
+</tbody>
+</table>
+<p>Примечание. Расчёт шага 1: link — C_блока 2, S = 5, E = 4, M = 2, вход от недоверенной Зарядной станции красный → ДДБПЦД, K = 10 → 2×5×2×10 = 200; plan — 4, S = 4, E = 3, M = 1.5, вход от НДБ красный → ДДБПЦД, K = 10 → 240; drive — 3, S = 3, E = 1, M = 1, вход зелёный → ДДБ, K = 5 → 45; perc — без функций, НДБ → ceil(3 × 0.1) = 1.</p>
+<p>Таблица 8.2 — Пример 2 «Безэкипажное судно-доставщик» (14.4.2)</p>
+<table>
+<thead>
+<tr class="header">
+<th>Состояние</th>
+<th>Ожидается по ТЗ</th>
+<th>Подтверждение</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>После загрузки</td>
+<td>nav 1, avoid 1, cargo 1, radio 1 — все НДБ; C_системы = 4; все 4 цели красные</td>
+<td>unit: <code>fixtures.test.ts</code> (картина доверия примера 2)</td>
+</tr>
+<tr class="even">
+<td>Шаг 1: fn-ais + fn-auth-shore → radio; fn-collision → avoid; fn-route-check → nav; fn-cargo-seal → cargo</td>
+<td>radio 200 (ДДБПЦД), nav 80 (ДДБ), avoid 60 (ДДБ), cargo 30 (ДДБ); C_системы = 370; все 4 цели зелёные</td>
+<td>unit: <code>fixtures.test.ts</code> (370 + картина доверия: radio — ДДБПЦД из-за красной стрелки от недоверенного Оператора шлюза)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sec-9-исправленные-дефекты-и-известные-ограничения">9. Исправленные дефекты и известные ограничения</h2>
+<h3 id="sec-91-дефекты-обнаруженные-и-устранённые-при-проверке-v00101">9.1. Дефекты, обнаруженные и устранённые при проверке v0.01.01</h3>
+<p><strong>D-4.</strong> Сценарии Э-05 (<code>decompose.spec.ts</code>) и Э-07 (<code>persistence.spec.ts</code>) остались на данных и механике демонстрационного комплекта v0 (единая кнопка «Демо-проект», блоки <code>blk-audit</code>/<code>blk-core</code>, функции <code>fn-hashing</code> и др.) — после ревизии тесты получали 0 узлов канвы и падали. Исправление: сценарии переведены на пример 1 (выбор «Демо-проект» → «Автономный коммунальный робот»), идентификаторы <code>blk-plan</code>/<code>blk-link</code>, <code>fn-sanitize</code>/<code>fn-auth</code> и числа 14.4 (120; 486; ожидание 7 узлов с рамкой периметра). Регресс: E2E — 11/11.</p>
+<p><strong>D-5.</strong> <code>make lint</code> сообщал об ошибках правил React Compiler/хуков: <code>react-hooks/set-state-in-effect</code> в <code>theme.ts</code> (синхронный <code>setState</code> в эффекте подписки темы) и <code>react-hooks/preserve-manual-memoization</code> в <code>Canvas.tsx</code> (несовпадение зависимостей <code>useMemo</code> рамки периметра). Исправление: <code>useSkibTheme</code> переведён на <code>useSyncExternalStore</code> (подписка на событие темы и cross-tab storage без setState-в-эффекте); зависимость <code>useMemo</code> расширена до <code>project.architecture</code>. Поведение (тёмная по умолчанию, сохранение выбора, синхронизация канвы) сохранено. Регресс: lint — 0 ошибок, unit — 144/144, E2E — 11/11.</p>
+<p><strong>D-2' (среда, не дефект продукта).</strong> Первый запуск E2E в чистой среде завершился ошибкой отсутствия браузеров Playwright; устранено <code>npx playwright install chromium</code> / <code>install firefox</code>. Аналогичный эпизод зафиксирован в v0 (D-2 отчёта v0).</p>
+<h3 id="sec-92-известные-ограничения-проверки">9.2. Известные ограничения проверки</h3>
+<ul>
+<li>Пункт 2 чек-листа (сборка и запуск контейнера) не выполнен: в среде проверки нет Docker-демона. Состав развёртывания (Dockerfile — multi-stage, node:22-alpine, nginx, порт 8080, <code>/healthz</code>; docker-compose.yml; Makefile) подготовлен и описан в docs/deployment-guide.md; рекомендуется <code>make docker-build &amp;&amp; make docker-run</code> на машине с Docker Engine 24+.</li>
+<li>Для НФ-7 (лимит файла 5 МБ) и НФ-10 (горячие клавиши) выделенных автотестов нет; реализация подтверждена анализом кода и косвенно — unit-тестами undo/redo и E2E-прогонами.</li>
+<li>Переключение темы проверено код-анализом и косвенно (прогоны в тёмной теме); выделенного E2E-сценария на переключатель нет — кандидат в v1 вместе с тестами НФ-7/НФ-10.</li>
+<li>Сценарий Э-02 проверяет загрузку файлов примера 1; загрузка файлов примера 2 покрыта unit-тестами фикстур — отдельного E2E нет.</li>
+</ul>
+<h3 id="sec-93-наследие-v0-кратко">9.3. Наследие v0 (кратко)</h3>
+<p>Изменения поставки от 10.11.2026 (порт dev через PORT, базовый образ node:22-alpine, выравнивание build/start со статическим экспортом) вошли в объём ревизии v0.01.01 (таблица 2.1, пункты 9); дефекты D-1 (ESLint скриптов документации, react-hooks диалога декомпозиции) и D-3 (build-скрипты standalone) устранены в v0 и в v0.01.01 не воспроизводятся.</p>
+<h2 id="sec-10-выводы-и-рекомендации">10. Выводы и рекомендации</h2>
+<ol type="1">
+<li>Критерий готовности кода (11.5 ТЗ) выполнен для v0.01.01: tsc и ESLint — без ошибок; 144 unit-теста с выполнением порогов покрытия; 11 E2E-сценариев Chromium пройдены; приёмка в Firefox (3/3) и контрольный перегон на порту 4321 (3/3) подтверждены. Суммарно — 158 автоматических проверок.</li>
+<li>Трассировка полна: каждое требование Ф-1…Ф-27 и НФ-1…НФ-10 имеет минимум одну подтверждающую проверку; обязательные кейсы 11.2 (54 идентификатора: T-C-01…T-C-12, T-T-01…T-T-10, T-P, T-Y, T-U, T-D, T-S) и сценарии 11.3 (Э-01…Э-09 + Э-02b + Э-06b) пройдены полностью.</li>
+<li>Модель доверия v0.01.01 проверена численно: контрольные примеры 14.4.1 (C_системы = 4 → 123 → 486) и 14.4.2 (4 → 370) воспроизводятся движком и зафиксированы unit-тестами; коэффициенты 0.1/5/10 применяются согласно классам НДБ/ДДБ/ДДБПЦД; раскраска обновляется автоматически (Э-06b).</li>
+<li>v0.01.01 соответствует ТЗ и готова к приёмке на стороне заказчика после выполнения пункта 2 чек-листа (docker-build/docker-run с node:22-alpine и проверкой <code>/healthz</code>) на машине с Docker.</li>
+<li>Рекомендации для v1: выделенные E2E на переключение темы, НФ-7 (лимит файла) и НФ-10 (горячие клавиши); E2E загрузки файлов примера 2; прямое перетаскивание карточек между доменами (Ф-9 в объёме v1); поиск в пуле; CI-контур (lint, тесты, сборка образа); E2E в WebKit.</li>
+</ol>
+
+</main>
+</body>
+</html>

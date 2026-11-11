@@ -1,0 +1,57 @@
+version: 1
+system:
+  name: "Автономный коммунальный робот"
+  description: "Пример 1: уборка и полив городской территории, взаимодействие со смежными системами"
+blocks:
+  - id: blk-perc
+    name: "Подсистема восприятия"
+    cost: 3
+    position: { x: 60, y: 200 }
+  - id: blk-plan
+    name: "Планировщик маршрута"
+    cost: 4
+    position: { x: 420, y: 120 }
+  - id: blk-drive
+    name: "Привод движения"
+    cost: 3
+    position: { x: 780, y: 200 }
+  - id: blk-link
+    name: "Модуль связи"
+    cost: 2
+    position: { x: 420, y: 340 }
+  - id: ext-ctrl
+    name: "Диспетчерский пункт"
+    cost: 0
+    external: true
+    trusted: true
+    position: { x: 1180, y: 120 }
+  - id: ext-charge
+    name: "Зарядная станция"
+    cost: 0
+    external: true
+    position: { x: 1180, y: 340 }
+edges:
+  - id: e-disp-link
+    from: ext-ctrl
+    to: blk-link
+    label: "команды диспетчера"
+  - id: e-charge-link
+    from: ext-charge
+    to: blk-link
+    label: "статус зарядки"
+  - id: e-link-plan
+    from: blk-link
+    to: blk-plan
+    label: "очищенные команды"
+  - id: e-perc-plan
+    from: blk-perc
+    to: blk-plan
+    label: "данные среды"
+  - id: e-plan-drive
+    from: blk-plan
+    to: blk-drive
+    label: "маршрут"
+  - id: e-link-ctrl
+    from: blk-link
+    to: ext-ctrl
+    label: "телеметрия"

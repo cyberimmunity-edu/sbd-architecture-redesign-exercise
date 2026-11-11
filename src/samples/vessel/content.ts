@@ -1,0 +1,273 @@
+/**
+ * Пример 2 — автономное безэкипажное судно-доставщик в речной акватории.
+ * Раздел 14.4 ТЗ v0.01.01. Строки — единый источник данных: файлы в
+ * tests/fixtures/vessel и samples/vessel генерируются скриптом
+ * scripts/emit-fixtures.ts и сверяются unit-тестом fixtures.test.ts.
+ *
+ * Картина доверия: Береговой пост (СУДС) — доверенная внешняя система,
+ * Оператор шлюза — недоверенная (по умолчанию). Все четыре внутренних домена
+ * введены в ДВБ; радиосвязь — ДДБПЦД (входят красная стрелка от оператора
+ * шлюза), остальные — ДДБ. Все цели зелёные: C_системы = 370 (14.4 ТЗ).
+ */
+
+export const DEMO_ARCHITECTURE_YAML = `version: 1
+system:
+  name: "Безэкипажное судно-доставщик"
+  description: "Пример 2: автономная доставка грузов в речной акватории"
+blocks:
+  - id: blk-nav
+    name: "Навигационный вычислитель"
+    cost: 4
+    position: { x: 420, y: 120 }
+  - id: blk-avoid
+    name: "Подсистема расхождения"
+    cost: 3
+    position: { x: 780, y: 200 }
+  - id: blk-cargo
+    name: "Контроль груза"
+    cost: 2
+    position: { x: 420, y: 340 }
+  - id: blk-radio
+    name: "Радиосвязь"
+    cost: 2
+    position: { x: 60, y: 200 }
+  - id: ext-shore
+    name: "Береговой пост (СУДС)"
+    cost: 0
+    external: true
+    trusted: true
+    position: { x: 1180, y: 120 }
+  - id: ext-lock
+    name: "Оператор шлюза"
+    cost: 0
+    external: true
+    position: { x: 1180, y: 340 }
+edges:
+  - id: e-shore-radio
+    from: ext-shore
+    to: blk-radio
+    label: "судоходная обстановка"
+  - id: e-lock-radio
+    from: ext-lock
+    to: blk-radio
+    label: "разрешение шлюзования"
+  - id: e-radio-nav
+    from: blk-radio
+    to: blk-nav
+    label: "очищенные данные"
+  - id: e-nav-avoid
+    from: blk-nav
+    to: blk-avoid
+    label: "данные курса"
+  - id: e-avoid-nav
+    from: blk-avoid
+    to: blk-nav
+    label: "корректировка маршрута"
+  - id: e-nav-cargo
+    from: blk-nav
+    to: blk-cargo
+    label: "маршрутный лист"
+  - id: e-cargo-shore
+    from: blk-cargo
+    to: ext-shore
+    label: "статус груза"
+  - id: e-radio-lock
+    from: blk-radio
+    to: ext-lock
+    label: "заявка на шлюзование"
+`;
+
+export const DEMO_SECURITY_YAML = `version: 1
+goals:
+  - id: g-nav
+    name: "Безопасность судоходства"
+    description: "Судно избегает столкновений и посадки на мель"
+  - id: g-comms
+    name: "Достоверность обмена с берегом"
+    description: "Обмен с береговым постом защищён от подмен"
+  - id: g-route
+    name: "Исполнение рейса"
+    description: "Рейс выполняется по согласованному маршруту"
+  - id: g-cargo
+    name: "Целостность грузовых данных"
+    description: "Данные о грузе достоверны у всех участников"
+functions:
+  - id: fn-ais
+    name: "Фильтрация AIS-данных"
+    cost: 2
+    implements:
+      - { goal: g-comms, weight: mandatory }
+  - id: fn-auth-shore
+    name: "Аутентификация береговых команд"
+    cost: 3
+    implements:
+      - { goal: g-comms, weight: mandatory }
+  - id: fn-collision
+    name: "Автоматическое расхождение"
+    cost: 4
+    implements:
+      - { goal: g-nav, weight: mandatory }
+  - id: fn-route-check
+    name: "Контроль исполнения рейса"
+    cost: 2
+    implements:
+      - { goal: g-route, weight: mandatory }
+  - id: fn-cargo-seal
+    name: "Электронная пломба"
+    cost: 3
+    implements:
+      - { goal: g-cargo, weight: mandatory }
+  - id: fn-weather
+    name: "Контроль погодных ограничений"
+    cost: 2
+    implements:
+      - { goal: g-nav, weight: optional }
+  - id: fn-log
+    name: "Журналирование рейса"
+    cost: 1
+    implements:
+      - { goal: g-cargo, weight: optional }
+`;
+
+export const DEMO_PUML = `@startuml
+[Навигационный вычислитель] <<cost: 4>>
+[Подсистема расхождения] <<cost: 3>>
+[Контроль груза] <<cost: 2>>
+[Радиосвязь] <<cost: 2>>
+[Береговой пост (СУДС)] <<external-trusted>>
+[Оператор шлюза] <<external>>
+[Береговой пост (СУДС)] --> [Радиосвязь] : судоходная обстановка
+[Оператор шлюза] --> [Радиосвязь] : разрешение шлюзования
+[Радиосвязь] --> [Навигационный вычислитель] : очищенные данные
+[Навигационный вычислитель] --> [Подсистема расхождения] : данные курса
+[Подсистема расхождения] --> [Навигационный вычислитель] : корректировка маршрута
+[Навигационный вычислитель] --> [Контроль груза] : маршрутный лист
+[Контроль груза] --> [Береговой пост (СУДС)] : статус груза
+[Радиосвязь] --> [Оператор шлюза] : заявка на шлюзование
+@enduml
+`;
+
+/** state.yaml шага 1 примера 2: C_системы = 370 (см. 14.4 ТЗ). */
+export const DEMO_STATE_YAML = `version: 1
+architecture:
+  blocks:
+    - id: blk-nav
+      name: "Навигационный вычислитель"
+      cost: 4
+      position: { x: 420, y: 120 }
+    - id: blk-avoid
+      name: "Подсистема расхождения"
+      cost: 3
+      position: { x: 780, y: 200 }
+    - id: blk-cargo
+      name: "Контроль груза"
+      cost: 2
+      position: { x: 420, y: 340 }
+    - id: blk-radio
+      name: "Радиосвязь"
+      cost: 2
+      position: { x: 60, y: 200 }
+    - id: ext-shore
+      name: "Береговой пост (СУДС)"
+      cost: 0
+      external: true
+      trusted: true
+      position: { x: 1180, y: 120 }
+    - id: ext-lock
+      name: "Оператор шлюза"
+      cost: 0
+      external: true
+      position: { x: 1180, y: 340 }
+  edges:
+    - id: e-shore-radio
+      from: ext-shore
+      to: blk-radio
+      label: "судоходная обстановка"
+    - id: e-lock-radio
+      from: ext-lock
+      to: blk-radio
+      label: "разрешение шлюзования"
+    - id: e-radio-nav
+      from: blk-radio
+      to: blk-nav
+      label: "очищенные данные"
+    - id: e-nav-avoid
+      from: blk-nav
+      to: blk-avoid
+      label: "данные курса"
+    - id: e-avoid-nav
+      from: blk-avoid
+      to: blk-nav
+      label: "корректировка маршрута"
+    - id: e-nav-cargo
+      from: blk-nav
+      to: blk-cargo
+      label: "маршрутный лист"
+    - id: e-cargo-shore
+      from: blk-cargo
+      to: ext-shore
+      label: "статус груза"
+    - id: e-radio-lock
+      from: blk-radio
+      to: ext-lock
+      label: "заявка на шлюзование"
+security:
+  goals:
+    - id: g-nav
+      name: "Безопасность судоходства"
+      description: "Судно избегает столкновений и посадки на мель"
+    - id: g-comms
+      name: "Достоверность обмена с берегом"
+      description: "Обмен с береговым постом защищён от подмен"
+    - id: g-route
+      name: "Исполнение рейса"
+      description: "Рейс выполняется по согласованному маршруту"
+    - id: g-cargo
+      name: "Целостность грузовых данных"
+      description: "Данные о грузе достоверны у всех участников"
+  functions:
+    - id: fn-ais
+      name: "Фильтрация AIS-данных"
+      cost: 2
+      implements:
+        - { goal: g-comms, weight: mandatory }
+    - id: fn-auth-shore
+      name: "Аутентификация береговых команд"
+      cost: 3
+      implements:
+        - { goal: g-comms, weight: mandatory }
+    - id: fn-collision
+      name: "Автоматическое расхождение"
+      cost: 4
+      implements:
+        - { goal: g-nav, weight: mandatory }
+    - id: fn-route-check
+      name: "Контроль исполнения рейса"
+      cost: 2
+      implements:
+        - { goal: g-route, weight: mandatory }
+    - id: fn-cargo-seal
+      name: "Электронная пломба"
+      cost: 3
+      implements:
+        - { goal: g-cargo, weight: mandatory }
+    - id: fn-weather
+      name: "Контроль погодных ограничений"
+      cost: 2
+      implements:
+        - { goal: g-nav, weight: optional }
+    - id: fn-log
+      name: "Журналирование рейса"
+      cost: 1
+      implements:
+        - { goal: g-cargo, weight: optional }
+assignments:
+  - { function: fn-ais, block: blk-radio }
+  - { function: fn-auth-shore, block: blk-radio }
+  - { function: fn-collision, block: blk-avoid }
+  - { function: fn-route-check, block: blk-nav }
+  - { function: fn-cargo-seal, block: blk-cargo }
+meta:
+  savedAt: "2026-11-10T09:00:00Z"
+  source: "Пример 2: безэкипажное судно-доставщик (14.4 ТЗ)"
+`;

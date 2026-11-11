@@ -1,0 +1,16 @@
+# Сценарий В3 (раздел 10.1 ТЗ): локальный запуск в Docker для учебного класса.
+# Запуск: make docker-build && make docker-start   либо   docker compose up --build
+# Порт хоста задаётся переменной PORT (по умолчанию 8080).
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_VERSION: "1.0.0"
+        BASE_PATH: "/"
+    image: skib-lab:1.0.0
+    container_name: skib-lab
+    ports:
+      - "${PORT:-8080}:8080"
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+version: 2
+architecture:
+  blocks:
+    - id: blk-core
+      name: "Ядро системы"
+      cost: 4
+  edges: []
+security:
+  goals:
+    - id: goal-conf
+      name: "Конфиденциальность данных"
+  functions:
+    - id: fn-hashing
+      name: "Хеширование паролей"
+      cost: 3
+assignments: []

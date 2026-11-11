@@ -1,0 +1,10 @@
+version: 1
+goals:
+  - id: goal-conf
+    name: "Конфиденциальность данных"
+functions:
+  - id: fn-hashing
+    name: "Хеширование паролей"
+    cost: 3
+    implements:
+      - { goal: goal-ghost, weight: mandatory }

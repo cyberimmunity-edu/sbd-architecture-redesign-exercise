@@ -1,0 +1,65 @@
+version: 1
+system:
+  name: "Безэкипажное судно-доставщик"
+  description: "Пример 2: автономная доставка грузов в речной акватории"
+blocks:
+  - id: blk-nav
+    name: "Навигационный вычислитель"
+    cost: 4
+    position: { x: 420, y: 120 }
+  - id: blk-avoid
+    name: "Подсистема расхождения"
+    cost: 3
+    position: { x: 780, y: 200 }
+  - id: blk-cargo
+    name: "Контроль груза"
+    cost: 2
+    position: { x: 420, y: 340 }
+  - id: blk-radio
+    name: "Радиосвязь"
+    cost: 2
+    position: { x: 60, y: 200 }
+  - id: ext-shore
+    name: "Береговой пост (СУДС)"
+    cost: 0
+    external: true
+    trusted: true
+    position: { x: 1180, y: 120 }
+  - id: ext-lock
+    name: "Оператор шлюза"
+    cost: 0
+    external: true
+    position: { x: 1180, y: 340 }
+edges:
+  - id: e-shore-radio
+    from: ext-shore
+    to: blk-radio
+    label: "судоходная обстановка"
+  - id: e-lock-radio
+    from: ext-lock
+    to: blk-radio
+    label: "разрешение шлюзования"
+  - id: e-radio-nav
+    from: blk-radio
+    to: blk-nav
+    label: "очищенные данные"
+  - id: e-nav-avoid
+    from: blk-nav
+    to: blk-avoid
+    label: "данные курса"
+  - id: e-avoid-nav
+    from: blk-avoid
+    to: blk-nav
+    label: "корректировка маршрута"
+  - id: e-nav-cargo
+    from: blk-nav
+    to: blk-cargo
+    label: "маршрутный лист"
+  - id: e-cargo-shore
+    from: blk-cargo
+    to: ext-shore
+    label: "статус груза"
+  - id: e-radio-lock
+    from: blk-radio
+    to: ext-lock
+    label: "заявка на шлюзование"
