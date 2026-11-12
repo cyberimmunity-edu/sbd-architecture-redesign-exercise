@@ -11,6 +11,8 @@ import { ERR, err, warn } from './errors';
 import { allowedKeys, collectUnknownKeys, issuePath, stateSchema } from './schema';
 import { parseArchInner } from './archYaml';
 import { parseSecurityInner } from './securityYaml';
+import { parseSequencesInner } from './sequencesYaml';
+import { serializeSequencesInner } from './sequencesYaml';
 import type { ParseResult } from './archYaml';
 
 /** Разбор уже распознанного объекта state. */
@@ -84,11 +86,25 @@ export function parseStateData(data: unknown): ParseResult<Project> {
     return { errors, warnings };
   }
 
+  // Диаграммы последовательности (v0.02.01, Ф-55): опциональная секция;
+  // ссылки — идентификаторы доменов той же архитектуры (E-604 при отсутствии).
+  let sequences: Project['sequences'];
+  if (parsed.data.sequences !== undefined) {
+    const seqResult = parseSequencesInner(parsed.data.sequences, archResult.model!.blocks, 'ids', 'sequences');
+    errors.push(...seqResult.errors);
+    warnings.push(...seqResult.warnings);
+    if (errors.length > 0) {
+      return { errors, warnings };
+    }
+    sequences = seqResult.model;
+  }
+
   const model: Project = {
     architecture: archResult.model!,
     security: securityResult.model!,
     assignments: assignments.map((a) => ({ function: a.function, block: a.block })),
     meta: parsed.data.meta ?? {},
+    ...(sequences !== undefined ? { sequences } : {}),
   };
   return { errors, warnings, model };
 }
@@ -156,11 +172,16 @@ export function serializeStateYaml(project: Project): string {
       })),
     },
     assignments: project.assignments.map((a) => ({ function: a.function, block: a.block })),
-    ...(project.meta.savedAt || project.meta.source
+    // Диаграммы последовательности (v0.02.01, Ф-55) — опциональная секция;
+    // файлы v0.01.x без ДП читаются старыми версиями с W-001.
+    ...(project.sequences && project.sequences.length > 0
+      ? { sequences: serializeSequencesInner(project.sequences) }
+      : {}),
+    ...(project.meta?.savedAt || project.meta?.source
       ? {
           meta: {
-            ...(project.meta.savedAt ? { savedAt: project.meta.savedAt } : {}),
-            ...(project.meta.source ? { source: project.meta.source } : {}),
+            ...(project.meta?.savedAt ? { savedAt: project.meta.savedAt } : {}),
+            ...(project.meta?.source ? { source: project.meta.source } : {}),
           },
         }
       : {}),

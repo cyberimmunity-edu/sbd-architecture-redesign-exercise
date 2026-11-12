@@ -61,7 +61,7 @@ test('v0.01.08: жест «от точки выхода к домену» даё
   await dragFromHandleToNode(page, 'blk-perc', 'right', 'blk-drive');
   await expect(page.locator('.react-flow__edge')).toHaveCount(7);
   await expect(page.getByTestId('inspector-panel')).toContainText(
-    'Из: Подсистема восприятия → В: Привод движения',
+    'Из: 01. Подсистема восприятия → В: 03. Привод движения',
   );
 });
 
@@ -71,7 +71,7 @@ test('v0.01.08: жест «назад» (слева направо по экра
   await dragFromHandleToNode(page, 'blk-link', 'left', 'blk-perc');
   await expect(page.locator('.react-flow__edge')).toHaveCount(7);
   await expect(page.getByTestId('inspector-panel')).toContainText(
-    'Из: Модуль связи → В: Подсистема восприятия',
+    'Из: 04. Модуль связи → В: 01. Подсистема восприятия',
   );
 });
 

@@ -2,43 +2,43 @@ version: 1
 architecture:
   blocks:
     - id: blk-gps-ins
-      name: "Навигация GPS/INS"
+      name: "01. Навигация GPS/INS"
       cost: 3
       position: { x: 60, y: 60 }
     - id: blk-cam
-      name: "Камера (техническое зрение)"
+      name: "02. Камера (техническое зрение)"
       cost: 2
       position: { x: 60, y: 240 }
     - id: blk-lidar
-      name: "Лидар"
+      name: "03. Лидар"
       cost: 2
       position: { x: 60, y: 400 }
     - id: blk-nav
-      name: "Навигационный вычислитель"
+      name: "04. Навигационный вычислитель"
       cost: 4
       position: { x: 400, y: 60 }
     - id: blk-vision
-      name: "Анализ видеопотока"
+      name: "05. Анализ видеопотока"
       cost: 3
       position: { x: 400, y: 240 }
     - id: blk-ota
-      name: "Подсистема OTA-обновления"
+      name: "06. Подсистема OTA-обновления"
       cost: 3
       position: { x: 400, y: 400 }
     - id: blk-ai
-      name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+      name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
       cost: 5
       position: { x: 760, y: 60 }
     - id: blk-avoid
-      name: "Подсистема расхождения"
+      name: "08. Подсистема расхождения"
       cost: 3
       position: { x: 760, y: 240 }
     - id: blk-cargo
-      name: "Контроль груза и выгрузки"
+      name: "09. Контроль груза и выгрузки"
       cost: 2
       position: { x: 760, y: 420 }
     - id: blk-radio
-      name: "Радиосвязь"
+      name: "10. Радиосвязь"
       cost: 2
       position: { x: 400, y: 560 }
     - id: ext-shore

@@ -33,6 +33,9 @@ import {
   AlertTriangle,
   CircleCheck,
   CircleX,
+  Workflow,
+  MessagesSquare,
+  Palette,
 } from 'lucide-react';
 import { ru } from '../i18n/ru';
 import { APP_VERSION } from '../engine/types';
@@ -59,6 +62,11 @@ export interface TopBarProps {
   canUndo: boolean;
   canRedo: boolean;
   validationStatus: ValidationStatus;
+  /** Переключатель режимов и опция «Цвета из ДАП» (v0.02.01, Ф-37, Ф-59). */
+  mode: 'architecture' | 'sequence';
+  onModeChange: (mode: 'architecture' | 'sequence') => void;
+  seqColorsFromDap: boolean;
+  onToggleSeqColors: () => void;
 }
 
 export function TopBar(props: TopBarProps) {
@@ -113,6 +121,46 @@ export function TopBar(props: TopBarProps) {
         <span className="text-sm font-bold">{ru.appTitle}</span>
         <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground">{appVersion}</span>
       </div>
+
+      {/* Переключатель режимов «Архитектура политики» / «Диаграммы
+          последовательности» (v0.02.01, Ф-37) — слева от кнопок файлов. */}
+      <div
+        className="flex items-center rounded-md border border-border p-0.5"
+        role="group"
+        aria-label={ru.seq.modeSequence}
+      >
+        <Button
+          size="sm"
+          variant={props.mode === 'architecture' ? 'secondary' : 'ghost'}
+          className={`h-7 ${props.mode === 'architecture' ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+          data-testid="mode-architecture"
+          onClick={() => props.onModeChange('architecture')}
+        >
+          <Workflow className="mr-1 h-3.5 w-3.5" /> {ru.seq.modeArchitecture}
+        </Button>
+        <Button
+          size="sm"
+          variant={props.mode === 'sequence' ? 'secondary' : 'ghost'}
+          className={`h-7 ${props.mode === 'sequence' ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+          data-testid="mode-sequence"
+          onClick={() => props.onModeChange('sequence')}
+        >
+          <MessagesSquare className="mr-1 h-3.5 w-3.5" /> {ru.seq.modeSequence}
+        </Button>
+      </div>
+      {/* Опция «Цвета из ДАП» (v0.02.01, Ф-59) — видна только в режиме ДП. */}
+      {props.mode === 'sequence' && (
+        <Button
+          size="sm"
+          variant={props.seqColorsFromDap ? 'secondary' : 'outline'}
+          className={`h-8 ${props.seqColorsFromDap ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+          data-testid="seq-colors-toggle"
+          onClick={props.onToggleSeqColors}
+          title={ru.seq.colorsFromDapTitle}
+        >
+          <Palette className="mr-1 h-3.5 w-3.5" /> {ru.seq.colorsFromDap}
+        </Button>
+      )}
 
       <input
         type="file"
@@ -204,10 +252,27 @@ export function TopBar(props: TopBarProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button size="sm" variant="outline" className="h-8" data-testid="add-domain" onClick={props.onAddDomain}>
+      {/* «+ Домен» / «+ Внешняя система»: в режиме ДП отключены (5.1 v0.02.01). */}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8"
+        data-testid="add-domain"
+        onClick={props.onAddDomain}
+        disabled={props.mode === 'sequence'}
+        title={props.mode === 'sequence' ? ru.seq.disabledDapButtonsTitle : undefined}
+      >
         <Layers className="mr-1 h-3.5 w-3.5" /> {ru.topBar.addDomain}
       </Button>
-      <Button size="sm" variant="outline" className="h-8" data-testid="add-external" onClick={props.onAddExternal}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8"
+        data-testid="add-external"
+        onClick={props.onAddExternal}
+        disabled={props.mode === 'sequence'}
+        title={props.mode === 'sequence' ? ru.seq.disabledDapButtonsTitle : undefined}
+      >
         <FilePlus2 className="mr-1 h-3.5 w-3.5" /> {ru.topBar.addExternal}
       </Button>
       {/* Проверка диаграммы (v0.01.08): трассировка «цель → функция → домен»

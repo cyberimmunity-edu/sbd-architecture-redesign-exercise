@@ -83,6 +83,42 @@ export const securitySchema = z.looseObject({
   ...securityInnerSchema.shape,
 });
 
+/** Стрелка ДП в файлах данных (v0.02.01). */
+export const seqArrowInnerSchema = z.looseObject({
+  id: z.string(),
+  from: z.string(),
+  to: z.string(),
+  label: z.string().optional(),
+});
+
+/** Блок ДП в файлах данных: группа, цикл или условный блок (v0.02.01). */
+export const seqBlockInnerSchema = z.looseObject({
+  id: z.string(),
+  kind: z.string(),
+  name: z.string(),
+  color: z.string().optional(),
+  arrows: z.array(z.string()),
+  thenLabel: z.string().optional(),
+  elseLabel: z.string().optional(),
+  elseFrom: z.string().optional(),
+});
+
+/** Диаграмма последовательности в файлах данных (v0.02.01). */
+export const seqDiagramInnerSchema = z.looseObject({
+  id: z.string(),
+  name: z.string(),
+  lifelines: z.array(z.string()),
+  arrows: z.array(seqArrowInnerSchema),
+  blocks: z.array(seqBlockInnerSchema),
+});
+
+/** Файл sequences.yaml (v0.02.01, Ф-52). */
+export const sequencesFileSchema = z.looseObject({
+  version: z.number(),
+  domains: z.record(z.string(), z.string()).optional(),
+  sequences: z.array(seqDiagramInnerSchema),
+});
+
 export const stateSchema = z.looseObject({
   version: z.number(),
   architecture: archInnerSchema.optional(),
@@ -99,6 +135,8 @@ export const stateSchema = z.looseObject({
       source: z.string().optional(),
     })
     .optional(),
+  // Диаграммы последовательности (v0.02.01, Ф-55) — опциональная секция.
+  sequences: z.array(seqDiagramInnerSchema).optional(),
 });
 
 /** Дерево допустимых полей для обнаружения неизвестных полей (W-001). */
@@ -131,6 +169,25 @@ export const allowedKeys = {
     },
     assignments: { function: null, block: null },
     meta: { savedAt: null, source: null },
+    // Диаграммы последовательности (v0.02.01).
+    sequences: {
+      id: null,
+      name: null,
+      lifelines: null,
+      arrows: { id: null, from: null, to: null, label: null },
+      blocks: { id: null, kind: null, name: null, color: null, arrows: null, thenLabel: null, elseLabel: null, elseFrom: null },
+    },
+  },
+  sequences: {
+    version: null,
+    domains: null,
+    sequences: {
+      id: null,
+      name: null,
+      lifelines: null,
+      arrows: { id: null, from: null, to: null, label: null },
+      blocks: { id: null, kind: null, name: null, color: null, arrows: null, thenLabel: null, elseLabel: null, elseFrom: null },
+    },
   },
 } as const;
 

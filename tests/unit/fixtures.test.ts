@@ -6,6 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseArchitectureYaml } from '@/io/archYaml';
+import { parseSequencesYaml } from '@/io/sequencesYaml';
+import { renumberArchitecture } from '@/engine/sequence';
 import { parseSecurityYaml } from '@/io/securityYaml';
 import { parseStateYaml } from '@/io/stateFile';
 import { parsePlantUml } from '@/io/plantuml';
@@ -24,6 +26,10 @@ import {
   DEMO_PUML as VESSEL_PUML,
   DEMO_SECURITY_YAML as VESSEL_SECURITY,
   DEMO_STATE_YAML as VESSEL_STATE,
+} from '@/samples/vessel/content';
+import {
+  DEMO_SEQUENCES_YAML as VESSEL_DEMO_SEQUENCES,
+  SCENARIO_SEQUENCES_YAML as VESSEL_SCENARIO_SEQUENCES,
 } from '@/samples/vessel/content';
 
 const FIXTURES = resolve(__dirname, '../fixtures');
@@ -210,5 +216,28 @@ describe('НФ-1: пересчёт на максимальной модели н
     }
     const elapsed = (performance.now() - start) / 100; // среднее на один пересчёт
     expect(elapsed).toBeLessThan(100);
+  });
+
+  it('Образцы ДП v0.02.01b: fixture scenario генерируется из content.ts и разбирается на ДАП 22 блоков', () => {
+    const sample = readFileSync(resolve(FIXTURES, 'vessel/sequences.yaml'), 'utf8');
+    expect(sample).toBe(VESSEL_SCENARIO_SEQUENCES);
+    const full = parseStateYaml(readFileSync(resolve(FIXTURES, 'vessel-full/state.yaml'), 'utf8')).model!;
+    const parsedFull = parseSequencesYaml(sample, renumberArchitecture(full.architecture).blocks);
+    expect(parsedFull.errors).toEqual([]);
+    expect(parsedFull.model?.map((s) => s.arrows.length)).toEqual([13, 21]);
+  });
+
+  it('Образцы ДП v0.02.01b: demo-sequences разбирается на ДАП примера 2 без ошибок (демо показывает ДП)', () => {
+    const sample = readFileSync(resolve(__dirname, '../../src/samples/vessel/sequences.yaml'), 'utf8');
+    expect(sample).toBe(VESSEL_DEMO_SEQUENCES);
+    const arch = parseArchitectureYaml(VESSEL_ARCH).model!;
+    const parsed = parseSequencesYaml(sample, renumberArchitecture(arch).blocks);
+    expect(parsed.errors).toEqual([]);
+    // Все линии жизни — домены ДАП примера 2; «Проверить ДП» без E-601.
+    const blockIds = new Set(arch.blocks.map((b) => b.id));
+    for (const diagram of parsed.model ?? []) {
+      for (const lifeline of diagram.lifelines) expect(blockIds.has(lifeline)).toBe(true);
+    }
+    expect(parsed.model?.map((s) => s.arrows.length)).toEqual([8, 14]);
   });
 });

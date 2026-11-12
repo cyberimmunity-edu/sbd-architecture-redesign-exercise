@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useSkibStore } from '../store/projectStore';
 import { MAX_FILE_SIZE } from '../engine/types';
-import type { Architecture, Project, SecuritySpec } from '../engine/types';
+import type { Architecture, Project, SecuritySpec, SequenceDiagram } from '../engine/types';
 import { frameBounds } from '../engine/trust';
 import { validateProject } from '../engine/audit';
 import {
@@ -43,9 +43,17 @@ import {
   serializeArchitectureYaml,
   serializePuml,
   serializeStateYaml,
+  parseSequencesYaml,
+  serializeSequencesYaml,
+  parseSeqPlantUml,
+  serializeSeqPuml,
 } from '../io';
 import { DEMO_ARCHITECTURE_YAML as ROBOT_ARCH, DEMO_SECURITY_YAML as ROBOT_SECURITY } from '../samples/robot/content';
-import { DEMO_ARCHITECTURE_YAML as VESSEL_ARCH, DEMO_SECURITY_YAML as VESSEL_SECURITY } from '../samples/vessel/content';
+import {
+  DEMO_ARCHITECTURE_YAML as VESSEL_ARCH,
+  DEMO_SECURITY_YAML as VESSEL_SECURITY,
+  DEMO_SEQUENCES_YAML as VESSEL_SEQUENCES,
+} from '../samples/vessel/content';
 import { TopBar, type ValidationStatus } from './TopBar';
 import { PoolPanel } from './PoolPanel';
 import { GoalsPanel } from './GoalsPanel';
@@ -57,6 +65,10 @@ import { AdvisorPanel } from './AdvisorPanel';
 import { DecomposeDialog } from './DecomposeDialog';
 import { ValidationPanel } from './ValidationPanel';
 import { HelpDialog } from './HelpDialog';
+import { SeqLeftPanel } from './sequence/SeqLeftPanel';
+import { SeqCanvas } from './sequence/SeqCanvas';
+import { SeqRightPanel } from './sequence/SeqRightPanel';
+import { useViewStore } from '../store/viewStore';
 import { ru } from '../i18n/ru';
 
 type DemoKind = 'robot' | 'vessel';
@@ -89,6 +101,14 @@ export function ToolApp() {
   const undo = useSkibStore((s) => s.undo);
   const redo = useSkibStore((s) => s.redo);
   const setValidation = useSkibStore((s) => s.setValidation);
+  const replaceSequences = useSkibStore((s) => s.replaceSequences);
+  const addSequenceFromPuml = useSkibStore((s) => s.addSequenceFromPuml);
+  const mode = useViewStore((s) => s.mode);
+  const setMode = useViewStore((s) => s.setMode);
+  const seqColorsFromDap = useViewStore((s) => s.seqColorsFromDap);
+  const toggleSeqColors = useViewStore((s) => s.toggleSeqColors);
+  const activeSequenceId = useViewStore((s) => s.activeSequenceId);
+  const setActiveSequence = useViewStore((s) => s.setActiveSequence);
   const { toast } = useToast();
 
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -157,6 +177,22 @@ export function ToolApp() {
     return await file.text();
   }, [toast]);
 
+  /** Применение разобранной архитектуры с каскадом ДП и W-009 (5.6 v0.02.01). */
+  const applyArchitecture = useCallback(
+    (model: Architecture, file: string, warnings: import('../engine/types').ImportMessage[]) => {
+      const cascade = loadArchitecture(model, file);
+      const allWarnings = [...warnings];
+      if (cascade.removedLifelines > 0 || cascade.removedArrows > 0) {
+        allWarnings.push({
+          code: 'W-009',
+          message: ru.seq.w009Info(cascade.removedLifelines, cascade.removedArrows),
+        });
+      }
+      setValidation({ errors: [], warnings: allWarnings, file });
+    },
+    [loadArchitecture, setValidation],
+  );
+
   const handleImportArchitecture = useCallback(
     async (file: File) => {
       const text = await readText(file);
@@ -167,13 +203,12 @@ export function ToolApp() {
         return;
       }
       if (isEmpty || !hasEdits) {
-        loadArchitecture(result.model!, file.name);
-        setValidation({ errors: [], warnings: result.warnings, file: file.name });
+        applyArchitecture(result.model!, file.name, result.warnings);
       } else {
         setPending({ kind: 'architecture', model: result.model!, warnings: result.warnings, file: file.name });
       }
     },
-    [hasEdits, isEmpty, loadArchitecture, readText, setValidation],
+    [applyArchitecture, hasEdits, isEmpty, readText, setValidation],
   );
 
   const handleImportPuml = useCallback(
@@ -186,13 +221,12 @@ export function ToolApp() {
         return;
       }
       if (isEmpty || !hasEdits) {
-        loadArchitecture(result.model!, file.name);
-        setValidation({ errors: [], warnings: result.warnings, file: file.name });
+        applyArchitecture(result.model!, file.name, result.warnings);
       } else {
         setPending({ kind: 'architecture', model: result.model!, warnings: result.warnings, file: file.name });
       }
     },
-    [hasEdits, isEmpty, loadArchitecture, readText, setValidation],
+    [applyArchitecture, hasEdits, isEmpty, readText, setValidation],
   );
 
   /** Ф-2: загрузка security.yaml без подтверждения, совместимые размещения сохраняются. */
@@ -231,7 +265,8 @@ export function ToolApp() {
     [isEmpty, loadState, readText, setValidation],
   );
 
-  /** Ф-5: демо-проект одной командой; без подтверждения, если проект пуст. */
+  /** Ф-5: демо-проект одной командой; без подтверждения, если проект пуст.
+   *  v0.02.01: пример судна включает образцы ДП из src/samples/vessel/sequences.yaml (9.1). */
   const loadDemoProject = useCallback(
     (kind: DemoKind) => {
       const demo = DEMOS[kind];
@@ -246,11 +281,19 @@ export function ToolApp() {
         });
         return;
       }
+      let sequences: SequenceDiagram[] = [];
+      if (kind === 'vessel' && VESSEL_SEQUENCES) {
+        const seq = parseSequencesYaml(VESSEL_SEQUENCES, arch.model!.blocks);
+        if (seq.errors.length === 0 && seq.model) {
+          sequences = seq.model;
+        }
+      }
       loadState({
         architecture: arch.model!,
         security: security.model!,
         assignments: [],
         meta: { source: kind === 'robot' ? ru.topBar.demoRobot : ru.topBar.demoVessel },
+        sequences,
       });
       setValidation({ errors: [], warnings: [...arch.warnings, ...security.warnings] });
     },
@@ -296,6 +339,70 @@ export function ToolApp() {
     [download, project],
   );
 
+  /* ---- Импорт/экспорт ДП (7.1–7.2, П-8) ---- */
+
+  /** «Импорт YAML»: sequences.yaml заменяет все ДП проекта (одна операция истории). */
+  const handleImportSequencesYaml = useCallback(
+    async (file: File) => {
+      const text = await readText(file);
+      if (text === null) return;
+      const result = parseSequencesYaml(text, project.architecture.blocks);
+      if (result.errors.length > 0) {
+        setValidation({ errors: result.errors, warnings: result.warnings, file: file.name });
+        return;
+      }
+      replaceSequences(result.model ?? []);
+      if (result.model && result.model.length > 0) {
+        setActiveSequence(result.model[0].id);
+      }
+      setValidation({ errors: [], warnings: result.warnings, file: file.name });
+    },
+    [project.architecture.blocks, readText, replaceSequences, setActiveSequence, setValidation],
+  );
+
+  /** «Импорт PlantUML»: одна ДП добавляется к проекту (одна операция истории). */
+  const handleImportSeqPuml = useCallback(
+    async (file: File) => {
+      const text = await readText(file);
+      if (text === null) return;
+      const result = parseSeqPlantUml(text, project.architecture.blocks);
+      if (result.errors.length > 0) {
+        setValidation({ errors: result.errors, warnings: result.warnings, file: file.name });
+        return;
+      }
+      const model = result.model!;
+      const created = addSequenceFromPuml({
+        id: '',
+        name: ru.seq.importedPumlName,
+        lifelines: model.lifelines,
+        arrows: model.arrows,
+        blocks: model.blocks,
+      });
+      if (created) setActiveSequence(created);
+      setValidation({ errors: [], warnings: result.warnings, file: file.name });
+    },
+    [addSequenceFromPuml, project.architecture.blocks, readText, setActiveSequence, setValidation],
+  );
+
+  /** «Экспорт YAML»: все ДП проекта в sequences.yaml (Ф-52). */
+  const handleExportSequencesYaml = useCallback(() => {
+    download(
+      'sequences.yaml',
+      serializeSequencesYaml(project.sequences ?? [], project.architecture.blocks),
+    );
+  }, [download, project.architecture.blocks, project.sequences]);
+
+  /** «Экспорт PlantUML»: выбранная ДП в <имя ДП>.puml (Ф-53). */
+  const handleExportSeqPuml = useCallback(() => {
+    const sequences = project.sequences ?? [];
+    const active = sequences.find((s) => s.id === activeSequenceId) ?? sequences[0];
+    if (!active) {
+      toast({ title: ru.seq.noSequenceSelected });
+      return;
+    }
+    download(`${active.name}.puml`, serializeSeqPuml(active, project.architecture.blocks));
+  }, [activeSequenceId, download, project.architecture.blocks, project.sequences, toast]);
+
   const handleReset = useCallback(() => {
     if (isEmpty) {
       resetProject();
@@ -320,8 +427,7 @@ export function ToolApp() {
   const confirmPending = useCallback(() => {
     if (!pending) return;
     if (pending.kind === 'architecture') {
-      loadArchitecture(pending.model, pending.file);
-      setValidation({ errors: [], warnings: pending.warnings, file: pending.file });
+      applyArchitecture(pending.model, pending.file, pending.warnings);
     } else if (pending.kind === 'state') {
       loadState(pending.project);
       setValidation({ errors: [], warnings: pending.warnings, file: pending.file });
@@ -331,7 +437,7 @@ export function ToolApp() {
       resetProject();
     }
     setPending(null);
-  }, [loadArchitecture, loadState, loadDemoProject, pending, resetProject, setValidation]);
+  }, [applyArchitecture, loadState, loadDemoProject, pending, resetProject, setValidation]);
 
   const pendingMessage = useMemo(() => {
     if (!pending) return '';
@@ -378,10 +484,63 @@ export function ToolApp() {
         canUndo={past.length > 0}
         canRedo={future.length > 0}
         validationStatus={validationStatus}
+        mode={mode}
+        onModeChange={setMode}
+        seqColorsFromDap={seqColorsFromDap}
+        onToggleSeqColors={toggleSeqColors}
       />
-      {/* Раздвижные панели (v0.01.05): ширину боковых панелей можно менять
+      {mode === 'sequence' ? (
+        /* Режим «Диаграммы последовательности» (v0.02.01): канва, панели и
+           инспектор заменяются содержимым 5.3–5.4; «+ Домен» и «+ Внешняя
+           система» отключены; загрузка файлов ДАП, экспорт state, undo/redo
+           и «Проверить» остаются доступными. */
+        <ResizablePanelGroup
+          direction="horizontal"
+          autoSaveId="skib-lab-seq-panels-v1"
+          className="min-h-0 flex-1"
+        >
+          <ResizablePanel
+            defaultSize={22}
+            minSize={16}
+            maxSize={36}
+            className="border-r border-border bg-card"
+          >
+            <SeqLeftPanel
+              onImportYaml={handleImportSequencesYaml}
+              onImportPuml={handleImportSeqPuml}
+              onExportYaml={handleExportSequencesYaml}
+              onExportPuml={handleExportSeqPuml}
+            />
+          </ResizablePanel>
+          <ResizableHandle
+            className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+            aria-label={ru.canvas.resizeLeftTitle}
+            title={ru.canvas.resizeLeftTitle}
+          />
+          <ResizablePanel defaultSize={54} minSize={28}>
+            <div className="relative h-full w-full">
+              <ValidationPanel />
+              <SeqCanvas />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle
+            className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+            aria-label={ru.canvas.resizeRightTitle}
+            title={ru.canvas.resizeRightTitle}
+          />
+          <ResizablePanel
+            defaultSize={24}
+            minSize={16}
+            maxSize={36}
+            className="border-l border-border bg-card"
+          >
+            <SeqRightPanel />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+      /* Раздвижные панели (v0.01.05): ширину боковых панелей можно менять
           перетаскиванием разделителя — текст карточек и целей помещается
-          целиком; ширины запоминаются в localStorage (autoSaveId). */}
+          целиком; ширины запоминаются в localStorage (autoSaveId). */
       <ResizablePanelGroup
         direction="horizontal"
         autoSaveId="skib-lab-panels-v1"
@@ -467,6 +626,7 @@ export function ToolApp() {
           </ResizablePanelGroup>
         </ResizablePanel>
       </ResizablePanelGroup>
+      )}
       <DecomposeDialog
         key={decomposeBlockId ?? 'closed'}
         blockId={decomposeBlockId}

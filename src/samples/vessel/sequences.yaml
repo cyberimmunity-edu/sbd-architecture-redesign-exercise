@@ -1,0 +1,134 @@
+version: 1
+domains:
+  ext-shore: Береговой пост (СУДС) (внешняя)
+  ext-lock: Оператор шлюза (внешняя)
+  blk-radio: 10. Радиосвязь
+  blk-ota: 06. Подсистема OTA-обновления
+  blk-nav: 04. Навигационный вычислитель
+  blk-gps-ins: 01. Навигация GPS/INS
+  blk-ai: 07. Бортовой ИИ (оценка обстановки и планирование маршрута)
+  blk-avoid: 08. Аварийный уход от столкновения
+  blk-cargo: 09. Контроль груза и выгрузки
+sequences:
+  - id: seq-1
+    name: Удалённое обновление прошивки
+    lifelines: [ext-shore, blk-radio, blk-ota, blk-nav, blk-ai]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: blk-radio
+        label: команда удалённого обновления прошивки
+      - id: a-2
+        from: blk-radio
+        to: blk-ota
+        label: передача пакета образа (OTA)
+      - id: a-3
+        from: blk-ota
+        to: blk-ota
+        label: проверка подписи образа
+      - id: a-4
+        from: blk-ota
+        to: blk-ota
+        label: применение верифицированной прошивки
+      - id: a-5
+        from: blk-ota
+        to: blk-nav
+        label: ввод прошивки в работу
+      - id: a-6
+        from: blk-ota
+        to: blk-ai
+        label: обновление моделей ИИ
+      - id: a-7
+        from: blk-ota
+        to: blk-ota
+        label: отклонение обновления
+      - id: a-8
+        from: blk-ota
+        to: blk-ota
+        label: запись события безопасности
+    blocks:
+      - id: g-1
+        kind: loop
+        name: до получения полного образа
+        color: '#1E88E5'
+        arrows: [a-1, a-2]
+      - id: g-2
+        kind: cond
+        name: подлинность прошивки подтверждена
+        thenLabel: нормальное обновление
+        elseLabel: нарушение подлинности
+        elseFrom: a-7
+        arrows: [a-3, a-4, a-5, a-6, a-7, a-8]
+  - id: seq-2
+    name: Выполнение новой миссии
+    lifelines: [ext-shore, ext-lock, blk-radio, blk-gps-ins, blk-nav, blk-ai, blk-avoid, blk-cargo]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: blk-radio
+        label: передача новой миссии
+      - id: a-2
+        from: blk-radio
+        to: blk-nav
+        label: приём миссии на борту
+      - id: a-3
+        from: blk-nav
+        to: blk-nav
+        label: контроль подлинности миссии
+      - id: a-4
+        from: blk-gps-ins
+        to: blk-nav
+        label: данные курса и позиции
+      - id: a-5
+        from: blk-nav
+        to: blk-ai
+        label: оценка обстановки и планирование маршрута
+      - id: a-6
+        from: blk-ai
+        to: blk-avoid
+        label: уход от столкновения
+      - id: a-7
+        from: blk-avoid
+        to: blk-nav
+        label: корректировка маршрута
+      - id: a-8
+        from: blk-nav
+        to: blk-cargo
+        label: маршрутный лист
+      - id: a-9
+        from: blk-radio
+        to: ext-lock
+        label: заявка на шлюзование
+      - id: a-10
+        from: ext-lock
+        to: blk-radio
+        label: разрешение шлюзования
+      - id: a-11
+        from: blk-cargo
+        to: ext-shore
+        label: отчёт о выполнении миссии
+      - id: a-12
+        from: blk-ai
+        to: blk-avoid
+        label: аварийный уход от столкновения
+      - id: a-13
+        from: blk-avoid
+        to: blk-nav
+        label: блокировка движения
+      - id: a-14
+        from: blk-avoid
+        to: blk-avoid
+        label: запись события безопасности
+    blocks:
+      - id: g-1
+        kind: loop
+        name: контроль обстановки по ходу миссии
+        color: '#1E88E5'
+        arrows: [a-4, a-5, a-6, a-7]
+      - id: g-2
+        kind: cond
+        name: критических нарушений в системе управления не выявлено
+        thenLabel: нормальное выполнение миссии
+        elseLabel: аварийная остановка
+        elseFrom: a-12
+        arrows: [a-8, a-9, a-10, a-11, a-12, a-13, a-14]

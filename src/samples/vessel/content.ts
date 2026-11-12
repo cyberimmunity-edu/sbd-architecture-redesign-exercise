@@ -27,43 +27,43 @@ system:
   description: "Пример 2: автономная доставка грузов в речной акватории"
 blocks:
   - id: blk-gps-ins
-    name: "Навигация GPS/INS"
+    name: "01. Навигация GPS/INS"
     cost: 3
     position: { x: 530, y: 80 }
   - id: blk-cam
-    name: "Камера (техническое зрение)"
+    name: "02. Камера (техническое зрение)"
     cost: 2
     position: { x: 530, y: 548 }
   - id: blk-lidar
-    name: "Лидар"
+    name: "03. Лидар"
     cost: 2
     position: { x: 530, y: 782 }
   - id: blk-nav
-    name: "Навигационный вычислитель"
+    name: "04. Навигационный вычислитель"
     cost: 4
     position: { x: 1370, y: 314 }
   - id: blk-vision
-    name: "Анализ видеопотока"
+    name: "05. Анализ видеопотока"
     cost: 3
     position: { x: 950, y: 548 }
   - id: blk-ota
-    name: "Подсистема OTA-обновления"
+    name: "06. Подсистема OTA-обновления"
     cost: 3
     position: { x: 950, y: 314 }
   - id: blk-ai
-    name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+    name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
     cost: 5
     position: { x: 1790, y: 197 }
   - id: blk-avoid
-    name: "Подсистема расхождения"
+    name: "08. Подсистема расхождения"
     cost: 3
     position: { x: 2210, y: 197 }
   - id: blk-cargo
-    name: "Контроль груза и выгрузки"
+    name: "09. Контроль груза и выгрузки"
     cost: 2
     position: { x: 1790, y: 431 }
   - id: blk-radio
-    name: "Радиосвязь"
+    name: "10. Радиосвязь"
     cost: 2
     position: { x: 530, y: 314 }
   - id: ext-shore
@@ -283,43 +283,43 @@ export const DEMO_STATE_YAML = `version: 1
 architecture:
   blocks:
     - id: blk-gps-ins
-      name: "Навигация GPS/INS"
+      name: "01. Навигация GPS/INS"
       cost: 3
       position: { x: 60, y: 60 }
     - id: blk-cam
-      name: "Камера (техническое зрение)"
+      name: "02. Камера (техническое зрение)"
       cost: 2
       position: { x: 60, y: 240 }
     - id: blk-lidar
-      name: "Лидар"
+      name: "03. Лидар"
       cost: 2
       position: { x: 60, y: 400 }
     - id: blk-nav
-      name: "Навигационный вычислитель"
+      name: "04. Навигационный вычислитель"
       cost: 4
       position: { x: 400, y: 60 }
     - id: blk-vision
-      name: "Анализ видеопотока"
+      name: "05. Анализ видеопотока"
       cost: 3
       position: { x: 400, y: 240 }
     - id: blk-ota
-      name: "Подсистема OTA-обновления"
+      name: "06. Подсистема OTA-обновления"
       cost: 3
       position: { x: 400, y: 400 }
     - id: blk-ai
-      name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+      name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
       cost: 5
       position: { x: 760, y: 60 }
     - id: blk-avoid
-      name: "Подсистема расхождения"
+      name: "08. Подсистема расхождения"
       cost: 3
       position: { x: 760, y: 240 }
     - id: blk-cargo
-      name: "Контроль груза и выгрузки"
+      name: "09. Контроль груза и выгрузки"
       cost: 2
       position: { x: 760, y: 420 }
     - id: blk-radio
-      name: "Радиосвязь"
+      name: "10. Радиосвязь"
       cost: 2
       position: { x: 400, y: 560 }
     - id: ext-shore
@@ -508,4 +508,358 @@ assignments:
 meta:
   savedAt: "2026-11-11T09:00:00Z"
   source: "Пример 2: безэкипажное судно-доставщик (доработка v0.01.05)"
+`;
+
+/**
+ * Образцы ДП демонстрационного комплекта «Безэкипажное судно-доставщик»
+ * (v0.02.01b): участники — ровно домены ДАП примера 2 (12 доменов),
+ * каждая стрелка (кроме self) опирается на связь ДАП с точным
+ * направлением (П-3): seq-1 «Удалённое обновление прошивки» (5 линий
+ * жизни, 8 стрелок: цикл «до получения полного образа», условный блок
+ * «подлинность прошивки подтверждена» с ветками «нормальное обновление»
+ * и «нарушение подлинности») и seq-2 «Выполнение новой миссии» (8 линий
+ * жизни, 14 стрелок: цикл «контроль обстановки по ходу миссии», условный
+ * блок «критических нарушений в системе управления не выявлено» с ветками
+ * «нормальное выполнение миссии» и «аварийная остановка»).
+ * Для ДАП сквозного сценария (22 домена) используется
+ * SCENARIO_SEQUENCES_YAML (fixture tests/fixtures/vessel/sequences.yaml).
+ */
+export const DEMO_SEQUENCES_YAML = `version: 1
+domains:
+  ext-shore: Береговой пост (СУДС) (внешняя)
+  ext-lock: Оператор шлюза (внешняя)
+  blk-radio: 10. Радиосвязь
+  blk-ota: 06. Подсистема OTA-обновления
+  blk-nav: 04. Навигационный вычислитель
+  blk-gps-ins: 01. Навигация GPS/INS
+  blk-ai: 07. Бортовой ИИ (оценка обстановки и планирование маршрута)
+  blk-avoid: 08. Аварийный уход от столкновения
+  blk-cargo: 09. Контроль груза и выгрузки
+sequences:
+  - id: seq-1
+    name: Удалённое обновление прошивки
+    lifelines: [ext-shore, blk-radio, blk-ota, blk-nav, blk-ai]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: blk-radio
+        label: команда удалённого обновления прошивки
+      - id: a-2
+        from: blk-radio
+        to: blk-ota
+        label: передача пакета образа (OTA)
+      - id: a-3
+        from: blk-ota
+        to: blk-ota
+        label: проверка подписи образа
+      - id: a-4
+        from: blk-ota
+        to: blk-ota
+        label: применение верифицированной прошивки
+      - id: a-5
+        from: blk-ota
+        to: blk-nav
+        label: ввод прошивки в работу
+      - id: a-6
+        from: blk-ota
+        to: blk-ai
+        label: обновление моделей ИИ
+      - id: a-7
+        from: blk-ota
+        to: blk-ota
+        label: отклонение обновления
+      - id: a-8
+        from: blk-ota
+        to: blk-ota
+        label: запись события безопасности
+    blocks:
+      - id: g-1
+        kind: loop
+        name: до получения полного образа
+        color: '#1E88E5'
+        arrows: [a-1, a-2]
+      - id: g-2
+        kind: cond
+        name: подлинность прошивки подтверждена
+        thenLabel: нормальное обновление
+        elseLabel: нарушение подлинности
+        elseFrom: a-7
+        arrows: [a-3, a-4, a-5, a-6, a-7, a-8]
+  - id: seq-2
+    name: Выполнение новой миссии
+    lifelines: [ext-shore, ext-lock, blk-radio, blk-gps-ins, blk-nav, blk-ai, blk-avoid, blk-cargo]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: blk-radio
+        label: передача новой миссии
+      - id: a-2
+        from: blk-radio
+        to: blk-nav
+        label: приём миссии на борту
+      - id: a-3
+        from: blk-nav
+        to: blk-nav
+        label: контроль подлинности миссии
+      - id: a-4
+        from: blk-gps-ins
+        to: blk-nav
+        label: данные курса и позиции
+      - id: a-5
+        from: blk-nav
+        to: blk-ai
+        label: оценка обстановки и планирование маршрута
+      - id: a-6
+        from: blk-ai
+        to: blk-avoid
+        label: уход от столкновения
+      - id: a-7
+        from: blk-avoid
+        to: blk-nav
+        label: корректировка маршрута
+      - id: a-8
+        from: blk-nav
+        to: blk-cargo
+        label: маршрутный лист
+      - id: a-9
+        from: blk-radio
+        to: ext-lock
+        label: заявка на шлюзование
+      - id: a-10
+        from: ext-lock
+        to: blk-radio
+        label: разрешение шлюзования
+      - id: a-11
+        from: blk-cargo
+        to: ext-shore
+        label: отчёт о выполнении миссии
+      - id: a-12
+        from: blk-ai
+        to: blk-avoid
+        label: аварийный уход от столкновения
+      - id: a-13
+        from: blk-avoid
+        to: blk-nav
+        label: блокировка движения
+      - id: a-14
+        from: blk-avoid
+        to: blk-avoid
+        label: запись события безопасности
+    blocks:
+      - id: g-1
+        kind: loop
+        name: контроль обстановки по ходу миссии
+        color: '#1E88E5'
+        arrows: [a-4, a-5, a-6, a-7]
+      - id: g-2
+        kind: cond
+        name: критических нарушений в системе управления не выявлено
+        thenLabel: нормальное выполнение миссии
+        elseLabel: аварийная остановка
+        elseFrom: a-12
+        arrows: [a-8, a-9, a-10, a-11, a-12, a-13, a-14]
+`;
+
+/**
+ * Образцы ДП сквозного сценария приёмки 9.1 ТЗ v0.02.01 — расширенная ДАП
+ * (22 домена, fixture vessel-full): seq-1 «Удалённое обновление прошивки» (9 линий жизни,
+ * 13 стрелок: цикл «до получения полного образа», условный блок «подлинность
+ * прошивки подтверждена» с ветками «нормальное обновление» и «нарушение
+ * подлинности») и seq-2 «Выполнение новой миссии» (12 линий жизни, 21
+ * стрелка: цикл «контроль обстановки по ходу миссии», условный блок
+ * «критических нарушений в системе управления не выявлено» с ветками
+ * «нормальное выполнение миссии» и «аварийная остановка»). Каждая стрелка
+ * (кроме self) опирается на связь ДАП с точным направлением (П-3).
+ * Файлы samples/vessel/sequences.yaml, tests/fixtures/vessel/sequences.yaml
+ * и src/samples/vessel/sequences.yaml генерируются скриптом emit-fixtures.ts
+ * и сверяются unit-тестом fixtures.test.ts.
+ */
+export const SCENARIO_SEQUENCES_YAML = `version: 1
+domains:
+  ext-shore: Береговой пост (СУДС) (внешняя)
+  ext-2: Радиоэфир (внешняя)
+  ext-lock: Оператор шлюза (внешняя)
+  blk-radio: 10. Радиосвязь
+  blk-ota: 06. Подсистема OTA-обновления
+  blk-nav: 04. Навигационный вычислитель
+  blk-ai: 07. Бортовой ИИ (оценка обстановки и планирование маршрута)
+  blk-cargo: 09. Контроль груза и выгрузки
+  dom-2: 12. Контроль миссии
+  dom-3: 13. Контроль положения
+  dom-4: 14. Аварийный уход от столкновения
+  dom-5: 15. Верификация и применение обновления прошивки
+  dom-6: 16. Выполнение критичных команд
+  dom-7: 17. События безопасности
+  dom-8: 18. Блокировка движения
+sequences:
+  - id: seq-1
+    name: Удалённое обновление прошивки
+    lifelines: [ext-shore, ext-2, blk-radio, blk-ota, dom-5, blk-nav, blk-ai, dom-2, dom-7]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: ext-2
+        label: команда удалённого обновления прошивки
+      - id: a-2
+        from: ext-2
+        to: blk-radio
+        label: передача команды обновления
+      - id: a-3
+        from: blk-radio
+        to: blk-ota
+        label: пакеты обновлений (OTA)
+      - id: a-4
+        from: blk-ota
+        to: dom-5
+        label: передача пакета образа
+      - id: a-5
+        from: dom-5
+        to: dom-5
+        label: проверка подписи образа
+      - id: a-6
+        from: dom-5
+        to: dom-5
+        label: применение верифицированной прошивки
+      - id: a-7
+        from: blk-ota
+        to: blk-nav
+        label: ввод прошивки в работу
+      - id: a-8
+        from: blk-ota
+        to: blk-ai
+        label: обновление моделей ИИ
+      - id: a-9
+        from: dom-5
+        to: dom-5
+        label: отклонение обновления
+      - id: a-10
+        from: dom-2
+        to: dom-7
+        label: регистрация события безопасности
+      - id: a-11
+        from: dom-7
+        to: blk-radio
+        label: передача тревоги
+      - id: a-12
+        from: blk-radio
+        to: ext-2
+        label: ретрансляция тревоги
+      - id: a-13
+        from: ext-2
+        to: ext-shore
+        label: тревога береговому посту
+    blocks:
+      - id: g-1
+        kind: loop
+        name: до получения полного образа
+        color: '#1E88E5'
+        arrows: [a-1, a-2, a-3, a-4]
+      - id: g-2
+        kind: cond
+        name: подлинность прошивки подтверждена
+        thenLabel: нормальное обновление
+        elseLabel: нарушение подлинности
+        elseFrom: a-9
+        arrows: [a-5, a-6, a-7, a-8, a-9, a-10, a-11, a-12, a-13]
+  - id: seq-2
+    name: Выполнение новой миссии
+    lifelines: [ext-shore, ext-2, blk-radio, ext-lock, dom-2, blk-nav, dom-3, dom-4, blk-cargo, dom-6, dom-7, dom-8]
+    arrows:
+      - id: a-1
+        from: ext-shore
+        to: ext-2
+        label: передача новой миссии
+      - id: a-2
+        from: ext-2
+        to: blk-radio
+        label: приём миссии на борту
+      - id: a-3
+        from: blk-radio
+        to: blk-nav
+        label: передача миссии в навигационный вычислитель
+      - id: a-4
+        from: blk-nav
+        to: blk-nav
+        label: контроль подлинности миссии
+      - id: a-5
+        from: blk-nav
+        to: dom-3
+        label: данные курса и позиции
+      - id: a-6
+        from: dom-3
+        to: dom-3
+        label: контроль целостности навигационных данных
+      - id: a-7
+        from: blk-nav
+        to: blk-cargo
+        label: маршрутный лист
+      - id: a-8
+        from: blk-radio
+        to: ext-lock
+        label: заявка на шлюзование
+      - id: a-9
+        from: ext-lock
+        to: blk-radio
+        label: разрешение шлюзования
+      - id: a-10
+        from: blk-cargo
+        to: blk-radio
+        label: отчёт о статусе груза
+      - id: a-11
+        from: blk-radio
+        to: ext-2
+        label: передача статуса груза и миссии
+      - id: a-12
+        from: ext-2
+        to: ext-shore
+        label: отчёт о выполнении миссии
+      - id: a-13
+        from: dom-2
+        to: dom-2
+        label: признак критического нарушения в системе управления
+      - id: a-14
+        from: dom-3
+        to: dom-4
+        label: экстренное торможение
+      - id: a-15
+        from: dom-2
+        to: dom-7
+        label: регистрация события безопасности
+      - id: a-16
+        from: blk-cargo
+        to: dom-6
+        label: передача критичной команды
+      - id: a-17
+        from: dom-6
+        to: dom-6
+        label: исполнение критичной команды
+      - id: a-18
+        from: dom-6
+        to: dom-8
+        label: блокировка движения
+      - id: a-19
+        from: dom-7
+        to: blk-radio
+        label: тревога
+      - id: a-20
+        from: blk-radio
+        to: ext-2
+        label: передача тревоги в радиоэфир
+      - id: a-21
+        from: ext-2
+        to: ext-shore
+        label: тревога береговому посту
+    blocks:
+      - id: g-1
+        kind: loop
+        name: контроль обстановки по ходу миссии
+        color: '#1E88E5'
+        arrows: [a-5, a-6]
+      - id: g-2
+        kind: cond
+        name: критических нарушений в системе управления не выявлено
+        thenLabel: нормальное выполнение миссии
+        elseLabel: аварийная остановка
+        elseFrom: a-13
+        arrows: [a-7, a-8, a-9, a-10, a-11, a-12, a-13, a-14, a-15, a-16, a-17, a-18, a-19, a-20, a-21]
 `;

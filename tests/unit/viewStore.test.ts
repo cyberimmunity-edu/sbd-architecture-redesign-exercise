@@ -123,6 +123,7 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
     // и в автосохранение (Ф-21, Ф-22 остаются про модель).
     const state = useViewStore.getState();
     expect(Object.keys(state).sort()).toEqual([
+      'activeSequenceId',
       'collapsedPorts',
       'cycleSizeMode',
       'expandAllPorts',
@@ -130,12 +131,22 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'flashDomains',
       'focusInternal',
       'highlightedDomainId',
+      // Режим ДП (v0.02.01): режим, активная ДП, выбор, опция цветов — вид.
+      'mode',
+      'seqColorsFromDap',
+      'seqSelectedArrows',
+      'seqSelection',
+      'setActiveSequence',
       'setHighlightedDomain',
+      'setMode',
+      'setSeqSelectedArrows',
+      'setSeqSelection',
       'setSizeMode',
       'showEdges',
       'sizeMode',
       'toggleFocusInternal',
       'togglePort',
+      'toggleSeqColors',
       'toggleShowEdges',
     ]);
   });

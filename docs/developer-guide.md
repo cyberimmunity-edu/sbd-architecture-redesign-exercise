@@ -52,6 +52,21 @@ npx tsc --noEmit # проверка типов (strict)
 Эти разделы — источник истины; имена полей в коде совпадают с ТЗ
 (`Block`, `Edge`, `Goal`, `SecurityFunction`, `Assignment`, `Project`).
 
+Режим ДП (v0.02.01) добавляет `SequenceDiagram { id, name, lifelines[],
+arrows[], blocks[] }` с `SeqArrow { id, from, to, label? }` и `SeqBlock
+{ id, kind: group|loop|cond, name, color, arrows[], thenLabel?, elseLabel?,
+elseFrom? }` — `Project.sequences?` опционально для совместимости файлов
+v0.01.x (W-001). Модули: `src/engine/sequence.ts` (автонумерация Ф-30…36,
+матчинг 7.3, валидация E-601/W-008, правила блоков П-13/П-14, производные
+цвета Ф-59), `src/io/sequencesYaml.ts` (sequences.yaml — 7.1, включая
+вкладываемую в state.yaml часть 7.4), `src/io/seqPlantuml.ts` (независимый
+парсер PlantUML ДП — 7.2: строки с `as` в ДАП-парсере пропускаются,
+поэтому у ДП свой парсер), UI — `src/ui/sequence/` (SeqCanvas: один крупный
+узел React Flow; линии жизни — пунктир до нижней границы канвы, v0.02.01b;
+мини-карта рисует линии жизни и стрелки собственным nodeComponent).
+Мини-карте нужны явные `width`/`height` узла — управляемый массив `nodes`
+без `onNodesChange` не получает dimension-изменения.
+
 ## 4. Адаптация стека к среде исполнения
 
 ТЗ (решение D6) фиксирует стек; исполнение v0/v0.01.01 выполнено на Next.js 16

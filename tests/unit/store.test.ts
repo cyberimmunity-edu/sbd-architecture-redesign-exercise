@@ -207,7 +207,8 @@ describe('Хранилище проекта', () => {
     const id = useSkibStore.getState().addDomain({ x: 10, y: 10 });
     expect(id).toBe('dom-1');
     const created = useSkibStore.getState().project.architecture.blocks.find((b) => b.id === id)!;
-    expect(created.name).toBe('Новый домен');
+    // v0.02.01 (Ф-31): новый внутренний домен получает очередной номер.
+    expect(created.name).toBe('05. Новый домен');
     expect(created.cost).toBe(1);
     expect(created.external).toBeFalsy();
     expect(id).not.toBeNull();
@@ -224,7 +225,8 @@ describe('Хранилище проекта', () => {
     const id = useSkibStore.getState().dropFunctionAsNewDomain('fn-auth', { x: 300, y: 240 });
     expect(id).toBe('dom-1');
     const created = useSkibStore.getState().project.architecture.blocks.find((b) => b.id === id)!;
-    expect(created.name).toBe('Новый домен');
+    // v0.02.01 (Ф-31): новый внутренний домен получает очередной номер.
+    expect(created.name).toBe('05. Новый домен');
     expect(created.cost).toBe(1);
     expect(created.position).toEqual({ x: 300, y: 240 });
     // Функция размещена в новом домене, домен выбран.

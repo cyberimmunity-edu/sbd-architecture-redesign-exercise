@@ -38,3 +38,21 @@ for (const [dir, files] of targets) {
   }
 }
 console.log('fixtures emitted:', targets.map(([dir]) => dir).join(', '));
+
+// Образцы ДП v0.02.01b: demo — под ДАП примера 2 (12 доменов); scenario —
+// под расширенную ДАП сквозного сценария (22 домена, fixture vessel-full).
+import {
+  DEMO_SEQUENCES_YAML as VESSEL_DEMO_SEQUENCES,
+  SCENARIO_SEQUENCES_YAML as VESSEL_SCENARIO_SEQUENCES,
+} from '../src/samples/vessel/content';
+
+const seqTargets = [
+  ['tests/fixtures/vessel', VESSEL_SCENARIO_SEQUENCES],
+  ['samples/vessel', VESSEL_DEMO_SEQUENCES],
+  ['src/samples/vessel', VESSEL_DEMO_SEQUENCES],
+] as const;
+
+for (const [dir, content] of seqTargets) {
+  writeFileSync(`${dir}/sequences.yaml`, content);
+}
+console.log('sequences.yaml emitted:', seqTargets.map(([dir]) => `${dir}/sequences.yaml`).join(', '));

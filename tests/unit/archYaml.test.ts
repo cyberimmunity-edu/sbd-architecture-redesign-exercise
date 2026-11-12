@@ -39,7 +39,8 @@ describe('architecture.yaml (раздел 6.1)', () => {
     expect(result.model!.edges).toHaveLength(6);
     expect(result.model!.blocks[0]).toMatchObject({
       id: 'blk-perc',
-      name: 'Подсистема восприятия',
+      // v0.02.01 (Ф-36): домены примеров носят префиксы автонумерации.
+      name: '01. Подсистема восприятия',
       cost: 3,
       position: { x: 530, y: 314 },
     });

@@ -7,9 +7,9 @@ services:
     build:
       context: .
       args:
-        APP_VERSION: "0.01.10"
+        APP_VERSION: "0.02.01"
         BASE_PATH: "/"
-    image: skib-lab:0.01.10
+    image: skib-lab:0.02.01
     container_name: skib-lab
     ports:
       - "${PORT:-8080}:8080"

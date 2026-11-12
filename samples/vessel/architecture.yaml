@@ -4,43 +4,43 @@ system:
   description: "Пример 2: автономная доставка грузов в речной акватории"
 blocks:
   - id: blk-gps-ins
-    name: "Навигация GPS/INS"
+    name: "01. Навигация GPS/INS"
     cost: 3
     position: { x: 530, y: 80 }
   - id: blk-cam
-    name: "Камера (техническое зрение)"
+    name: "02. Камера (техническое зрение)"
     cost: 2
     position: { x: 530, y: 548 }
   - id: blk-lidar
-    name: "Лидар"
+    name: "03. Лидар"
     cost: 2
     position: { x: 530, y: 782 }
   - id: blk-nav
-    name: "Навигационный вычислитель"
+    name: "04. Навигационный вычислитель"
     cost: 4
     position: { x: 1370, y: 314 }
   - id: blk-vision
-    name: "Анализ видеопотока"
+    name: "05. Анализ видеопотока"
     cost: 3
     position: { x: 950, y: 548 }
   - id: blk-ota
-    name: "Подсистема OTA-обновления"
+    name: "06. Подсистема OTA-обновления"
     cost: 3
     position: { x: 950, y: 314 }
   - id: blk-ai
-    name: "Бортовой ИИ (оценка обстановки и планирование маршрута)"
+    name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
     cost: 5
     position: { x: 1790, y: 197 }
   - id: blk-avoid
-    name: "Подсистема расхождения"
+    name: "08. Подсистема расхождения"
     cost: 3
     position: { x: 2210, y: 197 }
   - id: blk-cargo
-    name: "Контроль груза и выгрузки"
+    name: "09. Контроль груза и выгрузки"
     cost: 2
     position: { x: 1790, y: 431 }
   - id: blk-radio
-    name: "Радиосвязь"
+    name: "10. Радиосвязь"
     cost: 2
     position: { x: 530, y: 314 }
   - id: ext-shore

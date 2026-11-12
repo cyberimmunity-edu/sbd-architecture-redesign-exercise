@@ -11,6 +11,25 @@ export const ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 export const MAX_DOMAINS = 200;
 export const MAX_EDGES = 500;
 
+/** Лимиты режима «Диаграммы последовательности» — Ф-58 (v0.02.01). */
+export const MAX_SEQUENCES = 20;
+export const MAX_LIFELINES = 24;
+export const MAX_SEQ_ARROWS = 100;
+export const MAX_SEQ_BLOCKS = 10;
+/** Лимит длины имени ДП, имени блока, условия, подписей веток и стрелок. */
+export const SEQ_TEXT_LIMIT = 60;
+/** Палитра цветов групп и циклов — 8 фиксированных цветов (П-13). */
+export const SEQ_BLOCK_COLORS = [
+  '#1E88E5',
+  '#43A047',
+  '#F9A825',
+  '#8E24AA',
+  '#00897B',
+  '#D81B60',
+  '#6D4C41',
+  '#546E7A',
+] as const;
+
 /** Лимит истории операций — Ф-21. */
 export const HISTORY_LIMIT = 100;
 
@@ -118,12 +137,58 @@ export interface ProjectMeta {
   source?: string;
 }
 
-/** Проект — полное рабочее состояние инструмента. */
+/** Стрелка ДП. from == to допустимо (self-стрелка) — раздел 5.2 ТЗ v0.02.01. */
+export interface SeqArrow {
+  id: string;
+  /** Источник — Block.id из lifelines своей ДП. */
+  from: string;
+  /** Приёмник — Block.id из lifelines своей ДП; from == to — self-стрелка. */
+  to: string;
+  /** Подпись стрелки, до 60 символов (П-5). */
+  label?: string;
+}
+
+/** Блок ДП: группа (group), цикл (loop) или условный блок (cond).
+ *  Покрывает подряд идущие стрелки одной ДП; блоки не пересекаются
+ *  и не вкладываются (П-13). */
+export interface SeqBlock {
+  id: string;
+  kind: 'group' | 'loop' | 'cond';
+  /** Группа/цикл — имя; условный блок — условие. */
+  name: string;
+  /** Группа/цикл — цвет палитры; у cond не используется. */
+  color: string;
+  /** Подряд идущие стрелки (по порядку arrows). */
+  arrows: string[];
+  /** cond: подпись ветки «то». */
+  thenLabel?: string;
+  /** cond: подпись ветки «иначе». */
+  elseLabel?: string;
+  /** cond: id первой стрелки ветки «иначе»; без него ветки else нет (П-14). */
+  elseFrom?: string;
+}
+
+/** Диаграмма последовательности (v0.02.01, раздел 5.2 ТЗ). */
+export interface SequenceDiagram {
+  id: string;
+  /** До 60 символов, по умолчанию «Новая ДП». */
+  name: string;
+  /** Block.id, без повторов; порядок = слева направо. */
+  lifelines: string[];
+  /** Порядок массива = вертикальный порядок = нумерация 1..N. */
+  arrows: SeqArrow[];
+  blocks: SeqBlock[];
+}
+
+/** Проект — полное рабочее состояние инструмента.
+ *  sequences (v0.02.01) — опциональное поле: файлы и проекты v0.01.x
+ *  без ДП читаются без изменений (обратная совместимость, W-001). */
 export interface Project {
   architecture: Architecture;
   security: SecuritySpec;
   assignments: Assignment[];
   meta: ProjectMeta;
+  sequences?: SequenceDiagram[];
 }
 
 /** Статус светофора (раздел 3.4, 5.3). */
@@ -150,8 +215,10 @@ export function emptyProject(): Project {
     security: { goals: [], functions: [] },
     assignments: [],
     meta: {},
+    sequences: [],
   };
 }
 
-/** Версия инструмента — отображается в интерфейсе и документации. */
-export const APP_VERSION = '0.01.10';
+/** Версия инструмента — отображается в интерфейсе и документации.
+ *  Синхронизируется с package.json (раздел 10 ТЗ v0.02.01). */
+export const APP_VERSION = '0.02.01b';

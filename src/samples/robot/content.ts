@@ -16,19 +16,19 @@ system:
   description: "Пример 1: уборка и полив городской территории, взаимодействие со смежными системами"
 blocks:
   - id: blk-perc
-    name: "Подсистема восприятия"
+    name: "01. Подсистема восприятия"
     cost: 3
     position: { x: 530, y: 314 }
   - id: blk-plan
-    name: "Планировщик маршрута"
+    name: "02. Планировщик маршрута"
     cost: 4
     position: { x: 950, y: 80 }
   - id: blk-drive
-    name: "Привод движения"
+    name: "03. Привод движения"
     cost: 3
     position: { x: 1370, y: 80 }
   - id: blk-link
-    name: "Модуль связи"
+    name: "04. Модуль связи"
     cost: 2
     position: { x: 530, y: 80 }
   - id: ext-ctrl
@@ -147,19 +147,19 @@ export const DEMO_STATE_YAML = `version: 1
 architecture:
   blocks:
     - id: blk-perc
-      name: "Подсистема восприятия"
+      name: "01. Подсистема восприятия"
       cost: 3
       position: { x: 60, y: 200 }
     - id: blk-plan
-      name: "Планировщик маршрута"
+      name: "02. Планировщик маршрута"
       cost: 4
       position: { x: 420, y: 120 }
     - id: blk-drive
-      name: "Привод движения"
+      name: "03. Привод движения"
       cost: 3
       position: { x: 780, y: 200 }
     - id: blk-link
-      name: "Модуль связи"
+      name: "04. Модуль связи"
       cost: 2
       position: { x: 420, y: 340 }
     - id: ext-ctrl

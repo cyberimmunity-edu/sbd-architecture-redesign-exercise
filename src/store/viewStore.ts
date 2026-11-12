@@ -36,6 +36,16 @@
 import { create } from 'zustand';
 import type { SizeMode } from '../engine/sizing';
 
+/** Выбор объекта в режиме ДП (П-10): ДП, линия жизни, стрелка или блок. */
+export type SeqSelection =
+  | { kind: 'sequence' }
+  | { kind: 'lifeline'; id: string }
+  | { kind: 'arrow'; id: string }
+  | { kind: 'block'; id: string };
+
+/** Режим работы инструмента (Ф-37, v0.02.01): ДАП или ДП. */
+export type AppMode = 'architecture' | 'sequence';
+
 /** Ключ свёрнутого порта: `${blockId}:in` или `${blockId}:out`. */
 export type PortKey = string;
 
@@ -69,6 +79,25 @@ export interface ViewState {
   /** Критичные домены цели, кратко подсвеченные кликом по ЦБ (v0.01.09):
    *  голубое кольцо на канве и в мини-навигаторе, остальные домены приглушены. */
   flashDomainIds: ReadonlySet<string> | null;
+  /** Режим работы: «Архитектура политики» или «Диаграммы последовательности»
+   *  (Ф-37, v0.02.01). Не пишется в историю и localStorage — сбрасывается
+   *  при перезагрузке страницы, как настройки вида. */
+  mode: AppMode;
+  /** Активная ДП в режиме ДП (v0.02.01). */
+  activeSequenceId: string | null;
+  /** Выбранный объект ДП (П-10). */
+  seqSelection: SeqSelection | null;
+  /** Опция «Цвета из ДАП» (Ф-59, П-11): окраска канвы ДП по модели доверия.
+   *  По умолчанию выключена; между сеансами не сохраняется; переключение
+   *  режимов состояние опции сохраняет в рамках сеанса. */
+  seqColorsFromDap: boolean;
+  /** Выделенные стрелки для команд блоков (Shift/Ctrl, Ф-46). */
+  seqSelectedArrows: string[];
+  setMode: (mode: AppMode) => void;
+  setActiveSequence: (id: string | null) => void;
+  setSeqSelection: (selection: SeqSelection | null) => void;
+  toggleSeqColors: () => void;
+  setSeqSelectedArrows: (ids: string[]) => void;
   toggleShowEdges: () => void;
   toggleFocusInternal: () => void;
   /** Свернуть/развернуть стрелки порта (v0.01.03). */
@@ -97,6 +126,22 @@ export const useViewStore = create<ViewState>((set, get) => ({
   highlightedDomainId: null,
   sizeMode: 'off',
   flashDomainIds: null,
+  mode: 'architecture',
+  activeSequenceId: null,
+  seqSelection: null,
+  seqColorsFromDap: false,
+  seqSelectedArrows: [],
+  setMode: (mode) =>
+    set({
+      mode,
+      // Смена режима сбрасывает выбор объектов ДП/ДАП (объекты могут исчезнуть).
+      ...(mode === 'sequence' ? { seqSelection: null, seqSelectedArrows: [] } : { selection: undefined }),
+    }),
+  setActiveSequence: (id) => set({ activeSequenceId: id, seqSelection: null, seqSelectedArrows: [] }),
+  setSeqSelection: (selection) =>
+    set({ seqSelection: selection, seqSelectedArrows: selection ? get().seqSelectedArrows : [] }),
+  toggleSeqColors: () => set({ seqColorsFromDap: !get().seqColorsFromDap }),
+  setSeqSelectedArrows: (ids) => set({ seqSelectedArrows: ids }),
   toggleShowEdges: () =>
     // Смена режима вида возвращает свёрнутые стрелки (v0.01.03).
     set({ showEdges: !get().showEdges, collapsedPorts: {} }),
