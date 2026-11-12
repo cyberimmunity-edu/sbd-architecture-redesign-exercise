@@ -1,5 +1,5 @@
 /**
- * Трассировка стрелок с обходом доменов — v0.01.09.
+ * Трассировка стрелок с обходом доменов — v0.01.10.
  *
  * Штатные кривые Безье React Flow идут по прямой дуге от порта к порту
  * и при плотной раскладке пересекают чужие домены. Здесь форма стрелки
@@ -8,50 +8,65 @@
  *
  * 1. Прямой отрезок «порт → порт» проверяется на пересечение с прямоугольниками
  *    доменов, расширенными на отступ pad; если пересечений нет — стрелка прямая.
- * 2. Ортогональные кандидаты (v0.01.09): ходы с двумя поворотами через
+ *    Пологая прямая (наклон не круче 45°) остаётся чистой прямой; крутая
+ *    заменяется «сплющенной»: горизонтальные подходы-якоря у портов плюс
+ *    прямой участок между ними (v0.01.10) — вход в домен не бывает острым.
+ * 2. Якоря портов (v0.01.10): трассировка ведётся не от порта к порту, а
+ *    между точками-якорями в PORT_STUB px от порта наружу по нормали
+ *    (вправо от правого порта, влево от левого). К ломаной пристыковываются
+ *    горизонтальные «усики» порт → якорь и якорь → порт, поэтому вход в блок
+ *    и выход из него всегда перпендикулярны границе — вход под острым углом
+ *    и вертикальный «крючок» у порта исключены. Якорь не ставится, если
+ *    упирается в чужой домен (тогда конец остаётся прежним).
+ * 3. Свои домены — препятствия (v0.01.10): для трассировки (кандидаты,
+ *    решётка, упрощение, выпрямление) прямоугольники соединяемых доменов
+ *    включаются препятствиями целиком, поэтому путь не может нырнуть внутрь
+ *    своего домена и вынырнуть к порту («вход в порт изнутри блока»
+ *    исключён). Прямой ход порт → порт проверяется по-прежнему без своих
+ *    блоков: обычные стрелки из порта не задевают свой блок и остаются
+ *    прямыми, не теряя раннего выхода.
+ * 4. Ортогональные кандидаты (v0.01.09): ходы с двумя поворотами через
  *    свободные вертикальные/горизонтальные зазоры между препятствиями
  *    (границы препятствий ± 2 px, середина между портами, сами порты —
  *    вырождаются в Г-образный ход с одним поворотом). Кандидаты упорядочены
  *    по близости изгиба к середине и оси пары портов; из свободных
  *    выбирается ход с наименьшим «пробегом» по чужим коридорам
  *    (penaltyExposure).
- * 3. Если кандидатов нет — регулярная решётка (клетка ~20 px) и поиск A*
+ * 5. Если кандидатов нет — регулярная решётка (клетка ~20 px) и поиск A*
  *    по ортогональным направлениям (v0.01.09) со штрафом за поворот
  *    (TURN_COST): состояние поиска — «клетка + направление движения»,
  *    поэтому путь выходит с длинными прямыми участками и минимумом изломов
  *    вместо «ступенек» диагональной решётки прежних версий. Диагонали
  *    решётке не нужны: любой путь без срезания углов переводится в
  *    ортогональный, а манхэттенское расстояние — допустимая эвристика.
- * 4. Ломаная упрощается «прямой видимостью» (краткое пересечение чужой
+ * 6. Ломаная упрощается «прямой видимостью» (краткое пересечение чужой
  *    дорожки разрешено — PENALTY_CROSS_SAMPLES) и выпрямляется
  *    постобработкой (v0.01.09): слияние коллинеарных вершин, удаление
  *    одиночного угла, «лестница» из двух углов заменяется одним
  *    Г-образным ходом.
- * 5. Углы скругляются одной кубической кривой на вершину (v0.01.09):
+ * 7. Углы скругляются одной кубической кривой на вершину (v0.01.09):
  *    касательное приближение дуги, отступ дуги от вершины ограничен
  *    (MAX_CORNER_CUT) — плавные скругления вместо острых изломов и вместо
  *    двойного сглаживания «Чейкин + кривая» прежних версий.
- * 6. Развязка коридоров (v0.01.07): стрелки трассируются последовательно
+ * 8. Развязка коридоров (v0.01.07): стрелки трассируются последовательно
  *    (порядок — в routeEdges), и клетки, уже занятые прежними стрелками,
  *    получают надбавку стоимости (мягкие препятствия). Линии расходятся
  *    параллельными дорожками вместо слияния в пучок; слияние сегментов
  *    при упрощении/выпрямлении допускает лишь краткое пересечение чужой
  *    дорожки, но не наложение.
- * 6а. Родственные группы (v0.01.08): коридоры накапливаются только между
+ * 8а. Родственные группы (v0.01.08): коридоры накапливаются только между
  *     стрелками с общим доменом (edgeRelationGroups) — незнакомые стрелки
  *     не отклоняются от чужих линий и остаются прямыми.
- * 6б. Прямая трасса бракуется только пересечением с доменами (v0.01.08):
+ * 8б. Прямая трасса бракуется только пересечением с доменами (v0.01.08):
  *     штрафы влияют лишь на выбор варианта обхода. Скользящие якоря
  *     портов (portAnchorY, v0.01.08) тянут Y соединения к собеседнику.
- * 7. Стрелки с общим портом расходятся веером (computeEdgeFans):
+ * 9. Стрелки с общим портом расходятся веером (computeEdgeFans):
  *    вертикальный сдвиг точек старта/финала разводит линии, выходящие
  *    из одного порта или входящие в один порт; параллельные стрелки одной
  *    пары доменов дополнительно разводятся перпендикулярным сдвигом.
- * 8. «Усики» у портов (горизонтальный участок) добавляются только при
- *    горизонтальном выходе/входе (v0.01.09): стрелка, уходящая от порта
- *    вертикалью, не получает крючок.
- * 9. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
- *    стрелке прежнего поведения.
+ *    Сдвиг пары не утапливает порт внутрь своего блока (v0.01.10).
+ * 10. Если путь не найден (домены перекрывают весь коридор) — откат к прямой
+ *     стрелке прежнего поведения.
  *
  * Функции чистые и детерминированные: одинаковые входы дают одинаковую
  * форму (важно для тестов и для стабильности картинки при перерисовках).
@@ -78,15 +93,22 @@ export interface RouteOptions {
   cell?: number;
   /** Запас области поиска вокруг охватывающего прямоугольника, px. */
   margin?: number;
-  /** Предпочтительный горизонтальный выход из порта-источника, px. */
+  /**
+   * Направление выхода из порта-источника (v0.01.10): знак X задаёт сторону
+   * порта (+1 — правый, −1 — левый) и направление якоря-«усика» наружу.
+   */
   sourceExit?: RoutePoint;
-  /** Предпочтительный горизонтальный вход в порт-приёмник, px. */
+  /**
+   * Направление входа в порт-приёмник (v0.01.10): знак X задаёт сторону
+   * порта (−1 — левый, +1 — правый) и направление якоря-«усика» наружу.
+   */
   targetEntry?: RoutePoint;
   /**
-   * Прямоугольники соединяемых доменов (v0.01.04): включаются препятствиями
-   * только если прямой отрезок сквозь них (встречные стрелки, когда
-   * приёмник левее источника) — обычные стрелки из порта не задевают свой блок
-   * и остаются прямыми, не теряя раннего выхода.
+   * Прямоугольники соединяемых доменов (v0.01.04). Прямой ход порт → порт
+   * проверяется по-прежнему только пересечением трассы (встречные стрелки,
+   * когда приёмник левее источника); для самой трассировки (v0.01.10)
+   * свои домены включаются препятствиями целиком — путь не может нырнуть
+   * внутрь своего блока и вынырнуть к порту.
    */
   selfRects?: RouteRect[];
   /**
@@ -100,6 +122,12 @@ export interface RouteOptions {
 
 /** Отступ формы стрелки от границы домена по умолчанию, px. */
 export const DEFAULT_PAD = 14;
+/** Длина горизонтального подхода-якоря у порта, px (v0.01.10): вход в блок
+ *  и выход из него — по горизонтали, перпендикулярно границе. */
+export const PORT_STUB = 16;
+/** Допуск распознавания порта на боковой границе своего домена, px
+ *  (v0.01.10): веер и сдвиг пары могут сместить точку порта. */
+const PORT_EDGE_TOL = 14;
 /** Размер клетки решётки по умолчанию, px. */
 export const DEFAULT_CELL = 20;
 /** Запас области поиска по умолчанию, px. */
@@ -133,11 +161,6 @@ const TURN_COST = 2;
  *  PENALTY_CROSS_SAMPLES занятых клеток) разрешено, длинное параллельное
  *  наложение — нет. */
 const PENALTY_CROSS_SAMPLES = 4;
-/** Предельный «пробег» ортогонального кандидата по чужим коридорам
- *  (v0.01.09): кандидат, ложащийся вдоль занятой дорожки (краткое
- *  перпендикулярное пересечение — до нескольких клеток), отклоняется
- *  в пользу решётки A*, которая обойдёт коридор параллельной дорожкой. */
-const PENALTY_CANDIDATE_LIMIT = 8;
 /** Предельное срезание угла скруглением — отступ дуги от вершины, px
  *  (v0.01.09): скругление не приближает стрелку к домену заметнее решётки. */
 const MAX_CORNER_CUT = 10;
@@ -709,6 +732,52 @@ function straightenPath(
   return pts;
 }
 
+/**
+ * Сторона порта на боковой границе своего прямоугольника (v0.01.10):
+ * −1 — левая граница, +1 — правая, null — порт не на боковой границе.
+ * Точка порта может быть смещена веером и сдвигом пары, поэтому допуски
+ * и по X, и по Y.
+ */
+function portSideX(point: RoutePoint, rect: RouteRect): -1 | 1 | null {
+  if (
+    point.y < rect.y - PORT_EDGE_TOL ||
+    point.y > rect.y + rect.height + PORT_EDGE_TOL
+  ) {
+    return null;
+  }
+  if (Math.abs(point.x - rect.x) <= PORT_EDGE_TOL) return -1;
+  if (Math.abs(point.x - (rect.x + rect.width)) <= PORT_EDGE_TOL) return 1;
+  return null;
+}
+
+/** Знак числа: +1 / −1, для нуля и undefined — null. */
+function signOr(value: number | undefined): -1 | 1 | null {
+  if (!value) return null;
+  return value > 0 ? 1 : -1;
+}
+
+/**
+ * Слияние точек на одной прямой (v0.01.10): вершина, отстоящая от прямой
+ * «соседей» меньше чем на 0.5 px, лишняя — прямая остаётся одним отрезком.
+ * Применяется к прямым стрелкам: горизонтальные якоря-«усики» на одной
+ * линии с портом сливаются обратно в чистый отрезок из двух точек.
+ */
+function mergeCollinear(points: RoutePoint[]): RoutePoint[] {
+  if (points.length <= 2) return points;
+  const result: RoutePoint[] = [points[0]];
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const a = result[result.length - 1];
+    const b = points[i];
+    const c = points[i + 1];
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const base = Math.hypot(c.x - a.x, c.y - a.y);
+    if (base > 0 && Math.abs(cross) / base < 0.5) continue;
+    result.push(b);
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
 /** Удаление почти совпадающих последовательных точек. */
 function dedupePoints(points: RoutePoint[]): RoutePoint[] {
   const result: RoutePoint[] = [];
@@ -716,41 +785,6 @@ function dedupePoints(points: RoutePoint[]): RoutePoint[] {
     const last = result[result.length - 1];
     if (last && Math.abs(last.x - point.x) < 0.5 && Math.abs(last.y - point.y) < 0.5) continue;
     result.push(point);
-  }
-  return result;
-}
-
-/**
- * «Усики» у портов: короткий горизонтальный участок, чтобы стрелка выходила
- * из порта по горизонтали (как во Flying Logic). Добавляется только если
- * и сам усик, и отрезок до следующей точки формы не задевают домены.
- * С v0.01.09 усик уместен только при горизонтальном первом/последнем
- * отрезке формы: стрелка, уходящая от порта вертикалью, не получает
- * горизонтальный крючок.
- */
-function withPortHints(
-  points: RoutePoint[],
-  expanded: RouteRect[],
-  sourceExit?: RoutePoint,
-  targetEntry?: RoutePoint,
-): RoutePoint[] {
-  let result = points;
-  if (sourceExit && result.length >= 2) {
-    const [first, second] = result;
-    const horizontal = Math.abs(second.y - first.y) < 0.5;
-    const hint = { x: first.x + sourceExit.x, y: first.y + sourceExit.y };
-    if (horizontal && !crossesAny(first, hint, expanded) && !crossesAny(hint, second, expanded)) {
-      result = [first, hint, ...result.slice(1)];
-    }
-  }
-  if (targetEntry && result.length >= 2) {
-    const last = result[result.length - 1];
-    const prev = result[result.length - 2];
-    const horizontal = Math.abs(last.y - prev.y) < 0.5;
-    const hint = { x: last.x + targetEntry.x, y: last.y + targetEntry.y };
-    if (horizontal && !crossesAny(hint, last, expanded) && !crossesAny(prev, hint, expanded)) {
-      result = [...result.slice(0, -1), hint, last];
-    }
   }
   return result;
 }
@@ -806,11 +840,12 @@ function orthoCandidates(
 
 /**
  * Форма стрелки с обходом препятствий: список точек ломаной от порта-источника
- * к порту-приёмнику. Без пересечений возвращает прямой отрезок, при
+ * к порту-приёмнику. Без пересечений возвращает прямой отрезок (пологий) или
+ * «сплющенную» трассу с горизонтальными подходами (крутая), при
  * невозможности обхода — тоже прямой отрезок (откат к прежнему поведению).
- * Конвейер v0.01.09: прямая → ортогональные кандидаты через свободные
- * зазоры → решётка A* со штрафом за поворот → упрощение → выпрямление →
- * «усики» портов.
+ * Конвейер v0.01.10: якоря портов → прямая → ортогональные кандидаты через
+ * свободные зазоры → решётка A* со штрафом за поворот → упрощение →
+ * выпрямление; свои домены — препятствия трассировки.
  */
 export function computeRoutePath(
   source: RoutePoint,
@@ -827,19 +862,110 @@ export function computeRoutePath(
   ) {
     return [source, target];
   }
+
+  // Якоря портов (v0.01.10): трассировка ведётся между точками в PORT_STUB px
+  // от портов наружу по нормали; к результату пристыковываются горизонтальные
+  // «усики» порт → якорь и якорь → порт — вход в блок и выход из него
+  // всегда перпендикулярны границе. Направление наружу — из подсказок канвы
+  // (знак X sourceExit/targetEntry), иначе по границе своего домена,
+  // иначе навстречу собеседнику (порты лицом к лицу).
+  const selfRects = options?.selfRects ?? [];
+  const expandedOthers = obstacles.map((rect) => expandRect(rect, pad));
+  const srcRect = selfRects.find((rect) => portSideX(source, rect) !== null) ?? null;
+  const dstRect = selfRects.find((rect) => portSideX(target, rect) !== null) ?? null;
+  const srcOut =
+    signOr(options?.sourceExit?.x) ??
+    (srcRect ? portSideX(source, srcRect) : null) ??
+    (target.x >= source.x ? 1 : -1);
+  const dstOut =
+    signOr(options?.targetEntry?.x) ??
+    (dstRect ? portSideX(target, dstRect) : null) ??
+    (source.x >= target.x ? 1 : -1);
+  // «Усик» не ставится, если упирается в чужой домен (свой блок исключён —
+  // усик лежит в его отступе); тогда конец остаётся прежним (старое поведение).
+  const stubClear = (port: RoutePoint, out: number, own: RouteRect | null): boolean =>
+    !crossesAny(
+      port,
+      { x: port.x + out * PORT_STUB, y: port.y },
+      [
+        ...expandedOthers,
+        ...selfRects.filter((rect) => rect !== own).map((rect) => expandRect(rect, pad)),
+      ],
+    );
+  const srcAnchor = stubClear(source, srcOut, srcRect)
+    ? { x: source.x + srcOut * PORT_STUB, y: source.y }
+    : null;
+  const dstAnchor = stubClear(target, dstOut, dstRect)
+    ? { x: target.x + dstOut * PORT_STUB, y: target.y }
+    : null;
+  const start = srcAnchor ?? source;
+  const end = dstAnchor ?? target;
+
+  // Сборка формы: ломаная между якорями + «усики» портов. Якорь убирается,
+  // если трасса сразу идёт назад, — иначе «усик» превращается в крючок
+  // (возможно только у голых точек без своих блоков: с блоками трасса
+  // сквозь свой домен запрещена и назад не идёт).
+  const finish = (path: RoutePoint[]): RoutePoint[] => {
+    let useSrc = srcAnchor;
+    let useDst = dstAnchor;
+    if (useSrc && path.length >= 2) {
+      const outDir = useSrc.x - source.x;
+      const nextDir = path[1].x - useSrc.x;
+      if (outDir * nextDir < 0) useSrc = null;
+    }
+    if (useDst && path.length >= 2) {
+      const prev = path[path.length - 2];
+      const inDir = target.x - useDst.x;
+      const arriveDir = useDst.x - prev.x;
+      if (inDir * arriveDir < 0) useDst = null;
+    }
+    return dedupePoints([
+      source,
+      ...(useSrc ? [useSrc] : []),
+      ...path,
+      ...(useDst ? [useDst] : []),
+      target,
+    ]);
+  };
+
   // Свои домены — препятствия только при встречной геометрии: проверка
   // по прямоугольнику, сжатому на 1 px, чтобы касание порта не считалось.
-  const crossing = (options?.selfRects ?? []).filter((rect) =>
-    segmentIntersectsRect(source, target, expandRect(rect, -1)),
+  const crossing = selfRects.filter((rect) =>
+    segmentIntersectsRect(start, end, expandRect(rect, -1)),
   );
-  const expanded = [...obstacles, ...crossing].map((rect) => expandRect(rect, pad));
+  // Свои блоки с якорями — препятствия трассировки целиком (v0.01.10):
+  // путь не может нырнуть внутрь своего домена и вынырнуть к порту.
+  const anchoredSelf = selfRects.filter(
+    (rect) =>
+      !crossing.includes(rect) &&
+      ((rect === srcRect && srcAnchor) || (rect === dstRect && dstAnchor)),
+  );
+  const expanded = [
+    ...expandedOthers,
+    ...[...crossing, ...anchoredSelf].map((rect) => expandRect(rect, pad)),
+  ];
   const penalty = options?.penalty;
   // Прямой ход проверяется только на пересечение с доменами (v0.01.08):
   // штрафы коридоров не бракуют прямую трассу — незнакомые стрелки больше
   // не отклоняются от чужих линий; штрафы влияют только на выбор варианта
-  // обхода.
-  if (!crossesAny(source, target, expanded)) {
-    return [source, target];
+  // обхода. Свои блоки в проверке прямого хода не участвуют (v0.01.10):
+  // обычные стрелки из порта не задевают свой блок и остаются прямыми.
+  const expandedLegacy = [...expandedOthers, ...crossing.map((rect) => expandRect(rect, pad))];
+  const portLineClear = !crossesAny(source, target, expandedLegacy);
+  const anchorLineClear = !crossesAny(start, end, expanded);
+  if (portLineClear && anchorLineClear) {
+    // Пологая прямая (наклон не круче 45°) остаётся чистой прямой —
+    // максимум длины прямых отрезков (v0.01.09); крутая заменяется
+    // «сплющенной»: горизонтальные подходы-якоря плюс прямой участок
+    // между ними (v0.01.10) — вход в домен не бывает острым.
+    const steep = Math.abs(target.y - source.y) > Math.abs(target.x - source.x);
+    if (!steep) return mergeCollinear([source, target]);
+    return mergeCollinear(finish([start, end]));
+  }
+  if (!portLineClear && anchorLineClear) {
+    // Порты не на прямой видимости (встречная геометрия), но якоря видят
+    // друг друга: пологая трасса со входами по горизонтали.
+    return mergeCollinear(finish([start, end]));
   }
 
   // Порог видимости чуть меньше блокирующего отступа: упрощённая ломаная
@@ -847,12 +973,14 @@ export function computeRoutePath(
   const loose = expanded.map((rect) => expandRect(rect, -4));
 
   // Ортогональные кандидаты (v0.01.09): ходы с двумя поворотами через
-  // свободные зазоры. Из свободных выбирается ход с наименьшим «пробегом»
-  // по чужим коридорам родственной группы (порядок кандидатов — при равном
-  // пробеге), тогда развязка параллельных дорожек сохраняется без решётки.
+  // свободные зазоры. Принимается только свободный ход (v0.01.10): кандидат,
+  // задевающий чужие коридоры родственной группы, отклоняется в пользу
+  // решётки A*, которая обойдёт занятую дорожку параллельной дорожкой —
+  // раньше кандидат с «пробегом» до предела принимался и ложился в один
+  // канал с соседней стрелкой того же порта (совпадающие вертикали).
   let bestLegs: RoutePoint[] | null = null;
   let bestExposure = Infinity;
-  for (const candidate of orthoCandidates(source, target, expanded)) {
+  for (const candidate of orthoCandidates(start, end, expanded)) {
     const legs = dedupePoints(candidate);
     if (legs.length < 2) continue;
     let blocked = false;
@@ -870,21 +998,17 @@ export function computeRoutePath(
       bestLegs = legs;
     }
   }
-  // Кандидат, ложащийся вдоль чужой дорожки родственной группы (пробег
-  // выше предела), отклоняется: решётка A* обойдёт коридор параллельной
-  // дорожкой — развязка стрелок сохраняется.
-  if (bestLegs && bestExposure <= PENALTY_CANDIDATE_LIMIT) {
-    // «Усики» у портов сливаются с горизонтальными коленами кандидата.
-    return withPortHints(bestLegs, loose, options?.sourceExit, options?.targetEntry);
+  if (bestLegs && bestExposure === 0) {
+    return finish(bestLegs);
   }
 
   // Размер клетки подбирается так, чтобы решётка оставалась компактной:
   // область поиска — union портов и всех препятствий с запасом margin.
   let cell = cellSize;
-  let minX = Math.min(source.x, target.x);
-  let minY = Math.min(source.y, target.y);
-  let maxX = Math.max(source.x, target.x);
-  let maxY = Math.max(source.y, target.y);
+  let minX = Math.min(start.x, end.x);
+  let minY = Math.min(start.y, end.y);
+  let maxX = Math.max(start.x, end.x);
+  let maxY = Math.max(start.y, end.y);
   for (const rect of expanded) {
     minX = Math.min(minX, rect.x);
     minY = Math.min(minY, rect.y);
@@ -895,16 +1019,17 @@ export function computeRoutePath(
     cell *= 1.5;
   }
 
-  const grid = buildGrid(source, target, expanded, cell, margin);
-  const startCol = Math.floor((source.x - grid.x0) / grid.cell);
-  const startRow = Math.floor((source.y - grid.y0) / grid.cell);
-  const goalCol = Math.floor((target.x - grid.x0) / grid.cell);
-  const goalRow = Math.floor((target.y - grid.y0) / grid.cell);
-  const start = nearestFreeCellIndex(grid.blocked, grid.cols, grid.rows, startCol, startRow);
-  const goal = nearestFreeCellIndex(grid.blocked, grid.cols, grid.rows, goalCol, goalRow);
-  if (start < 0 || goal < 0) return [source, target];
+  const grid = buildGrid(start, end, expanded, cell, margin);
+  const startCol = Math.floor((start.x - grid.x0) / grid.cell);
+  const startRow = Math.floor((start.y - grid.y0) / grid.cell);
+  const goalCol = Math.floor((end.x - grid.x0) / grid.cell);
+  const goalRow = Math.floor((end.y - grid.y0) / grid.cell);
+  const startCell = nearestFreeCellIndex(grid.blocked, grid.cols, grid.rows, startCol, startRow);
+  const goalCell = nearestFreeCellIndex(grid.blocked, grid.cols, grid.rows, goalCol, goalRow);
+  // Откаты к прежнему поведению — чистая прямая порт → порт без якорей.
+  if (startCell < 0 || goalCell < 0) return [source, target];
 
-  const cells = findGridPath(grid, start, goal, penalty);
+  const cells = findGridPath(grid, startCell, goalCell, penalty);
   if (!cells || cells.length < 2) return [source, target];
 
   const cellPoints = cells.map((index) => ({
@@ -912,12 +1037,10 @@ export function computeRoutePath(
     y: grid.y0 + (Math.floor(index / grid.cols) + 0.5) * grid.cell,
   }));
 
-  const simplified = simplifyPath(dedupePoints([source, ...cellPoints, target]), loose, penalty);
+  const simplified = simplifyPath(dedupePoints([start, ...cellPoints, end]), loose, penalty);
   // Выпрямление (v0.01.09): лестницы и лишние углы сливаются в прямые.
   const straightened = straightenPath(simplified, loose, penalty);
-  // «Усики» проверяются по тому же порогу, что и упрощение: иначе коридор,
-  // зажатый между доменами, отклонял бы усик при допустимой ломаной.
-  return withPortHints(straightened, loose, options?.sourceExit, options?.targetEntry);
+  return finish(straightened);
 }
 
 /**
@@ -1001,6 +1124,10 @@ export interface EdgeFanOffsets {
  * С v0.01.07 у домена два выхода и два входа (обычные и встречные стрелки):
  * группы считаются по паре «узел + сторона» — веер обычных выходов (справа)
  * не смешивается с веером встречных выходов (слева).
+ * С v0.01.10 слоты порта единые для выходов и входов: у порта один ряд
+ * и все его стрелки (выходящие и входящие) разбирают слоты вместе —
+ * раньше выходы и входы веерились порознь, и «усик» входящей стрелки
+ * мог лечь на «усик» выходящей (совпадающие горизонтальные участки).
  * Чистая и детерминированная функция: одинаковые входы — одинаковые сдвиги.
  */
 export function computeEdgeFans(
@@ -1014,47 +1141,33 @@ export function computeEdgeFans(
   for (const edge of edges) fans.set(edge.id, { sourceFan: 0, targetFan: 0 });
   const positionOf = (id: string) => positions[id] ?? { x: 0, y: 0 };
 
-  const assignFan = (
-    groupKey: (edge: FanEdge) => string,
-    otherKey: (edge: FanEdge) => string,
-    side: 'sourceFan' | 'targetFan',
-  ): void => {
-    const groups = new Map<string, FanEdge[]>();
-    for (const edge of edges) {
-      const key = groupKey(edge);
-      const list = groups.get(key);
-      if (list) list.push(edge);
-      else groups.set(key, [edge]);
-    }
-    for (const list of groups.values()) {
-      if (list.length < 2) continue;
-      const sorted = [...list].sort((a, b) => {
-        const pa = positionOf(otherKey(a));
-        const pb = positionOf(otherKey(b));
-        return pa.y - pb.y || pa.x - pb.x || a.id.localeCompare(b.id);
-      });
-      sorted.forEach((edge, index) => {
-        const raw = (index - (sorted.length - 1) / 2) * spacing;
-        const fan = Math.max(-maxOffset, Math.min(maxOffset, raw));
-        fans.get(edge.id)![side] = fan;
-      });
-    }
+  // Использование портов: каждая стрелка занимает слот в порту источника
+  // и в порту приёмника; слоты считаются по паре «узел + сторона».
+  type PortUsage = { edge: FanEdge; role: 'sourceFan' | 'targetFan'; otherId: string };
+  const groups = new Map<string, PortUsage[]>();
+  const add = (edge: FanEdge, role: 'sourceFan' | 'targetFan', portKey: string, otherId: string): void => {
+    const usage: PortUsage = { edge, role, otherId };
+    const list = groups.get(portKey);
+    if (list) list.push(usage);
+    else groups.set(portKey, [usage]);
   };
-
-  // Порт источника: стрелки с общим «узел + сторона выхода» сортируются
-  // по позиции приёмника (v0.01.07: сторона учитывается, по умолчанию right).
-  assignFan(
-    (edge) => `${edge.from}#${edge.sourceSide ?? 'right'}`,
-    (edge) => edge.to,
-    'sourceFan',
-  );
-  // Порт приёмника: стрелки с общим «узел + сторона входа» — по позиции
-  // источника (по умолчанию left).
-  assignFan(
-    (edge) => `${edge.to}#${edge.targetSide ?? 'left'}`,
-    (edge) => edge.from,
-    'targetFan',
-  );
+  for (const edge of edges) {
+    add(edge, 'sourceFan', `${edge.from}#${edge.sourceSide ?? 'right'}`, edge.to);
+    add(edge, 'targetFan', `${edge.to}#${edge.targetSide ?? 'left'}`, edge.from);
+  }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const sorted = [...list].sort((a, b) => {
+      const pa = positionOf(a.otherId);
+      const pb = positionOf(b.otherId);
+      return pa.y - pb.y || pa.x - pb.x || a.edge.id.localeCompare(b.edge.id);
+    });
+    sorted.forEach((usage, index) => {
+      const raw = (index - (sorted.length - 1) / 2) * spacing;
+      const fan = Math.max(-maxOffset, Math.min(maxOffset, raw));
+      fans.get(usage.edge.id)![usage.role] = fan;
+    });
+  }
   return fans;
 }
 
@@ -1288,6 +1401,22 @@ export function routeEdges(layout: RoutingLayout): RoutingOutput {
       const length = Math.hypot(axisX, axisY) || 1;
       from = { x: from.x + (-axisY / length) * shift, y: from.y + (axisX / length) * shift };
       to = { x: to.x + (-axisY / length) * shift, y: to.y + (axisX / length) * shift };
+      // Сдвиг пары не утапливает порт внутрь своего блока (v0.01.10):
+      // X точки остаётся на границе домена или дальше наружу.
+      from = {
+        x:
+          side.source === 'left'
+            ? Math.min(from.x, sourceRect.x)
+            : Math.max(from.x, sourceRect.x + sourceRect.width),
+        y: from.y,
+      };
+      to = {
+        x:
+          side.target === 'left'
+            ? Math.min(to.x, targetRect.x)
+            : Math.max(to.x, targetRect.x + targetRect.width),
+        y: to.y,
+      };
     }
     const obstacles: RouteRect[] = [];
     const selfRects: RouteRect[] = [];

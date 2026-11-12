@@ -41,7 +41,10 @@
  * и в мини-навигаторе (viewStore.highlightedDomainId); клик по строке —
  * фокус на домене (в центр, с укрупнением) и выбор — FocusController
  * ловит событие skib-focus-node и вызывает setCenter; выделение узла
- * синхронизировано с хранилищем (selected-флаги узлов).
+ * синхронизировано с хранилищем (selected-флаги узлов). Клик по цели
+ * безопасности подгоняет масштаб под все критичные для неё домены
+ * (событие skib-focus-rect, v0.01.10); клик по функции — фокус на домене
+ * её размещения.
  * Сброс карточки на свободное место канвы (v0.01.06): сразу создаётся новый
  * домен безопасности с этой функцией внутри (dropFunctionAsNewDomain — одна
  * операция с историей); сброс на внешний системный блок отклоняется
@@ -54,6 +57,7 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
+  getViewportForBounds,
   MiniMap,
   MarkerType,
   Panel,
@@ -73,7 +77,7 @@ import { Button } from '@/components/ui/button';
 import { Crosshair, Network, Scaling, Waypoints } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSkibStore } from '../store/projectStore';
-import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
+import { FOCUS_NODE_EVENT, FOCUS_RECT_EVENT, useViewStore } from '../store/viewStore';
 import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
@@ -116,15 +120,18 @@ const edgeTypes = { routing: RoutingEdge } as const;
 
 /**
  * Фокус на домене по событию FOCUS_NODE_EVENT (v0.01.04) — клик по строке
- * в таблице «Расширенный анализ ДВБ»: диаграмма центрируется на домене,
- * укрупняется (но не отдаляется, если пользователь уже ближе) и домен
- * выделяется. Хук useReactFlow действует только внутри ReactFlowProvider.
+ * в таблице «Расширенный анализ ДВБ» или по функции безопасности (v0.01.10):
+ * диаграмма центрируется на домене, укрупняется (но не отдаляется, если
+ * пользователь уже ближе) и домен выделяется.
+ * Вмещение доменов по событию FOCUS_RECT_EVENT (v0.01.10) — клик по цели
+ * безопасности: масштаб подбирается так, чтобы все перечисленные домены
+ * (критичные для цели) помещались в видимую область диаграммы.
+ * Хук useReactFlow действует только внутри ReactFlowProvider.
  */
 function FocusController() {
-  const { setCenter, getNodes, getZoom } = useReactFlow();
+  const { setCenter, setViewport, getNodes, getZoom } = useReactFlow();
   useEffect(() => {
-    const handler = (event: Event) => {
-      const id = (event as CustomEvent<string>).detail;
+    const focusNode = (id: string): void => {
       if (!id) return;
       const node = getNodes().find((n) => n.id === id);
       if (!node) return;
@@ -136,9 +143,52 @@ function FocusController() {
       const zoom = Math.min(Math.max(getZoom(), 1.25), 2);
       void setCenter(x, y, { zoom, duration: 420 });
     };
-    window.addEventListener(FOCUS_NODE_EVENT, handler);
-    return () => window.removeEventListener(FOCUS_NODE_EVENT, handler);
-  }, [setCenter, getNodes, getZoom]);
+    const fitDomains = (ids: string[]): void => {
+      const nodes = getNodes().filter((node) => ids.includes(node.id));
+      if (nodes.length === 0) return;
+      // Охватывающий прямоугольник перечисленных доменов (measured — точные
+      // габариты, без них — оценка из движка).
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (const node of nodes) {
+        const width = node.measured?.width ?? NODE_ESTIMATED_WIDTH;
+        const height = node.measured?.height ?? NODE_ESTIMATED_HEIGHT;
+        minX = Math.min(minX, node.position.x);
+        minY = Math.min(minY, node.position.y);
+        maxX = Math.max(maxX, node.position.x + width);
+        maxY = Math.max(maxY, node.position.y + height);
+      }
+      // Размер видимой области — сам контейнер канвы.
+      const container = document.querySelector<HTMLElement>('.react-flow');
+      const width = container?.clientWidth ?? 0;
+      const height = container?.clientHeight ?? 0;
+      if (width < 40 || height < 40) return;
+      const viewport = getViewportForBounds(
+        { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        width,
+        height,
+        0.25,
+        2,
+        0.12,
+      );
+      void setViewport(viewport, { duration: 420 });
+    };
+    const handleFocusNode = (event: Event) => {
+      focusNode((event as CustomEvent<string>).detail);
+    };
+    const handleFocusRect = (event: Event) => {
+      const ids = (event as CustomEvent<string[]>).detail;
+      if (Array.isArray(ids) && ids.length > 0) fitDomains(ids);
+    };
+    window.addEventListener(FOCUS_NODE_EVENT, handleFocusNode);
+    window.addEventListener(FOCUS_RECT_EVENT, handleFocusRect);
+    return () => {
+      window.removeEventListener(FOCUS_NODE_EVENT, handleFocusNode);
+      window.removeEventListener(FOCUS_RECT_EVENT, handleFocusRect);
+    };
+  }, [setCenter, setViewport, getNodes, getZoom]);
   return null;
 }
 

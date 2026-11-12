@@ -9,6 +9,9 @@
  * v0.01.06: высота области «Расчёт и статус системы» под инспектором
  * изменяема по вертикали (вложенная вертикальная группа с запоминанием
  * «skib-lab-summary-v1») — для больших примеров область можно вытянуть вверх.
+ * v0.01.10: высота области «Цели безопасности» в левой панели изменяема
+ * по вертикали (вложенная вертикальная группа с запоминанием
+ * «skib-lab-goals-v1») — пропорции пула и списка целей настраиваются.
  * Оркестрирует импорт/экспорт файлов, подтверждения замен (Ф-1, Ф-4, Ф-5,
  * Ф-23), горячие клавиши (НФ-10) и диалог декомпозиции (Ф-16).
  */
@@ -384,15 +387,33 @@ export function ToolApp() {
         autoSaveId="skib-lab-panels-v1"
         className="min-h-0 flex-1"
       >
-        {/* Левая панель: пул карточек + цели безопасности (5.1 v0.01.01). */}
+        {/* Левая панель: пул карточек + цели безопасности (5.1 v0.01.01).
+            Высота области целей изменяема по вертикали (v0.01.10): вложенная
+            вертикальная группа с запоминанием в localStorage — пропорции пула
+            и списка целей настраиваются перетаскиванием разделителя. */}
         <ResizablePanel
           defaultSize={22}
           minSize={16}
           maxSize={36}
           className="flex flex-col border-r border-border bg-card"
         >
-          <PoolPanel />
-          <GoalsPanel />
+          <ResizablePanelGroup
+            direction="vertical"
+            autoSaveId="skib-lab-goals-v1"
+            className="min-h-0 flex-1"
+          >
+            <ResizablePanel defaultSize={52} minSize={10} className="flex flex-col">
+              <PoolPanel />
+            </ResizablePanel>
+            <ResizableHandle
+              className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+              aria-label={ru.canvas.resizeGoalsTitle}
+              title={ru.canvas.resizeGoalsTitle}
+            />
+            <ResizablePanel defaultSize={48} minSize={8} className="flex flex-col">
+              <GoalsPanel />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle
           className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"

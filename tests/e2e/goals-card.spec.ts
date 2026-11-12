@@ -6,6 +6,10 @@
  * приглушены — как при подсветке стрелок) и гаснут сами. Клик по домену
  * в карточке — фокус на диаграмме и выбор. Пример 1 загружается без
  * размещений: для подсветки критичного домена функция размещается вручную.
+ * Вмещение и фокус — v0.01.10: клик по цели подгоняет масштаб так, чтобы
+ * домены всех обеспечивающих механизмов цели помещались в видимую область
+ * диаграммы; клик по функции подсвечивает домен размещения и центрирует его;
+ * клик по размещённой карточке в пуле — то же.
  */
 
 import { expect, test } from '@playwright/test';
@@ -94,4 +98,89 @@ test('v0.01.09: клик по функции в карточке ЦБ откры
   // Инспектор переключается на карточку функции.
   await expect(inspector).toContainText('Карточка функции');
   await expect(inspector).toContainText('Аутентификация команд диспетчера');
+});
+
+test('v0.01.10: клик по цели подгоняет масштаб — критичный домен виден целиком', async ({ page }) => {
+  // fn-auth (обязательная для g-cmd) → «Модуль связи» (blk-link).
+  await placeCard(page, 'fn-auth', 'blk-link');
+
+  const viewport = page.locator('.react-flow__viewport');
+  const before = await viewport.getAttribute('style');
+
+  await page.getByTestId('goal-card-g-cmd').click();
+  await page.waitForTimeout(600); // длительность анимации setViewport — 420 мс
+
+  // Вид изменился: масштаб подогнан под охватывающий прямоугольник
+  // критичных доменов цели.
+  const after = await viewport.getAttribute('style');
+  expect(after).not.toBe(before);
+  // Карточка ЦБ открылась, домен подсвечен (вмещение сопровождает подсветку).
+  await expect(page.getByTestId('goal-inspector')).toBeVisible();
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'true');
+
+  // Цель без размещённых обязательных функций масштаб не меняет
+  // (g-safe: обязательная fn-estop осталась в пуле — критичных доменов нет).
+  await page.getByTestId('fit-view').click();
+  await page.waitForTimeout(600);
+  const fitStyle = await viewport.getAttribute('style');
+  await page.getByTestId('goal-card-g-safe').click();
+  await page.waitForTimeout(600);
+  expect(await viewport.getAttribute('style')).toBe(fitStyle);
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'false');
+});
+
+test('v0.01.10: клик по функции в карточке ЦБ — фокус на домене размещения', async ({ page }) => {
+  await placeCard(page, 'fn-auth', 'blk-link');
+  await page.getByTestId('goal-card-g-cmd').click();
+  // Ждём завершения вмещения — иначе «до» поймает промежуточный кадр анимации.
+  await page.waitForTimeout(600);
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'true');
+
+  // После вмещения домен уже в центре — уводим вид кнопкой «−»,
+  // чтобы фокус по функции был заметен.
+  await page.getByTestId('zoom-out').click();
+  await page.getByTestId('zoom-out').click();
+  await page.waitForTimeout(500);
+
+  const viewport = page.locator('.react-flow__viewport');
+  const before = await viewport.getAttribute('style');
+  await page.getByTestId('goal-fn-fn-auth').click();
+  await page.waitForTimeout(600);
+
+  // Карточка функции открылась, домен размещения в центре диаграммы
+  // (вид изменился) и подсвечен голубым кольцом.
+  await expect(page.getByTestId('inspector-panel')).toContainText('Карточка функции');
+  expect(await viewport.getAttribute('style')).not.toBe(before);
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'true');
+
+  // Функция в пуле домена не имеет — фокус не уводится, карточка открывается.
+  await page.getByTestId('goal-card-g-cmd').click();
+  await page.waitForTimeout(600);
+  await page.getByTestId('goal-fn-fn-sanitize').click();
+  await expect(page.getByTestId('inspector-panel')).toContainText('Карточка функции');
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveAttribute('data-flash', 'false');
+});
+
+test('v0.01.10: клик по размещённой карточке в пуле — фокус на домене размещения', async ({ page }) => {
+  await placeCard(page, 'fn-auth', 'blk-link');
+
+  const viewport = page.locator('.react-flow__viewport');
+  const before = await viewport.getAttribute('style');
+  await page.getByTestId('pool-card-fn-auth').click();
+  await page.waitForTimeout(600);
+
+  // Карточка выбрана (инспектор), домен в центре и подсвечен.
+  await expect(page.getByTestId('inspector-panel')).toContainText('Карточка функции');
+  expect(await viewport.getAttribute('style')).not.toBe(before);
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'true');
+
+  // Подсветка гаснет сама (FLASH_DURATION_MS = 2200 мс).
+  await expect(page.locator('[data-block-id="blk-link"]')).toHaveAttribute('data-flash', 'false', { timeout: 4000 });
+
+  // Клик по карточке из пула (не размещённой) — без подсветки и без фокуса.
+  const untouched = await viewport.getAttribute('style');
+  await page.getByTestId('pool-card-fn-estop').click();
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId('inspector-panel')).toContainText('Карточка функции');
+  expect(await viewport.getAttribute('style')).toBe(untouched);
 });

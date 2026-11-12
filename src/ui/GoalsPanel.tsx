@@ -3,18 +3,22 @@
 /**
  * Панель целей — Ф-19: список целей со светофором и составом связанных
  * функций. В v0.01.01 размещается в левой панели под пулом карточек
- * (раздел 5.1 v0.01.01). Предположения безопасности и признак ПЛО (*)
- * у целей — v0.01.05; левая панель раздвижная — текст помещается целиком.
- * Карточка ЦБ (v0.01.09): клик по цели выбирает её (карточка ЦБ
+ * (раздел 5.1 v0.01.01); высота области целей изменяема по вертикали
+ * (v0.01.10, разделитель над панелью). Предположения безопасности и признак
+ * ПЛО (*) у целей — v0.01.05; левая панель раздвижная — текст помещается
+ * целиком. Карточка ЦБ (v0.01.09): клик по цели выбирает её (карточка ЦБ
  * открывается в инспекторе) и кратко подсвечивает все критичные для цели
  * домены на канве — голубое кольцо, остальные домены приглушены
- * (viewStore.flashDomains, примерно как подсветка стрелок).
+ * (viewStore.flashDomains, примерно как подсветка стрелок). Вмещение
+ * (v0.01.10): тот же клик подгоняет масштаб так, чтобы домены всех
+ * обеспечивающих механизмов цели помещались в видимую область диаграммы
+ * (FOCUS_RECT_EVENT).
  */
 
 import { useMemo } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSkibStore } from '../store/projectStore';
-import { useViewStore } from '../store/viewStore';
+import { FOCUS_RECT_EVENT, useViewStore } from '../store/viewStore';
 import { goalDistribution, recalcCoverage } from '../engine/coverage';
 import { ru } from '../i18n/ru';
 import { StatusDot } from './status';
@@ -36,15 +40,32 @@ export function GoalsPanel() {
     (goal) => goalStatuses.get(goal.id) === 'green',
   ).length;
 
-  /** Клик по цели (v0.01.09): выбор цели + краткая подсветка критичных доменов. */
+  /** Клик по цели (v0.01.09, v0.01.10): выбор цели + краткая подсветка
+   *  критичных доменов + подгонка масштаба, чтобы все домены обеспечивающих
+   *  механизмов цели помещались в видимую область диаграммы. */
   const openGoalCard = (goalId: string): void => {
     setSelection({ kind: 'goal', id: goalId });
     const distribution = goalDistribution(project, goalId);
-    flashDomains(distribution.criticalDomains.map((domain) => domain.id));
+    const domainIds = distribution.criticalDomains.map((domain) => domain.id);
+    flashDomains(domainIds);
+    // Вмещение (v0.01.10): масштаб подгоняется под домены ВСЕХ обеспечивающих
+    // механизмов цели — обязательных и необязательных; канва рассчитывает
+    // охватывающий прямоугольник и подбирает зум. Без размещённых функций
+    // доменов нет — масштаб не меняется, подсветки нет.
+    const fitIds = [
+      ...new Set(
+        distribution.functions
+          .map((fn) => fn.blockId)
+          .filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+    if (fitIds.length > 0) {
+      window.dispatchEvent(new CustomEvent(FOCUS_RECT_EVENT, { detail: fitIds }));
+    }
   };
 
   return (
-    <div className="flex min-h-0 flex-[2] flex-col border-t border-border" data-testid="goals-panel">
+    <div className="flex min-h-0 flex-1 flex-col border-t border-border" data-testid="goals-panel">
       <div className="flex items-center justify-between px-4 py-3">
         <h2 className="text-sm font-semibold text-foreground">{ru.goals.title}</h2>
         <span className="text-xs text-muted-foreground">

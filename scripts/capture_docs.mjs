@@ -8,7 +8,14 @@ import { chromium } from '/home/z/my-project/node_modules/playwright/index.mjs';
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 const OUT = '/home/z/my-project/docs/img';
 
-const browser = await chromium.launch();
+// В чистом окружении Chromium Playwright не установлен — путь задаётся
+// переменной SKIB_CHROMIUM_PATH (правило проекта: браузер ставится до
+// тестирования, см. docs/testing-guide.md).
+const browser = await chromium.launch(
+  process.env.SKIB_CHROMIUM_PATH
+    ? { executablePath: process.env.SKIB_CHROMIUM_PATH, args: ['--no-sandbox'] }
+    : {},
+);
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'ru-RU' });
 
 async function loadRobot() {
@@ -95,5 +102,14 @@ await page.getByRole('option', { name: /принудительно/ }).click();
 await page.waitForTimeout(400);
 await page.screenshot({ path: `${OUT}/07-force-dvb.png` });
 
+// 08 — карточка ЦБ и вмещение критичных доменов (v0.01.10): клик по цели
+// открывает карточку в инспекторе, критичный домен подсвечивается и
+// масштаб подгоняется так, чтобы он помещался в видимую область целиком.
+await loadRobot();
+await drop('fn-auth', 'blk-link');
+await page.getByTestId('goal-card-g-cmd').click();
+await page.waitForTimeout(900);
+await page.screenshot({ path: `${OUT}/08-goal-fit.png` });
+
 await browser.close();
-console.log('OK: скриншоты обновлены (v0.01.06)');
+console.log('OK: скриншоты обновлены (v0.01.10)');

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-# Пересборка архива поставки skib-lab-v0.01.04-src.zip (v0.01.04).
-# Манифест берётся из текущего архива поставки; при пересборке добавляются
-# новые файлы (docs/github-pages.md, .github/workflows/gh-pages.yml) и
-# исключаются устаревшие (скрипты снимков старых ревизий и лог тестов
-# v0.01.01 удалены при чистке старых файлов задачи). Отчёты (ТЗ и отчёт по трассировке, md/pdf) остаются
+# Пересборка архива поставки skib-lab-v0.01.10-src.zip (v0.01.10).
+# Манифест берётся из предыдущего архива поставки; при пересборке добавляются
+# новые файлы (scripts/shot-v010.mjs, docs/img/08-goal-fit.png) и
+# исключаются устаревшие. Отчёты (ТЗ и отчёт по трассировке, md/pdf) остаются
 # в каталоге docs/ архива — отдельно не поставляются. tool-results,
 # .zscripts и прочие рабочие каталоги не входят.
 
@@ -12,23 +11,30 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path('/home/z/my-project')
-CUR_ZIP = ROOT / 'download' / 'skib-lab-v0.01.04-src.zip'
+CUR_ZIP = ROOT / 'download' / 'skib-lab-v0.01.10-src.zip'
 
 ADD_FILES = [
-    'docs/github-pages.md',
-    '.github/workflows/gh-pages.yml',
-    'tests/unit/makefile.test.ts',
+    'scripts/shot-v010.mjs',
+    'docs/img/08-goal-fit.png',
 ]
 REMOVE_FILES = [
-    'scripts/shot-v002.mjs',
-    'scripts/shot-v004.mjs',
-    'test-artifacts/runs-v0.01.01.md',
 ]
+
+
+def fix_zip_name(name: str) -> str:
+    """Имена в старых архивах писались в UTF-8 без флага — zipfile читает
+    их как CP437 (мojибake). Восстановление: CP437 → байты → UTF-8."""
+    if name.isascii():
+        return name
+    try:
+        return name.encode('cp437').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return name
 
 
 def main() -> int:
     with zipfile.ZipFile(CUR_ZIP) as cur:
-        manifest = [name for name in cur.namelist() if not name.endswith('/')]
+        manifest = [fix_zip_name(name) for name in cur.namelist() if not name.endswith('/')]
     names = [name for name in manifest if name not in REMOVE_FILES]
     names = list(dict.fromkeys(names + ADD_FILES))
 

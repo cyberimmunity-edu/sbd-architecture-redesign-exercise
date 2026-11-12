@@ -6,6 +6,8 @@
  * прежней. Новое в v0.01.03: автоматическая раскладка («Раскладка»),
  * свёртка стрелок порта кнопками «+/−», мини-навигатор слева снизу,
  * кнопки масштаба («+», «−», «вместить») и панель расширенного анализа ДВБ.
+ * Новое в v0.01.10: высота области «Цели безопасности» в левой панели
+ * изменяема по вертикали, пропорции запоминаются в localStorage.
  */
 
 import { expect, test } from '@playwright/test';
@@ -202,4 +204,35 @@ test('v0.01.03: панель расширенного анализа ДВБ по
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText('120');
   await expect(rows.last()).toHaveAttribute('data-testid', 'dvb-row-blk-drive');
+});
+
+test('v0.01.10: высота области «Цели безопасности» изменяема по вертикали', async ({ page }) => {
+  // Разделитель между пулом и целями — как у области «Расчёт и статус».
+  const handle = page.locator('[aria-label="Разделитель панелей: потяните, чтобы изменить высоту области «Цели безопасности» в левой панели"]');
+  await expect(handle).toBeVisible();
+
+  const goalsPanel = page.getByTestId('goals-panel');
+  await expect(goalsPanel).toBeVisible();
+  const heightBefore = (await goalsPanel.boundingBox())?.height ?? 0;
+  expect(heightBefore).toBeGreaterThan(0);
+
+  // Тянем разделитель вниз — цели сжимаются, пул растёт (и наоборот).
+  // Плавный драг: react-resizable-panels отслеживает последовательные
+  // pointermove — рывок из одной точки не даёт размера.
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + 160, { steps: 20 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+
+  const heightAfter = (await goalsPanel.boundingBox())?.height ?? 0;
+  expect(heightAfter).toBeLessThan(heightBefore);
+
+  // Пропорции запоминаются: после перезагрузки области остаются сжатыми.
+  await page.reload();
+  await expect(goalsPanel).toBeVisible();
+  await page.waitForTimeout(300);
+  const heightReloaded = (await goalsPanel.boundingBox())?.height ?? 0;
+  expect(Math.abs(heightReloaded - heightAfter)).toBeLessThanOrEqual(6);
 });

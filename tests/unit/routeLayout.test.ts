@@ -139,7 +139,11 @@ describe('Трассировка раскладки пользователя (v0
     }
   });
 
-  it('максимум прямых отрезков: у стрелки не больше трёх поворотов (было до 13)', () => {
+  it('максимум прямых отрезков: у стрелки не больше пяти поворотов (было до 13)', () => {
+    // v0.01.10: у портов стоят горизонтальные якоря-«усики» (перпендикулярный
+    // вход в блок — жёсткое требование), каждый изгиб у якоря добавляет
+    // поворот: раньше контурная стрелка имела 2–3 угла, теперь 4–5.
+    // Приоритет сместился: перпендикулярные входы важнее минимума углов.
     let total = 0;
     let max = 0;
     for (const path of output.paths.values()) {
@@ -147,8 +151,40 @@ describe('Трассировка раскладки пользователя (v0
       total += corners;
       max = Math.max(max, corners);
     }
-    expect(max).toBeLessThanOrEqual(3);
-    expect(total).toBeLessThanOrEqual(30); // факт v0.01.09: 27 (в v0.01.08 — 84)
+    expect(max).toBeLessThanOrEqual(5);
+    expect(total).toBeLessThanOrEqual(60); // факт v0.01.10: 54 (в v0.01.09 — 27)
+  });
+
+  it('вход в блок без острых углов: «усик» у порта или пологая прямая (v0.01.10)', () => {
+    for (const edge of edges) {
+      const path = output.paths.get(edge.id)!;
+      const first = path[0];
+      const second = path[1];
+      const last = path[path.length - 1];
+      const beforeLast = path[path.length - 2];
+      if (path.length === 2) {
+        // Чистая прямая — только пологая (наклон не круче 45°): острого
+        // входа в блок нет.
+        expect(Math.abs(last.y - first.y)).toBeLessThanOrEqual(Math.abs(last.x - first.x) + 0.5);
+        continue;
+      }
+      // У ломаной стрелки выход и вход — горизонтальные участки-«усики»;
+      // якорь отсутствует только если «усик» упёрся в чужой домен.
+      expect(Math.abs(second.y - first.y)).toBeLessThanOrEqual(0.5);
+      expect(Math.abs(last.y - beforeLast.y)).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it('стрелки не заходят внутрь своих доменов (v0.01.10)', () => {
+    for (const edge of edges) {
+      const path = output.paths.get(edge.id)!;
+      // Форма не ныряет внутрь своего блока и не выныривает к порту:
+      // единственное касание своего домена — горизонтальный «усик» от порта.
+      for (let i = 1; i < path.length - 2; i += 1) {
+        expect(segmentIntersectsRect(path[i], path[i + 1], rects.get(edge.from)!)).toBe(false);
+        expect(segmentIntersectsRect(path[i], path[i + 1], rects.get(edge.to)!)).toBe(false);
+      }
+    }
   });
 
   it('стрелки не наложены друг на друга (нет общих участков длиннее 4 px)', () => {

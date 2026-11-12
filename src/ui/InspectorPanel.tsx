@@ -12,7 +12,9 @@
  * её карточку — обеспечивающие механизмы (функции) с весом и размещением,
  * статус распределения (светофор покрытия) и критичные домены с их типами
  * доверия; клик по домену — фокус на диаграмме и выбор, клик по функции —
- * её карточка. Чистые расчёты — recalcCosts/goalDistribution (без мутаций).
+ * её карточка. С v0.01.10 клик по функции подсвечивает домен её размещения
+ * (краткое голубое кольцо) и центрирует его на диаграмме. Чистые расчёты —
+ * recalcCosts/goalDistribution (без мутаций).
  * Под инспектором — панель расчёта и статуса (SummaryPanel).
  */
 
@@ -417,7 +419,16 @@ export function InspectorPanel() {
                       className="flex w-full items-center justify-between gap-2 rounded border border-border bg-card px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
                       data-testid={`goal-fn-${fn.id}`}
                       title={`${fn.name} — ${placedBlock ? ru.pool.placedIn(placedBlock.name) : ru.pool.free}`}
-                      onClick={() => setSelection({ kind: 'card', id: fn.id })}
+                      onClick={() => {
+                        setSelection({ kind: 'card', id: fn.id });
+                        // v0.01.10: клик по функции — подсветка домена размещения
+                        // (голубое кольцо вместо подсветки цели) и центрирование
+                        // домена на диаграмме; у функции в пуле домена нет.
+                        if (fn.blockId) {
+                          clearFlash([fn.blockId]);
+                          window.dispatchEvent(new CustomEvent(FOCUS_NODE_EVENT, { detail: fn.blockId }));
+                        }
+                      }}
                     >
                       <span className="min-w-0 flex-1 truncate text-xs font-medium">{fn.name}</span>
                       <span className="text-xs text-muted-foreground">{fn.cost}</span>

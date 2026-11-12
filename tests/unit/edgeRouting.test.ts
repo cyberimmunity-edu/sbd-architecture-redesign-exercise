@@ -17,6 +17,7 @@ import {
   polylineMidpoint,
   polylineToRoundedPath,
   portAnchorY,
+  routeEdges,
   segmentIntersectsRect,
   DEFAULT_CELL,
   DEFAULT_PAD,
@@ -220,17 +221,137 @@ describe('computeRoutePath: горизонтальные «усики» у по�
     expect(points[points.length - 1]).toEqual(target);
   });
 
-  it('вертикальный выход из порта не получает горизонтальный усик (v0.01.09)', () => {
-    // Домен на одной высоте с портами: стрелка уходит верхним контуром,
-    // первый и последний отрезки вертикальны — усики не ставятся.
+  it('выход и вход из портов выровнены якорями-«усиками» (v0.01.10): горизонталь у порта, обход — между якорями', () => {
+    // Домен на одной высоте с портами: раньше стрелка уходила от порта
+    // вертикалью (острый вход в блок); теперь у порта — горизонтальный
+    // якорь-«усик», вертикальный обход идёт между якорями.
     const middle: RouteRect = { x: 380, y: 120, width: 240, height: 160 };
     const points = computeRoutePath(source, { x: 800, y: 200 }, [middle], hints);
     expect(points[0]).toEqual(source);
     expect(points[points.length - 1]).toEqual({ x: 800, y: 200 });
-    expect(points[1]).not.toEqual({ x: 216, y: 200 });
-    // Первый отрезок — вертикальный (стрелка уходит от порта вверх).
-    expect(Math.abs(points[1].y - source.y)).toBeGreaterThan(0.5);
-    expect(Math.abs(points[1].x - source.x)).toBeLessThan(0.5);
+    // Выход из порта — горизонтальный участок вправо (якорь PORT_STUB = 16).
+    expect(points[1]).toEqual({ x: 216, y: 200 });
+    // Вход в порт — горизонтальный участок слева.
+    expect(points[points.length - 2]).toEqual({ x: 784, y: 200 });
+    // Форма обошла домен.
+    expect(avoidsRect(points, middle)).toBe(true);
+  });
+});
+
+describe('Якоря портов и свои блоки как препятствия (v0.01.10)', () => {
+  it('крутая прямая стрелка становится «сплющенной»: горизонтальные подходы у обоих портов', () => {
+    // Порты почти на одной вертикали: наклон прямой круче 45° — вход в блок
+    // был бы острым; вместо прямой — горизонтальный «усик», наклонный
+    // участок и горизонтальный вход.
+    const points = computeRoutePath({ x: 0, y: 0 }, { x: 60, y: 400 }, []);
+    expect(points).toEqual([
+      { x: 0, y: 0 },
+      { x: 16, y: 0 },
+      { x: 44, y: 400 },
+      { x: 60, y: 400 },
+    ]);
+  });
+
+  it('пологая прямая остаётся чистой прямой из двух точек (наклон не круче 45°)', () => {
+    const points = computeRoutePath({ x: 0, y: 0 }, { x: 400, y: 100 }, []);
+    expect(points).toEqual([
+      { x: 0, y: 0 },
+      { x: 400, y: 100 },
+    ]);
+  });
+
+  it('контурная стрелка входит в порт по горизонтали, перпендикулярно границе', () => {
+    // Стрелка обходит домен по верхнему контуру и спускается к левому порту
+    // приёмника: спуск — в 16 px слева от порта, вход — горизонтальный.
+    const source: RoutePoint = { x: 200, y: 200 };
+    const target: RoutePoint = { x: 800, y: 200 };
+    const box: RouteRect = { x: 380, y: 120, width: 240, height: 160 };
+    const points = computeRoutePath(source, target, [box]);
+    expect(points[points.length - 1]).toEqual(target);
+    expect(points[points.length - 2]).toEqual({ x: 784, y: 200 });
+    expect(Math.abs(points[points.length - 2].y - target.y)).toBeLessThanOrEqual(0.5);
+  });
+
+  it('стрелка не входит в порт изнутри своего домена (selfRects — препятствия)', () => {
+    // Щель между стенами — выше приёмника: путь обязан спуститься к порту.
+    // Раньше спуск проходил сквозь собственный домен приёмника (вход в порт
+    // изнутри блока); теперь свой домен — препятствие трассировки.
+    const source: RoutePoint = { x: 0, y: 200 };
+    const target: RoutePoint = { x: 700, y: 200 };
+    const targetBox: RouteRect = { x: 700, y: 140, width: 200, height: 120 };
+    const upperWall: RouteRect = { x: 380, y: -900, width: 60, height: 980 };
+    const lowerWall: RouteRect = { x: 380, y: 126, width: 60, height: 1200 };
+    const points = computeRoutePath(source, target, [upperWall, lowerWall], {
+      selfRects: [targetBox],
+      sourceExit: { x: 16, y: 0 },
+      targetEntry: { x: -16, y: 0 },
+    });
+    expect(points[0]).toEqual(source);
+    expect(points[points.length - 1]).toEqual(target);
+    // Ни один отрезок не заходит внутрь своего домена приёмника
+    // (касание границы в порту допустимо — усик стартует с контура).
+    expect(avoidsRect(points, expandRect(targetBox, -1))).toBe(true);
+    // Вход в порт — горизонтальный участок слева от него.
+    expect(points[points.length - 2]).toEqual({ x: 684, y: 200 });
+  });
+
+  it('усик не вытягивается дальше соседнего домена: якорь не ставится', () => {
+    // Соседний домен вплотную к правому порту источника: якорь упёрся —
+    // усика нет, стрелка стартует прямо от порта.
+    const ownBox: RouteRect = { x: 180, y: 150, width: 240, height: 100 };
+    const neighbour: RouteRect = { x: 202, y: 192, width: 16, height: 16 };
+    const points = computeRoutePath({ x: 420, y: 200 }, { x: 800, y: 200 }, [neighbour], {
+      selfRects: [ownBox],
+    });
+    expect(points[0]).toEqual({ x: 420, y: 200 });
+    expect(points[1]).not.toEqual({ x: 436, y: 200 });
+  });
+
+  it('выходы и входы одного порта разбирают слоты веера вместе (v0.01.10)', () => {
+    // e1 выходит из правого порта «a», e2 входит в тот же порт (встречная
+    // стрелка): раньше веера считались порознь и обе получали слот 0 —
+    // «усики» совпадали; теперь слоты общие.
+    const positions = {
+      a: { x: 400, y: 100 },
+      b: { x: 0, y: 50 },
+      c: { x: 0, y: 150 },
+    };
+    const edges = [
+      { id: 'out', from: 'a', to: 'b' }, // выход из a#right
+      { id: 'in', from: 'c', to: 'a', targetSide: 'right' as const }, // вход в a#right
+    ];
+    const fans = computeEdgeFans(edges, positions);
+    expect(fans.get('out')!.sourceFan).toBe(-4.5); // другой конец выше — верхний слот
+    expect(fans.get('in')!.targetFan).toBe(4.5); // вход — нижний слот того же порта
+  });
+
+  it('сдвиг пары не утапливает порт внутрь своего блока (v0.01.10)', () => {
+    // Стрелки «туда-обратно» между блоками на диагонали: сдвиг пары
+    // перпендикулярен наклонной оси и мог сместить порт внутрь блока.
+    const rects = new Map<string, RouteRect>([
+      ['a', { x: 0, y: 0, width: 200, height: 120 }],
+      ['b', { x: 900, y: 700, width: 200, height: 120 }],
+    ]);
+    const output = routeEdges({
+      rects,
+      edges: [
+        { id: 'f', from: 'a', to: 'b' },
+        { id: 'r', from: 'b', to: 'a' },
+      ],
+    });
+    for (const [id, path] of output.paths) {
+      const [from, to] = id === 'f' ? ['a', 'b'] : ['b', 'a'];
+      const sourceRect = rects.get(from)!;
+      const targetRect = rects.get(to)!;
+      const side = output.sides.get(id)!;
+      const sourcePortX = side.source === 'left' ? sourceRect.x : sourceRect.x + sourceRect.width;
+      const targetPortX = side.target === 'left' ? targetRect.x : targetRect.x + targetRect.width;
+      // Порт остаётся на границе или дальше наружу — не внутри блока.
+      if (side.source === 'left') expect(path[0].x).toBeLessThanOrEqual(sourcePortX + 0.5);
+      else expect(path[0].x).toBeGreaterThanOrEqual(sourcePortX - 0.5);
+      if (side.target === 'left') expect(path[path.length - 1].x).toBeLessThanOrEqual(targetPortX + 0.5);
+      else expect(path[path.length - 1].x).toBeGreaterThanOrEqual(targetPortX - 0.5);
+    }
   });
 });
 
@@ -420,12 +541,15 @@ describe('Ортогональные кандидаты, группы и яко�
     const box: RouteRect = { x: 60, y: 130, width: 30, height: 30 };
     // Прямая задевает домен; изгиб подбирается по свободной границе
     // препятствия (46 − 2 = 44) — горизонталь-первый кандидат при широкой
-    // стрелке: два прямых колена без «ступенек» A*.
+    // стрелке: два прямых колена без «ступенек» A*. С v0.01.10 у портов
+    // стоят горизонтальные якоря-«усики» (PORT_STUB = 16).
     const points = computeRoutePath(source, target, [box]);
     expect(points).toEqual([
       { x: 0, y: 150 },
+      { x: 16, y: 150 },
       { x: 44, y: 150 },
       { x: 44, y: 250 },
+      { x: 784, y: 250 },
       { x: 800, y: 250 },
     ]);
   });

@@ -3,12 +3,16 @@
 /**
  * Пул карточек — зона «Пул карточек» раздела 5.1, Ф-7: имя, стоимость,
  * точечные индикаторы целей, статус; фильтры «все / свободные / размещённые».
- * Перетаскивание карточки в домен создаёт размещение (Ф-8).
+ * Перетаскивание карточки в домен создаёт размещение (Ф-8). Клик по карточке
+ * выбирает её; с v0.01.10 клик по размещённой карточке подсвечивает домен
+ * размещения (краткое голубое кольцо) и центрирует его на диаграмме
+ * (FOCUS_NODE_EVENT).
  */
 
 import { useMemo, useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSkibStore } from '../store/projectStore';
+import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
 import { recalcCoverage } from '../engine/coverage';
 import type { SecurityFunction, Status } from '../engine/types';
 import { STATUS_COLORS, StatusDot } from './status';
@@ -20,15 +24,19 @@ export function CardItem({
   fn,
   status,
   goalStatuses,
+  placementBlockId,
   placementBlockName,
 }: {
   fn: SecurityFunction;
   status: Status;
   goalStatuses: Map<string, Status>;
+  /** Идентификатор домена размещения (v0.01.10) — для подсветки и фокуса. */
+  placementBlockId?: string;
   placementBlockName?: string;
 }) {
   const setSelection = useSkibStore((s) => s.setSelection);
   const selection = useSkibStore((s) => s.selection);
+  const flashDomains = useViewStore((s) => s.flashDomains);
   const isSelected = selection?.kind === 'card' && selection.id === fn.id;
   const links = fn.implements ?? [];
 
@@ -40,7 +48,15 @@ export function CardItem({
         event.dataTransfer.setData('application/x-skib-function', fn.id);
         event.dataTransfer.effectAllowed = 'move';
       }}
-      onClick={() => setSelection({ kind: 'card', id: fn.id })}
+      onClick={() => {
+        setSelection({ kind: 'card', id: fn.id });
+        // v0.01.10: клик по размещённой карточке — подсветка домена размещения
+        // и фокус на нём (в центр, с укрупнением); карточка в пуле домена не имеет.
+        if (placementBlockId) {
+          flashDomains([placementBlockId]);
+          window.dispatchEvent(new CustomEvent(FOCUS_NODE_EVENT, { detail: placementBlockId }));
+        }
+      }}
       data-testid={`pool-card-${fn.id}`}
       title={`${fn.name} — стоимость ${fn.cost}. ${ru.pool.dragHint}`}
     >
@@ -140,19 +156,21 @@ export function PoolPanel() {
           {visible.length === 0 && (
             <p className="px-1 text-xs italic text-muted-foreground">{ru.pool.empty}</p>
           )}
-          {visible.map((fn) => (
-            <CardItem
-              key={fn.id}
-              fn={fn}
-              status="neutral"
-              goalStatuses={goalStatuses}
-              placementBlockName={
-                placementByFn.has(fn.id)
-                  ? (blockNameById.get(placementByFn.get(fn.id)!) ?? '')
-                  : undefined
-              }
-            />
-          ))}
+          {visible.map((fn) => {
+            const placementBlockId = placementByFn.get(fn.id);
+            return (
+              <CardItem
+                key={fn.id}
+                fn={fn}
+                status="neutral"
+                goalStatuses={goalStatuses}
+                placementBlockId={placementBlockId}
+                placementBlockName={
+                  placementBlockId ? (blockNameById.get(placementBlockId) ?? '') : undefined
+                }
+              />
+            );
+          })}
         </div>
       </ScrollArea>
       <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">{ru.pool.dragHint}</div>
