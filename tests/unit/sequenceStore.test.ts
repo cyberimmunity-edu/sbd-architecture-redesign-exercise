@@ -93,6 +93,32 @@ describe('Хранилище ДП: создание, линии жизни, ст
     expect(restored.arrows).toHaveLength(1);
   });
 
+  it('Вставка линии жизни в зазор между другими (v0.02.02): addLifeline с индексом', () => {
+    const seqId = useSkibStore.getState().createSequence()!;
+    const blocks = useSkibStore.getState().project.architecture.blocks;
+    const [a, b, c, d] = blocks;
+    useSkibStore.getState().addLifeline(seqId, a.id);
+    useSkibStore.getState().addLifeline(seqId, c.id);
+    // Вставка между a и c — индекс 1 (зазор между линиями 0 и 1).
+    expect(useSkibStore.getState().addLifeline(seqId, b.id, 1)).not.toBeNull();
+    // Вставка в начало — индекс 0.
+    expect(useSkibStore.getState().addLifeline(seqId, d.id, 0)).not.toBeNull();
+    const seq = useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!;
+    expect(seq.lifelines).toEqual([d.id, a.id, b.id, c.id]);
+    // Повторное добавление блокируется независимо от индекса.
+    expect(useSkibStore.getState().addLifeline(seqId, a.id, 99)).toBeNull();
+    // Некорректный индекс (за границами) — вставка в конец.
+    const e = blocks[4];
+    expect(useSkibStore.getState().addLifeline(seqId, e.id, 42)).not.toBeNull();
+    expect(
+      useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!.lifelines,
+    ).toEqual([d.id, a.id, b.id, c.id, e.id]);
+    // Вставка — одна операция истории: Ctrl+Z убирает последнюю линию жизни.
+    useSkibStore.getState().undo();
+    const undone = useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!;
+    expect(undone.lifelines).toEqual([d.id, a.id, b.id, c.id]);
+  });
+
   it('Стрелки: лимит 100, self-стрелка, подпись до 60 символов (Ф-42…Ф-45, П-5)', () => {
     const seqId = useSkibStore.getState().createSequence()!;
     const [a, b] = useSkibStore.getState().project.architecture.blocks;

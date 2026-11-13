@@ -221,4 +221,4 @@ export function emptyProject(): Project {
 
 /** Версия инструмента — отображается в интерфейсе и документации.
  *  Синхронизируется с package.json (раздел 10 ТЗ v0.02.01). */
-export const APP_VERSION = '0.02.01b';
+export const APP_VERSION = '0.02.02';

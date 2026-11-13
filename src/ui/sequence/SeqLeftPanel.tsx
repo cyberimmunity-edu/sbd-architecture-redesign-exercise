@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useSkibStore } from '../../store/projectStore';
 import { useViewStore } from '../../store/viewStore';
+import { seqDndPayload } from './seqDnd';
 import { ru } from '../../i18n/ru';
 
 export interface SeqLeftPanelProps {
@@ -73,23 +74,31 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
     };
 
   return (
-    <div className="flex h-full flex-col" data-testid="seq-left-panel">
+    <div className="@container flex h-full flex-col" data-testid="seq-left-panel">
       <div className="border-b border-border px-3 py-2">
-        <span className="text-sm font-semibold">{ru.seq.leftTitle}</span>
-        <div className="mt-1.5 flex gap-1">
+        <span className="block wrap-anywhere text-sm font-semibold">{ru.seq.leftTitle}</span>
+        {/* Кнопки с переносом подписи: при узкой панели текст читается
+            целиком, не обрезается (v0.02.02); при ширине панели < 240 px
+            кнопки ставятся в столбик, чтобы подписи не ломались побуквенно. */}
+        <div className="mt-1.5 flex flex-col gap-1 @min-[240px]:flex-row">
           <Button
             size="sm"
             variant="outline"
-            className="h-7 flex-1"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere @min-[240px]:flex-1"
             data-testid="seq-create"
-            onClick={() => createSequence()}
+            onClick={() => {
+              // v0.02.02: новая ДП сразу становится активной — иначе при
+              // уже существующих ДП пустая ДП оставалась бы невидимой.
+              const id = createSequence();
+              if (id) setActiveSequence(id);
+            }}
           >
             <Plus className="mr-1 h-3.5 w-3.5" /> {ru.seq.createSequence}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 flex-1"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere @min-[240px]:flex-1"
             data-testid="seq-clear"
             disabled={!active || (active.lifelines.length === 0 && active.arrows.length === 0 && active.blocks.length === 0)}
             onClick={() => active && setPendingClear(active.id)}
@@ -120,7 +129,7 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
                   className="min-w-0 flex-1 text-left"
                   onClick={() => setActiveSequence(seq.id)}
                 >
-                  <span className="block truncate text-sm font-medium" title={seq.name}>
+                  <span className="block whitespace-normal break-words text-sm font-medium" title={seq.name}>
                     {seq.name}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
@@ -162,12 +171,16 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
                 onDragStart={(event) => {
                   event.dataTransfer.setData('text/plain', `skib-goal:${goal.id}`);
                   event.dataTransfer.effectAllowed = 'copy';
+                  seqDndPayload.current = `skib-goal:${goal.id}`;
+                }}
+                onDragEnd={() => {
+                  seqDndPayload.current = null;
                 }}
                 className="cursor-grab rounded-md border border-border bg-card px-2 py-1.5 text-xs hover:bg-muted/60"
                 data-testid={`seq-goal-card-${goal.id}`}
                 title={goal.description ?? goal.name}
               >
-                <span className="block truncate">{goal.name}</span>
+                <span className="block break-words leading-snug">{goal.name}</span>
               </div>
             ))}
           </div>
@@ -176,11 +189,11 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
 
       {/* Блок импорта/экспорта (Ф-39, П-8). */}
       <div className="border-t border-border p-2">
-        <div className="grid grid-cols-2 gap-1">
+        <div className="grid grid-cols-1 gap-1 @min-[240px]:grid-cols-2">
           <Button
             size="sm"
             variant="outline"
-            className="h-7 justify-start px-2 text-xs"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
             data-testid="seq-import-yaml"
             title={ru.seq.importYamlTitle}
             onClick={() => yamlInput.current?.click()}
@@ -190,7 +203,7 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
           <Button
             size="sm"
             variant="outline"
-            className="h-7 justify-start px-2 text-xs"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
             data-testid="seq-import-puml"
             title={ru.seq.importPumlTitle}
             onClick={() => pumlInput.current?.click()}
@@ -200,7 +213,7 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
           <Button
             size="sm"
             variant="outline"
-            className="h-7 justify-start px-2 text-xs"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
             data-testid="seq-export-yaml"
             title={ru.seq.exportYamlTitle}
             onClick={onExportYaml}
@@ -210,7 +223,7 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
           <Button
             size="sm"
             variant="outline"
-            className="h-7 justify-start px-2 text-xs"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
             data-testid="seq-export-puml"
             title={ru.seq.exportPumlTitle}
             onClick={onExportPuml}

@@ -123,8 +123,10 @@ interface SkibStore {
   deleteSequence: (id: string) => void;
   /** Переименование ДП (до 60 символов). */
   renameSequence: (id: string, name: string) => void;
-  /** Добавление линии жизни из набора доменов ДАП (П-12): домен вне ДАП недобавляем. */
-  addLifeline: (seqId: string, blockId: string) => string | null;
+  /** Добавление линии жизни из набора доменов ДАП (П-12): домен вне ДАП недобавляем.
+   *  index — место вставки между существующими линиями жизни (v0.02.02):
+   *  зазор между линиями index-1 и index; по умолчанию — в конец. */
+  addLifeline: (seqId: string, blockId: string, index?: number) => string | null;
   /** Убрать линию жизни: удаляются её стрелки, блоки чистятся (одна операция). */
   removeLifeline: (seqId: string, blockId: string) => void;
   /** Порядок линий жизни (перетаскивание — без истории, П-7). */
@@ -853,8 +855,10 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
   },
 
   /** Перетаскивание домена из набора на канву → линия жизни (Ф-38, П-12).
-   *  Домен вне ДАП недобавляем; повторное добавление блокируется; лимит 24. */
-  addLifeline: (seqId, blockId) => {
+   *  Домен вне ДАП недобавляем; повторное добавление блокируется; лимит 24.
+   *  v0.02.02: index — вставка между существующими линиями жизни (ближайший
+   *  зазор по месту сброса); без index — в конец списка. */
+  addLifeline: (seqId, blockId, index) => {
     const { project } = get();
     const seq = (project.sequences ?? []).find((s) => s.id === seqId);
     const block = project.architecture.blocks.find((b) => b.id === blockId);
@@ -864,7 +868,13 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     let newId: string | null = null;
     updateSequence(set, get, seqId, (current) => {
       newId = blockId;
-      return { ...current, lifelines: [...current.lifelines, blockId] };
+      const lifelines = [...current.lifelines];
+      const at =
+        index === undefined || index < 0 || index > lifelines.length
+          ? lifelines.length
+          : index;
+      lifelines.splice(at, 0, blockId);
+      return { ...current, lifelines };
     });
     return newId;
   },

@@ -240,7 +240,7 @@ export function InspectorPanel() {
                 {cards.map((fn) => (
                   <div key={fn.id} className="rounded border border-border bg-card px-2 py-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium" title={fn.name}>
+                      <span className="min-w-0 flex-1 break-words text-xs font-medium" title={fn.name}>
                         {fn.name}
                       </span>
                       <span className="text-xs text-muted-foreground">{fn.cost}</span>
@@ -329,7 +329,7 @@ export function InspectorPanel() {
                 const goal = goalById.get(link.goal);
                 return (
                   <li key={index} className="flex items-center justify-between gap-2 text-xs">
-                    <span className="min-w-0 truncate text-muted-foreground">{goal?.name ?? link.goal}</span>
+                    <span className="min-w-0 break-words text-muted-foreground">{goal?.name ?? link.goal}</span>
                     <span
                       className={`shrink-0 rounded px-1.5 py-0.5 ${
                         link.weight === 'mandatory'
@@ -430,7 +430,7 @@ export function InspectorPanel() {
                         }
                       }}
                     >
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium">{fn.name}</span>
+                      <span className="min-w-0 flex-1 break-words text-xs font-medium">{fn.name}</span>
                       <span className="text-xs text-muted-foreground">{fn.cost}</span>
                       <span
                         className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${
@@ -484,7 +484,7 @@ export function InspectorPanel() {
                       onMouseEnter={() => setHighlightedDomain(domain.id)}
                       onMouseLeave={() => setHighlightedDomain(null)}
                     >
-                      <span className="min-w-0 flex-1 truncate text-xs font-medium">{domain.name}</span>
+                      <span className="min-w-0 flex-1 break-words text-xs font-medium">{domain.name}</span>
                       <span
                         className="shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold"
                         style={{ border: `1px solid ${badge.color.border}`, background: badge.color.fill }}

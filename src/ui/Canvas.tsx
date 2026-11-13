@@ -828,8 +828,10 @@ function CanvasInner() {
           }
           nodeStrokeWidth={highlightedDomainId || flashDomainIds ? 2 : 1}
         />
-        {/* Кнопки вида канвы (v0.01.02–v0.01.03): стрелки, периметр, раскладка. */}
-        <Panel position="top-left" className="flex items-center gap-1.5">
+        {/* Кнопки вида канвы (v0.01.02–v0.01.03): стрелки, периметр, раскладка.
+            max-width = ширина канвы: при узком окне кнопки переносятся на
+            вторую строку вместо выхода под боковую панель (v0.02.02). */}
+        <Panel position="top-left" className="flex max-w-[calc(100%-12px)] flex-wrap items-center gap-1.5">
           <Button
             size="sm"
             variant={showEdges ? 'secondary' : 'outline'}

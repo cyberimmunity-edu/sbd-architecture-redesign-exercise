@@ -46,6 +46,7 @@ import {
 import { CircleCheck, CircleX, LogOut, SearchCheck, Trash2, Unlink } from 'lucide-react';
 import { useSkibStore } from '../../store/projectStore';
 import { useViewStore } from '../../store/viewStore';
+import { seqDndPayload } from './seqDnd';
 import { validateSequencesRows } from '../../engine/sequence';
 import type { SeqValidationRow } from '../../engine/sequence';
 import { SEQ_BLOCK_COLORS, SEQ_TEXT_LIMIT } from '../../engine/types';
@@ -55,7 +56,9 @@ import { useToast } from '@/hooks/use-toast';
 export function SeqRightPanel() {
   return (
     <ResizablePanelGroup direction="vertical" autoSaveId="skib-lab-seq-right-v1" className="min-h-0 flex-1">
-      <ResizablePanel defaultSize={34} minSize={8} className="flex flex-col">
+      {/* v0.02.02: доля «Набора доменов» увеличена (34 → 40) — при длинных
+          названиях доменов список оставался в полоске в пару пикселей. */}
+      <ResizablePanel defaultSize={40} minSize={8} className="flex flex-col">
         <DomainsPool />
       </ResizablePanel>
       <ResizableHandle
@@ -125,15 +128,20 @@ function DomainsPool() {
                 onDragStart={(event) => {
                   event.dataTransfer.setData('text/plain', `skib-domain:${block.id}`);
                   event.dataTransfer.effectAllowed = 'copy';
+                  // Payload доступен канве до drop — индикатор места вставки (v0.02.02).
+                  seqDndPayload.current = `skib-domain:${block.id}`;
                 }}
-                className={`flex items-center justify-between rounded-md border border-border px-2 py-1.5 text-xs ${
+                onDragEnd={() => {
+                  seqDndPayload.current = null;
+                }}
+                className={`flex items-center justify-between gap-1 rounded-md border border-border px-2 py-1.5 text-xs ${
                   isIncluded ? 'opacity-45' : 'cursor-grab bg-card hover:bg-muted/60'
                 }`}
                 data-testid={`seq-domain-card-${block.id}`}
                 data-in-sequence={isIncluded ? 'true' : 'false'}
                 title={isIncluded ? ru.seq.inSequence : ru.seq.domainsHint}
               >
-                <span className="min-w-0 flex-1 truncate">{block.name}</span>
+                <span className="min-w-0 flex-1 break-words leading-snug">{block.name}</span>
                 {block.external ? (
                   <span className="ml-1 shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                     {ru.seq.externalBadge}
@@ -237,7 +245,7 @@ function SeqInspector() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 justify-start"
+                className="h-auto min-h-8 justify-start whitespace-normal! px-2 py-1 text-left text-sm leading-snug wrap-anywhere"
                 data-testid="seq-remove-lifeline"
                 onClick={() => {
                   removeLifeline(active.id, seqSelection.id);
@@ -286,7 +294,7 @@ function SeqInspector() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 justify-start text-xs"
+                      className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
                       data-testid="seq-leave-block"
                       onClick={() => {
                         // «Покинуть блок»: блок пересобирается без этой стрелки (5.4).
@@ -300,7 +308,7 @@ function SeqInspector() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 justify-start text-red-600 dark:text-red-400"
+                  className="h-auto min-h-8 justify-start whitespace-normal! px-2 py-1 text-left text-sm leading-snug wrap-anywhere text-red-600 dark:text-red-400"
                   data-testid="seq-delete-arrow"
                   onClick={() => {
                     deleteSeqArrow(active.id, arrow.id);
@@ -411,7 +419,7 @@ function SeqInspector() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 justify-start"
+                  className="h-auto min-h-8 justify-start whitespace-normal! px-2 py-1 text-left text-sm leading-snug wrap-anywhere"
                   data-testid="seq-ungroup"
                   onClick={() => {
                     ungroupSeqBlock(active.id, block.id);
@@ -423,7 +431,7 @@ function SeqInspector() {
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 justify-start text-red-600 dark:text-red-400"
+                  className="h-auto min-h-8 justify-start whitespace-normal! px-2 py-1 text-left text-sm leading-snug wrap-anywhere text-red-600 dark:text-red-400"
                   data-testid="seq-delete-block"
                   onClick={() => setPendingBlockDelete(block.id)}
                 >
@@ -494,7 +502,9 @@ function SeqValidation() {
 
   return (
     <div className="flex h-full flex-col" data-testid="seq-validation">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      {/* flex-wrap: при узкой панели «Проверить ДП» уходит под заголовок
+          вместо обрезки (v0.02.02). */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
         <span className="text-sm font-semibold">{ru.seq.validationTitle}</span>
         <Button size="sm" variant="outline" className="h-7" data-testid="seq-check" onClick={runCheck}>
           <SearchCheck className="mr-1 h-3.5 w-3.5" /> {ru.seq.checkSequences}

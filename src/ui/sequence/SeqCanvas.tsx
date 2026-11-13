@@ -10,6 +10,8 @@
  *
  * Жесты:
  * - перетаскивание домена из «Набора доменов» на канву → линия жизни (Ф-38);
+ *   место вставки — ближайший зазор между линиями жизни, не только края,
+ *   с индикатором вставки во время перетаскивания (v0.02.02);
  * - перетаскивание ЦБ из списка левой панели на канву (Ф-65, v0.02.01b):
  *   при отсутствии ДП создаётся ДП с именем ЦБ и линиями жизни критичных
  *   доменов; иначе критичные домены добавляются в текущую ДП;
@@ -47,6 +49,7 @@ import { computeSeqColors } from '../../engine/sequence';
 import { TRUST_COLORS } from '../status';
 import { CanvasControls } from '../CanvasControls';
 import { SeqToolbar } from './SeqToolbar';
+import { seqDndPayload } from './seqDnd';
 import { canvasBackgroundColor, useSkibTheme } from '../theme';
 import { ru } from '../../i18n/ru';
 
@@ -88,6 +91,9 @@ export interface SeqDiagramNodeData extends Record<string, unknown> {
   colorsLifelines: Record<string, 'red' | 'yellow' | 'green'>;
   colorsArrows: Record<string, 'red' | 'green'>;
   colorsFromDap: boolean;
+  /** Индекс вставки линии жизни при перетаскивании домена (v0.02.02):
+   *  зазор между колонками dropIndex-1 и dropIndex; null — нет перетаскивания. */
+  dropIndex: number | null;
   onSelectLifeline: (id: string) => void;
   onSelectArrow: (id: string, additive: boolean) => void;
   onSelectBlock: (id: string) => void;
@@ -117,6 +123,7 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
     colorsLifelines,
     colorsArrows,
     colorsFromDap,
+    dropIndex,
     onSelectLifeline,
     onSelectArrow,
     onSelectBlock,
@@ -247,6 +254,25 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
 
   return (
     <div className="relative" style={{ width, height }} data-testid="seq-diagram-node">
+      {/* Индикатор места вставки линии жизни (v0.02.02): вертикальная
+          пунктирная линия в зазоре, куда попадёт домен при сбросе. */}
+      {dropIndex != null && (
+        <div
+          className="nodrag nopan pointer-events-none absolute"
+          style={{
+            left: xOf(dropIndex) - COLUMN_W / 2 - 1,
+            top: 0,
+            width: 4,
+            height: Math.max(HEADER_H + arrowsHeight, 96) + LIFELINE_EXTEND,
+            zIndex: 35,
+            borderLeft: '2px dashed #38BDF8',
+            filter: 'drop-shadow(0 0 4px rgba(56, 189, 248, 0.6))',
+            pointerEvents: 'none',
+          }}
+          data-testid="seq-insert-marker"
+        />
+      )}
+
       {/* Заголовки линий жизни. */}
       {lifelines.map((lifeline, index) => {
         const selected = selectedLifeline === lifeline.id;
@@ -675,11 +701,14 @@ function SeqCanvasInner() {
   const setSeqSelectedArrows = useViewStore((s) => s.setSeqSelectedArrows);
   const seqColorsFromDap = useViewStore((s) => s.seqColorsFromDap);
   const { toast } = useToast();
+  const { screenToFlowPosition } = useReactFlow();
 
   const sequences = project.sequences ?? [];
   const active = sequences.find((s) => s.id === activeSequenceId) ?? null;
 
   const [dropHint, setDropHint] = useState(false);
+  /** Зазор вставки линии жизни при перетаскивании домена (v0.02.02). */
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   const colors = useMemo(
     () =>
@@ -713,6 +742,7 @@ function SeqCanvasInner() {
       colorsLifelines: Object.fromEntries(colors.lifelines) as Record<string, 'red' | 'yellow' | 'green'>,
       colorsArrows: Object.fromEntries(colors.arrows) as Record<string, 'red' | 'green'>,
       colorsFromDap: seqColorsFromDap,
+      dropIndex,
       onSelectLifeline: (id) => setSeqSelection({ kind: 'lifeline', id }),
       onSelectArrow: (id, additive) => {
         setSeqSelection({ kind: 'arrow', id });
@@ -742,7 +772,7 @@ function SeqCanvasInner() {
       },
       onClearSelection: () => setSeqSelection(null),
     };
-  }, [active, project.architecture.blocks, seqSelection, seqSelectedArrows, seqColorsFromDap, colors, addSeqArrow, moveSeqArrow, reorderLifelines, setSeqSelection, setSeqSelectedArrows, toast]);
+  }, [active, project.architecture.blocks, seqSelection, seqSelectedArrows, seqColorsFromDap, colors, dropIndex, addSeqArrow, moveSeqArrow, reorderLifelines, setSeqSelection, setSeqSelectedArrows, toast]);
 
   const width = Math.max((active?.lifelines.length ?? 0) * COLUMN_W + PAD_X * 2, 480);
   const height = HEADER_H + (active?.arrows.length ?? 0) * ROW_H + PAD_BOTTOM;
@@ -779,18 +809,45 @@ function SeqCanvasInner() {
   }, [seqId, arrowCount]);
 
   // HTML5 DnD: сброс домена из набора на канву → линия жизни (Ф-38, П-12).
-  const handleDragOver = useCallback((event: React.DragEvent) => {
-    if (event.dataTransfer.types.includes('text/plain')) {
+  // v0.02.02: во время перетаскивания показывается индикатор зазора вставки.
+  /** Зазор вставки по координате сброса: граница между колонками —
+   *  x = PAD_X + k·COLUMN_W, поэтому k = round((x − PAD_X) / COLUMN_W).
+   *  Границы за краями диаграммы зажимаются в [0, число линий]. */
+  const computeInsertIndex = useCallback(
+    (clientX: number): number => {
+      if (!active) return 0;
+      const flowX = screenToFlowPosition({ x: clientX, y: 0 }).x;
+      const raw = Math.round((flowX - PAD_X) / COLUMN_W);
+      return Math.max(0, Math.min(active.lifelines.length, raw));
+    },
+    [active, screenToFlowPosition],
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent) => {
+      if (!event.dataTransfer.types.includes('text/plain')) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = 'copy';
       setDropHint(true);
-    }
+      // Индикатор зазора — только при перетаскивании домена (payload известен
+      // источнику заранее, seqDndPayload — v0.02.02).
+      if (seqDndPayload.current?.startsWith('skib-domain:') && active) {
+        setDropIndex(computeInsertIndex(event.clientX));
+      } else {
+        setDropIndex(null);
+      }
+    },
+    [active, computeInsertIndex],
+  );
+  const handleDragLeave = useCallback(() => {
+    setDropHint(false);
+    setDropIndex(null);
   }, []);
-  const handleDragLeave = useCallback(() => setDropHint(false), []);
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       setDropHint(false);
+      setDropIndex(null);
       const payload = event.dataTransfer.getData('text/plain');
       // Набрасывание ЦБ (Ф-65, v0.02.01b): при отсутствии ДП создаётся ДП
       // с именем ЦБ и линиями жизни критичных доменов; иначе критичные
@@ -839,9 +896,11 @@ function SeqCanvasInner() {
         toast({ title: ru.seq.limitLifelines(24), variant: 'destructive' });
         return;
       }
-      addLifeline(active.id, blockId);
+      // v0.02.02: вставка в ближайший зазор между линиями жизни,
+      // не только в начало или конец (П-7).
+      addLifeline(active.id, blockId, computeInsertIndex(event.clientX));
     },
-    [active, addGoalDomains, addLifeline, createSequenceFromGoal, project.architecture.blocks, project.security.goals, sequences, setActiveSequence, toast],
+    [active, addGoalDomains, addLifeline, computeInsertIndex, createSequenceFromGoal, project.architecture.blocks, project.security.goals, sequences, setActiveSequence, toast],
   );
 
   const backgroundColor = canvasBackgroundColor(useSkibTheme()[0]);

@@ -61,7 +61,7 @@ export function CardItem({
       title={`${fn.name} — стоимость ${fn.cost}. ${ru.pool.dragHint}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+        <span className="min-w-0 flex-1 break-words text-sm font-medium text-foreground">
           {fn.name}
         </span>
         <span
@@ -84,7 +84,7 @@ export function CardItem({
           ))}
         </span>
         <span
-          className={`min-w-0 truncate text-right text-xs ${placementBlockName ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+          className={`min-w-0 break-words text-right text-xs ${placementBlockName ? 'text-sky-600 dark:text-sky-400' : 'text-emerald-600 dark:text-emerald-400'}`}
           title={placementBlockName ? ru.pool.placedIn(placementBlockName) : ru.pool.free}
         >
           {placementBlockName ? ru.pool.placedIn(placementBlockName) : ru.pool.free}

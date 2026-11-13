@@ -115,7 +115,7 @@ export function DvbPanel() {
                       window.dispatchEvent(new CustomEvent(FOCUS_NODE_EVENT, { detail: row.id }));
                     }}
                   >
-                    <td className="max-w-[84px] truncate px-1 py-1 font-medium text-foreground" title={row.name}>
+                    <td className="whitespace-normal break-words px-1 py-1 font-medium text-foreground" title={row.name}>
                       {row.name}
                     </td>
                     <td className="px-1 py-1">

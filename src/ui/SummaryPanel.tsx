@@ -30,7 +30,7 @@ function MetricTile({
       className="rounded-lg border border-border bg-background/40 px-2.5 py-2"
       data-testid={testId}
     >
-      <div className="text-base font-bold leading-snug text-foreground">{value}</div>
+      <div className="text-base font-bold leading-snug wrap-anywhere text-foreground">{value}</div>
     </div>
   );
 }
@@ -77,12 +77,12 @@ export function SummaryPanel() {
       aria-label={ru.summary.title}
       data-testid="summary-bar"
     >
-      <h2 className="text-sm font-semibold text-foreground">{ru.summary.title}</h2>
+      <h2 className="wrap-anywhere text-sm font-semibold text-foreground">{ru.summary.title}</h2>
 
       {/* Главная метрика — C_системы самым крупным шрифтом панели (v0.01.02). */}
       <div className="mt-2 rounded-lg border border-border bg-background/40 px-3 py-2.5">
         <div
-          className="text-4xl font-extrabold leading-none tracking-tight text-foreground"
+          className="wrap-anywhere text-4xl font-extrabold leading-none tracking-tight text-foreground"
           data-testid="summary-system-cost"
         >
           {ru.summary.systemCost(systemCost)}
@@ -99,7 +99,7 @@ export function SummaryPanel() {
               style={{ backgroundColor: statusColor }}
               aria-hidden
             />
-            <span className="text-base font-semibold leading-tight text-foreground">
+            <span className="wrap-anywhere text-base font-semibold leading-tight text-foreground">
               {totalGoals === 0
                 ? ru.summary.systemStatusNeutral
                 : ru.summary.systemStatus(systemStatus as 'red' | 'yellow' | 'green')}

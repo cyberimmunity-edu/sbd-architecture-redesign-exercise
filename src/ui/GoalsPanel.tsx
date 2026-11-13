@@ -162,7 +162,7 @@ export function GoalsPanel() {
                     const placed = placementByFn.has(fn.id);
                     return (
                       <li key={fn.id} className="flex items-center justify-between gap-1.5 text-[11px]">
-                        <span className="min-w-0 truncate text-muted-foreground" title={fn.name}>
+                        <span className="min-w-0 break-words text-muted-foreground" title={fn.name}>
                           {fn.name}
                         </span>
                         <span className="flex shrink-0 items-center gap-1">

@@ -75,9 +75,11 @@ export function SeqToolbar() {
   };
 
   return (
-    <Panel position="top-center" className="pointer-events-auto">
+    // max-width = ширина канвы: при узком окне команды переносятся на
+    // вторую строку вместо выхода под боковую панель (v0.02.02).
+    <Panel position="top-center" className="pointer-events-auto max-w-[calc(100%-12px)]">
       <div
-        className="flex items-center gap-1 rounded-md border border-border bg-popover/95 p-1 shadow-sm"
+        className="flex flex-wrap items-center gap-1 rounded-md border border-border bg-popover/95 p-1 shadow-sm"
         data-testid="seq-toolbar"
       >
         <Button

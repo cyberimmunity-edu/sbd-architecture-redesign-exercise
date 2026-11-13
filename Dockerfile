@@ -1,4 +1,4 @@
-# Конструктор СКИБ — сборка исполняемого образа (раздел 10.2 ТЗ).
+# Моделирование СКИБ — сборка исполняемого образа (раздел 10.2 ТЗ).
 # Многоэтапная сборка: builder на node:22-alpine, runtime на nginx:1.27-alpine.
 # Node 22 (не 20) — требование engines vitest 5 из devDependencies: на node 20
 # npm ci выводит предупреждения EBADENGINE, а vitest официально не поддерживается.
@@ -63,7 +63,7 @@ FROM nginx:1.27-alpine
 
 ARG APP_VERSION
 
-LABEL org.opencontainers.image.title="Конструктор СКИБ (skib-lab)" \
+LABEL org.opencontainers.image.title="Моделирование СКИБ (skib-lab)" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.description="Лабораторный веб-инструмент курса «Проектирование систем с конструктивной информационной безопасностью»: домены безопасности, функции безопасности, светофор покрытия целей и модель стоимости. Серверной части нет — данные хранятся в браузере."
 

@@ -16,8 +16,9 @@
  * Ф-23), горячие клавиши (НФ-10) и диалог декомпозиции (Ф-16).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -69,6 +70,8 @@ import { SeqLeftPanel } from './sequence/SeqLeftPanel';
 import { SeqCanvas } from './sequence/SeqCanvas';
 import { SeqRightPanel } from './sequence/SeqRightPanel';
 import { useViewStore } from '../store/viewStore';
+import { useAppearanceStore } from '../store/appearanceStore';
+import { AutoHidePanel } from './AutoHidePanel';
 import { ru } from '../i18n/ru';
 
 type DemoKind = 'robot' | 'vessel';
@@ -109,7 +112,13 @@ export function ToolApp() {
   const toggleSeqColors = useViewStore((s) => s.toggleSeqColors);
   const activeSequenceId = useViewStore((s) => s.activeSequenceId);
   const setActiveSequence = useViewStore((s) => s.setActiveSequence);
+  const hydrateAppearance = useAppearanceStore((s) => s.hydrate);
   const { toast } = useToast();
+
+  const panelLeftRef = useRef<ImperativePanelHandle | null>(null);
+  const panelRightRef = useRef<ImperativePanelHandle | null>(null);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
 
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [decomposeBlockId, setDecomposeBlockId] = useState<string | null>(null);
@@ -118,7 +127,9 @@ export function ToolApp() {
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    // Настройки оформления (раскладка тулбаров, автоскрытие) — v0.02.02.
+    hydrateAppearance();
+  }, [hydrate, hydrateAppearance]);
 
   // Диалог декомпозиции открывается кнопкой на узле канвы (Ф-12).
   useEffect(() => {
@@ -466,7 +477,7 @@ export function ToolApp() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground" style={{ minWidth: 1280 }}>
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground" style={{ minWidth: 760 }}>
       <TopBar
         onImportArchitecture={handleImportArchitecture}
         onImportSecurity={handleImportSecurity}
@@ -500,17 +511,25 @@ export function ToolApp() {
           className="min-h-0 flex-1"
         >
           <ResizablePanel
+            id="panel-left"
+            ref={panelLeftRef}
+            collapsible
+            collapsedSize={1.5}
+            onCollapse={() => setLeftCollapsed(true)}
+            onExpand={() => setLeftCollapsed(false)}
             defaultSize={22}
             minSize={16}
             maxSize={36}
             className="border-r border-border bg-card"
           >
-            <SeqLeftPanel
-              onImportYaml={handleImportSequencesYaml}
-              onImportPuml={handleImportSeqPuml}
-              onExportYaml={handleExportSequencesYaml}
-              onExportPuml={handleExportSeqPuml}
-            />
+            <AutoHidePanel side="left" panelRef={panelLeftRef} collapsed={leftCollapsed} onCollapsedChange={setLeftCollapsed}>
+              <SeqLeftPanel
+                onImportYaml={handleImportSequencesYaml}
+                onImportPuml={handleImportSeqPuml}
+                onExportYaml={handleExportSequencesYaml}
+                onExportPuml={handleExportSeqPuml}
+              />
+            </AutoHidePanel>
           </ResizablePanel>
           <ResizableHandle
             className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
@@ -529,12 +548,20 @@ export function ToolApp() {
             title={ru.canvas.resizeRightTitle}
           />
           <ResizablePanel
+            id="panel-right"
+            ref={panelRightRef}
+            collapsible
+            collapsedSize={1.5}
+            onCollapse={() => setRightCollapsed(true)}
+            onExpand={() => setRightCollapsed(false)}
             defaultSize={24}
             minSize={16}
             maxSize={36}
             className="border-l border-border bg-card"
           >
-            <SeqRightPanel />
+            <AutoHidePanel side="right" panelRef={panelRightRef} collapsed={rightCollapsed} onCollapsedChange={setRightCollapsed}>
+              <SeqRightPanel />
+            </AutoHidePanel>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
@@ -551,28 +578,36 @@ export function ToolApp() {
             вертикальная группа с запоминанием в localStorage — пропорции пула
             и списка целей настраиваются перетаскиванием разделителя. */}
         <ResizablePanel
+          id="panel-left"
+          ref={panelLeftRef}
+          collapsible
+          collapsedSize={1.5}
+          onCollapse={() => setLeftCollapsed(true)}
+          onExpand={() => setLeftCollapsed(false)}
           defaultSize={22}
           minSize={16}
           maxSize={36}
           className="flex flex-col border-r border-border bg-card"
         >
-          <ResizablePanelGroup
-            direction="vertical"
-            autoSaveId="skib-lab-goals-v1"
-            className="min-h-0 flex-1"
-          >
-            <ResizablePanel defaultSize={52} minSize={10} className="flex flex-col">
-              <PoolPanel />
-            </ResizablePanel>
-            <ResizableHandle
-              className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
-              aria-label={ru.canvas.resizeGoalsTitle}
-              title={ru.canvas.resizeGoalsTitle}
-            />
-            <ResizablePanel defaultSize={48} minSize={8} className="flex flex-col">
-              <GoalsPanel />
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          <AutoHidePanel side="left" panelRef={panelLeftRef} collapsed={leftCollapsed} onCollapsedChange={setLeftCollapsed}>
+            <ResizablePanelGroup
+              direction="vertical"
+              autoSaveId="skib-lab-goals-v1"
+              className="min-h-0 flex-1"
+            >
+              <ResizablePanel defaultSize={52} minSize={10} className="flex flex-col">
+                <PoolPanel />
+              </ResizablePanel>
+              <ResizableHandle
+                className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+                aria-label={ru.canvas.resizeGoalsTitle}
+                title={ru.canvas.resizeGoalsTitle}
+              />
+              <ResizablePanel defaultSize={48} minSize={8} className="flex flex-col">
+                <GoalsPanel />
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </AutoHidePanel>
         </ResizablePanel>
         <ResizableHandle
           className="w-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
@@ -596,34 +631,42 @@ export function ToolApp() {
             вертикальная группа с запоминанием в localStorage — область можно
             вытянуть вверх, используя свободное место под инспектором. */}
         <ResizablePanel
+          id="panel-right"
+          ref={panelRightRef}
+          collapsible
+          collapsedSize={1.5}
+          onCollapse={() => setRightCollapsed(true)}
+          onExpand={() => setRightCollapsed(false)}
           defaultSize={24}
           minSize={16}
           maxSize={36}
           className="flex flex-col border-l border-border bg-card"
         >
-          <ResizablePanelGroup
-            direction="vertical"
-            autoSaveId="skib-lab-summary-v1"
-            className="min-h-0 flex-1"
-          >
-            <ResizablePanel defaultSize={55} minSize={10} className="flex flex-col">
-              <InspectorPanel />
-            </ResizablePanel>
-            <ResizableHandle
-              className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
-              aria-label={ru.canvas.resizeSummaryTitle}
-              title={ru.canvas.resizeSummaryTitle}
-            />
-            <ResizablePanel defaultSize={45} minSize={8}>
-              <ScrollArea className="h-full">
-                <SummaryPanel />
-                <DvbPanel />
-                {/* Советы по архитектуре (v0.01.08): эвристики с оценкой
-                    экономии; применение — вручную. */}
-                <AdvisorPanel />
-              </ScrollArea>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+          <AutoHidePanel side="right" panelRef={panelRightRef} collapsed={rightCollapsed} onCollapsedChange={setRightCollapsed}>
+            <ResizablePanelGroup
+              direction="vertical"
+              autoSaveId="skib-lab-summary-v1"
+              className="min-h-0 flex-1"
+            >
+              <ResizablePanel defaultSize={55} minSize={10} className="flex flex-col">
+                <InspectorPanel />
+              </ResizablePanel>
+              <ResizableHandle
+                className="h-1.5 transition-colors hover:bg-primary/40 data-[resize-handle-active=pointer]:bg-primary/60"
+                aria-label={ru.canvas.resizeSummaryTitle}
+                title={ru.canvas.resizeSummaryTitle}
+              />
+              <ResizablePanel defaultSize={45} minSize={8}>
+                <ScrollArea className="h-full">
+                  <SummaryPanel />
+                  <DvbPanel />
+                  {/* Советы по архитектуре (v0.01.08): эвристики с оценкой
+                      экономии; применение — вручную. */}
+                  <AdvisorPanel />
+                </ScrollArea>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </AutoHidePanel>
         </ResizablePanel>
       </ResizablePanelGroup>
       )}

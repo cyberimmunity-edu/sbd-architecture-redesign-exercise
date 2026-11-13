@@ -46,14 +46,26 @@ async function gestureArrow(page: Page, fromId: string, toId: string) {
   await page.waitForTimeout(300);
 }
 
-/** Drag карточки домена из набора на канву в долю ширины канвы. */
+/** Сброс карточки домена из набора на канву в долю ширины канвы.
+ *  Диспетчеризация HTML5 DnD (как в view.spec dropCard): реальное наведение
+ *  чувствительно к обрезке карточек прокруткой «Набора доменов» — hit-тест
+ *  Playwright промахивается по обрезанной карточке (v0.02.02). */
 async function dragDomain(page: Page, blockId: string, fraction: number) {
   const box = (await page.getByTestId('seq-canvas').boundingBox())!;
   const x = Math.max(80, Math.min(Math.round(box.width * fraction), box.width - 60));
   const y = Math.min(Math.round(box.height * 0.4), box.height - 80);
-  await page.locator(`[data-testid="seq-domain-card-${blockId}"]`).dragTo(page.getByTestId('seq-canvas'), {
-    targetPosition: { x, y },
-  });
+  const dataTransfer = await page.evaluateHandle((id) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', `skib-domain:${id}`);
+    return dt;
+  }, blockId);
+  const card = page.locator(`[data-testid="seq-domain-card-${blockId}"]`);
+  const clientX = Math.round(box.x + x);
+  const clientY = Math.round(box.y + y);
+  await card.dispatchEvent('dragstart', { dataTransfer });
+  await page.getByTestId('seq-canvas').dispatchEvent('dragover', { dataTransfer, clientX, clientY });
+  await page.getByTestId('seq-canvas').dispatchEvent('drop', { dataTransfer, clientX, clientY });
+  await card.dispatchEvent('dragend', { dataTransfer });
   await page.waitForTimeout(400);
 }
 
@@ -395,21 +407,34 @@ test('T-U-12: «Очистить ДП» с подтверждением — со
   await expect(page.locator('[data-testid^="seq-arrow-a-"]')).toHaveCount(1);
 });
 
+/** Сброс карточки ЦБ на канву (диспетчеризация HTML5 DnD — v0.02.02). */
+async function dropGoal(page: Page, goalId: string, x: number, y: number) {
+  const box = (await page.getByTestId('seq-canvas').boundingBox())!;
+  const dataTransfer = await page.evaluateHandle((id) => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', `skib-goal:${id}`);
+    return dt;
+  }, goalId);
+  const card = page.locator(`[data-testid="seq-goal-card-${goalId}"]`);
+  const clientX = Math.round(box.x + x);
+  const clientY = Math.round(box.y + y);
+  await card.dispatchEvent('dragstart', { dataTransfer });
+  await page.getByTestId('seq-canvas').dispatchEvent('dragover', { dataTransfer, clientX, clientY });
+  await page.getByTestId('seq-canvas').dispatchEvent('drop', { dataTransfer, clientX, clientY });
+  await card.dispatchEvent('dragend', { dataTransfer });
+  await page.waitForTimeout(500);
+}
+
 test('T-U-13: набрасывание ЦБ — ДП по имени ЦБ, затем пополнение критичными доменами (Ф-65)', async ({ page }) => {
   await loadDap22(page);
-  const canvas = page.getByTestId('seq-canvas');
   // ДП ещё нет: создаётся ДП с именем ЦБ и критичным доменом dom-5.
-  await page
-    .locator('[data-testid="seq-goal-card-g-fw-authentic"]')
-    .dragTo(canvas, { targetPosition: { x: 320, y: 220 } });
+  await dropGoal(page, 'g-fw-authentic', 320, 220);
   await page.waitForTimeout(500);
   await expect(page.getByTestId('seq-item-seq-1')).toContainText('Подлинность прошивок');
   await expect(page.getByTestId('seq-item-seq-1')).toContainText('1 лин./0 стрел.');
   await expect(page.getByTestId('seq-lifeline-header-dom-5')).toBeVisible();
   // Вторая ЦБ: критичный домен dom-7 добавляется в текущую ДП.
-  await page
-    .locator('[data-testid="seq-goal-card-g-id-authentic"]')
-    .dragTo(canvas, { targetPosition: { x: 520, y: 220 } });
+  await dropGoal(page, 'g-id-authentic', 520, 220);
   await page.waitForTimeout(500);
   await expect(page.getByTestId('seq-item-seq-1')).toContainText('2 лин./0 стрел.');
   await expect(page.getByTestId('seq-lifeline-header-dom-7')).toBeVisible();
@@ -418,4 +443,48 @@ test('T-U-13: набрасывание ЦБ — ДП по имени ЦБ, за�
   await page.waitForTimeout(400);
   await expect(page.getByTestId('seq-item-seq-1')).toContainText('1 лин./0 стрел.');
   await expect(page.getByTestId('seq-lifeline-header-dom-7')).toHaveCount(0);
+});
+
+test('T-U-14: вставка линии жизни в зазор между другими — индикатор и порядок (v0.02.02)', async ({ page }) => {
+  await loadDap22(page);
+  await page.getByTestId('seq-create').click();
+  await page.waitForTimeout(300);
+  await dragDomain(page, 'blk-radio', 0.3);
+  await dragDomain(page, 'blk-ota', 0.75);
+  await expect(page.getByTestId('seq-lifeline-header-blk-radio')).toBeVisible();
+  await expect(page.getByTestId('seq-lifeline-header-blk-ota')).toBeVisible();
+
+  // Сброс третьего домена в зазор между двумя линиями жизни: x — середина
+  // между центрами заголовков; во время перетаскивания виден индикатор.
+  const radio = (await page.getByTestId('seq-lifeline-header-blk-radio').boundingBox())!;
+  const ota = (await page.getByTestId('seq-lifeline-header-blk-ota').boundingBox())!;
+  const canvas = (await page.getByTestId('seq-canvas').boundingBox())!;
+  const gapX = Math.round((radio.x + radio.width / 2 + ota.x + ota.width / 2) / 2);
+  const gapY = Math.round(radio.y - canvas.y + radio.height / 2);
+
+  const dataTransfer = await page.evaluateHandle(() => {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'skib-domain:blk-nav');
+    return dt;
+  });
+  const card = page.locator('[data-testid="seq-domain-card-blk-nav"]');
+  const canvasEl = page.getByTestId('seq-canvas');
+  await card.dispatchEvent('dragstart', { dataTransfer });
+  await canvasEl.dispatchEvent('dragover', { dataTransfer, clientX: gapX, clientY: gapY });
+  // Индикатор зазора вставки виден во время перетаскивания (v0.02.02).
+  await expect(page.getByTestId('seq-insert-marker')).toBeVisible();
+  await canvasEl.dispatchEvent('drop', { dataTransfer, clientX: gapX, clientY: gapY });
+  await card.dispatchEvent('dragend', { dataTransfer });
+  await page.waitForTimeout(400);
+
+  // Линия жизни встала между radio и ota, а не в конец: порядок по x
+  // (позиции оцифровываются заново после вставки).
+  const nav = (await page.getByTestId('seq-lifeline-header-blk-nav').boundingBox())!;
+  const otaAfter = (await page.getByTestId('seq-lifeline-header-blk-ota').boundingBox())!;
+  const radioAfter = (await page.getByTestId('seq-lifeline-header-blk-radio').boundingBox())!;
+  expect(radioAfter.x).toBeLessThan(nav.x);
+  expect(nav.x).toBeLessThan(otaAfter.x);
+  await expect(page.getByTestId('seq-item-seq-1')).toContainText('3 лин./0 стрел.');
+  // После сброса индикатор скрыт.
+  await expect(page.getByTestId('seq-insert-marker')).toHaveCount(0);
 });
