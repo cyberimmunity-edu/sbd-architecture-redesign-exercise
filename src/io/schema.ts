@@ -23,6 +23,8 @@ export const archInnerSchema = z.looseObject({
       trusted: z.boolean().optional(),
       // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
       forceTrusted: z.boolean().optional(),
+      // Логическая группа (ЛГ) блока — v0.02.03, Ф-70.
+      group: z.string().optional(),
     }),
   ),
   edges: z.array(
@@ -33,6 +35,20 @@ export const archInnerSchema = z.looseObject({
       label: z.string().optional(),
     }),
   ),
+  // Логические группы ДБ на ДАП — v0.02.03, Ф-70…Ф-76 (опциональная секция:
+  // файлы v0.02.02 и старше читаются без изменений).
+  groups: z
+    .array(
+      z.looseObject({
+        id: z.string(),
+        name: z.string(),
+        color: z.string().optional(),
+        collapsed: z.boolean().optional(),
+        parent: z.string().optional(),
+        position: z.looseObject({ x: z.number(), y: z.number() }).optional(),
+      }),
+    )
+    .optional(),
 });
 
 /** Внутренняя структура security без поля version (для вложения в state.yaml). */
@@ -144,8 +160,9 @@ export const allowedKeys = {
   arch: {
     version: null,
     system: { name: null, description: null },
-    blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null },
+    blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null, group: null },
     edges: { id: null, from: null, to: null, label: null },
+    groups: { id: null, name: null, color: null, collapsed: null, parent: null, position: { x: null, y: null } },
   },
   security: {
     version: null,
@@ -158,8 +175,9 @@ export const allowedKeys = {
     architecture: {
       version: null,
       system: { name: null, description: null },
-      blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null },
+      blocks: { id: null, name: null, cost: null, position: { x: null, y: null }, external: null, trusted: null, forceTrusted: null, group: null },
       edges: { id: null, from: null, to: null, label: null },
+      groups: { id: null, name: null, color: null, collapsed: null, parent: null, position: { x: null, y: null } },
     },
     security: {
       version: null,

@@ -20,6 +20,10 @@
  * «Автоскрытие панелей» — боковые панели сворачиваются в рейки;
  * «Только значки» — подписи кнопок скрыты, название кнопки показывается
  * во всплывающей подсказке при наведении.
+ *
+ * Меню «ЛГ» (v0.02.03, Ф-70…Ф-74) в тулбаре «Правка»: создание ЛГ из
+ * выделенных ДБ, включение/исключение выделенных, свернуть/развернуть все;
+ * работает с мультивыбором канвы (viewStore.domainSelection).
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -60,6 +64,8 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
   Boxes,
+  ChevronDown,
+  ChevronUp,
   CircleCheck,
   CircleHelp,
   CircleX,
@@ -80,6 +86,7 @@ import {
   PanelTopClose,
   Redo2,
   SearchCheck,
+  Shapes,
   ShieldCheck,
   Sun,
   Undo2,
@@ -90,8 +97,11 @@ import {
 } from 'lucide-react';
 import { ru } from '../i18n/ru';
 import { APP_VERSION } from '../engine/types';
+import type { DomainGroup } from '../engine/types';
 import { useSkibTheme } from './theme';
 import { useAppearanceStore, type ToolbarId } from '../store/appearanceStore';
+import { useSkibStore } from '../store/projectStore';
+import { useViewStore } from '../store/viewStore';
 
 export type ValidationStatus = 'clean' | 'warnings' | 'errors';
 
@@ -122,6 +132,9 @@ export interface TopBarProps {
 }
 
 const TOOLBAR_IDS: ToolbarId[] = ['edit', 'mode', 'io', 'validate', 'settings'];
+
+/** Стабильная пустая секция ЛГ для селектора хранилища (getSnapshot-кэш). */
+const EMPTY_GROUPS: DomainGroup[] = [];
 
 /* ------------------------------------------------------------------ */
 /* Кнопка тулбара: подпись скрывается в режиме «Только значки»         */
@@ -208,6 +221,12 @@ export function TopBar(props: TopBarProps) {
   const toggleAutoHideToolbars = useAppearanceStore((s) => s.toggleAutoHideToolbars);
   const toggleAutoHidePanels = useAppearanceStore((s) => s.toggleAutoHidePanels);
   const autoHidePanels = useAppearanceStore((s) => s.autoHidePanels);
+  // Меню «ЛГ» (v0.02.03, Ф-70…Ф-74): группы, мультивыбор и действия.
+  // Селектор без «?? []»: новый массив при каждом вызове ломает кэш снапшота.
+  const lgGroups = useSkibStore((s) => s.project.architecture.groups) ?? EMPTY_GROUPS;
+  const domainSelection = useViewStore((s) => s.domainSelection);
+  const setDomainsGroup = useSkibStore((s) => s.setDomainsGroup);
+  const setAllGroupsCollapsed = useSkibStore((s) => s.setAllGroupsCollapsed);
 
   // Автоскрытие верхней зоны (v0.02.02): без наведения — полоска 12 px.
   const [hoverExpanded, setHoverExpanded] = useState(false);
@@ -320,6 +339,75 @@ export function TopBar(props: TopBarProps) {
           disabled={props.mode === 'sequence'}
           hint={props.mode === 'sequence' ? ru.seq.disabledDapButtonsTitle : undefined}
         />
+        {/* Меню «ЛГ» (v0.02.03, Ф-70…Ф-74): создание из выделенных ДБ,
+            включение/исключение, свертывание/развертывание всех. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild disabled={props.mode === 'sequence'}>
+            <TbButton
+              icon={Shapes}
+              label={ru.topBar.lgMenu}
+              iconOnly={iconOnly}
+              data-testid="lg-menu"
+              disabled={props.mode === 'sequence'}
+              hint={props.mode === 'sequence' ? ru.seq.disabledDapButtonsTitle : ru.topBar.lgMenuTitle}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              data-testid="lg-create-selected"
+              disabled={domainSelection.length === 0}
+              onSelect={() =>
+                window.dispatchEvent(
+                  new CustomEvent('skib-lg-dialog', {
+                    detail: { mode: 'create', memberIds: domainSelection },
+                  }),
+                )
+              }
+            >
+              {ru.topBar.lgCreateSelected}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="lg-remove-selected"
+              disabled={domainSelection.length === 0}
+              onSelect={() => setDomainsGroup(domainSelection, null)}
+            >
+              {ru.topBar.lgRemoveSelected}
+            </DropdownMenuItem>
+            {lgGroups.length > 0 && <DropdownMenuSeparator />}
+            {lgGroups.map((group) => (
+              <DropdownMenuItem
+                key={group.id}
+                data-testid={`lg-add-${group.id}`}
+                disabled={domainSelection.length === 0}
+                onSelect={() => setDomainsGroup(domainSelection, group.id)}
+              >
+                <span
+                  className="mr-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+                  style={{ background: group.color }}
+                  aria-hidden
+                />
+                {ru.topBar.lgAddTo(group.name)}
+              </DropdownMenuItem>
+            ))}
+            {lgGroups.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              data-testid="lg-collapse-all"
+              disabled={lgGroups.length === 0}
+              onSelect={() => setAllGroupsCollapsed(true)}
+            >
+              <ChevronDown className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {ru.topBar.lgCollapseAll}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid="lg-expand-all"
+              disabled={lgGroups.length === 0}
+              onSelect={() => setAllGroupsCollapsed(false)}
+            >
+              <ChevronUp className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {ru.topBar.lgExpandAll}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </>
     ),
     /* «Режим»: переключатель ДАП/ДП (Ф-37) и «Цвета из ДАП» (Ф-59, только в ДП). */
@@ -512,7 +600,7 @@ export function TopBar(props: TopBarProps) {
         />
       </>
     ),
-  }), [props, iconOnly, theme, setTheme, autoHideToolbars, autoHidePanels, toggleAutoHideToolbars, toggleAutoHidePanels, toggleIconOnly, validationChip]);
+  }), [props, iconOnly, theme, setTheme, autoHideToolbars, autoHidePanels, toggleAutoHideToolbars, toggleAutoHidePanels, toggleIconOnly, validationChip, lgGroups, domainSelection, setDomainsGroup, setAllGroupsCollapsed]);
 
   const titles: Record<ToolbarId, string> = {
     edit: ru.topBar.toolbarEdit,

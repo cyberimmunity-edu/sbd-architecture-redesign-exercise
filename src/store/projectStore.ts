@@ -20,8 +20,12 @@ import type {
 } from '../engine/types';
 import {
   HISTORY_LIMIT,
+  LG_DEFAULT_COLOR,
+  LG_NAME_LIMIT,
+  MAX_DOMAIN_GROUPS,
   MAX_DOMAINS,
   MAX_EDGES,
+  MAX_LG_DEPTH,
   MAX_LIFELINES,
   MAX_SEQ_ARROWS,
   MAX_SEQ_BLOCKS,
@@ -30,10 +34,19 @@ import {
   STORAGE_KEY,
   emptyProject,
 } from '../engine/types';
+import type { DomainGroup } from '../engine/types';
 import { decompose } from '../engine/decompose';
 import type { DecomposeInput } from '../engine/decompose';
 import { goalDistribution } from '../engine/coverage';
 import { snapExternalsOutside } from '../engine/trust';
+import {
+  blocksRectAnchor,
+  depthAllowed,
+  groupAncestors,
+  groupSubtree,
+  normalizeGroupColor,
+  uniqueGroupName,
+} from '../engine/groups';
 import {
   canonicalInternalName,
   cleanBlocksAfterArrowRemoval,
@@ -46,9 +59,9 @@ import {
   uniqueSequenceName,
 } from '../engine/sequence';
 
-/** Выбор объекта интерфейса: домен, карточка функции, стрелка
- *  или цель безопасности (v0.01.09 — карточка ЦБ в инспекторе). */
-export type Selection = { kind: 'domain' | 'card' | 'edge' | 'goal'; id: string };
+/** Выбор объекта интерфейса: домен, карточка функции, стрелка,
+ *  цель безопасности или логическая группа (v0.02.03). */
+export type Selection = { kind: 'domain' | 'card' | 'edge' | 'goal' | 'group'; id: string };
 
 interface Snapshot {
   architecture: Project['architecture'];
@@ -106,6 +119,38 @@ interface SkibStore {
   undo: () => void;
   redo: () => void;
   resetProject: () => void;
+
+  /* ---- Логические группы (ЛГ) — v0.02.03, Ф-70…Ф-76 ---- */
+  /** Создание ЛГ (Ф-70): имя (по умолчанию «Новая ЛГ», уникализируется),
+   *  цвет из палитры (по умолчанию серый, П-15), члены-ДБ, родительская ЛГ
+   *  (вложенность до MAX_LG_DEPTH, Ф-71). Возвращает id или null (лимит
+   *  20 ЛГ или превышение глубины). Одна операция истории. */
+  createGroup: (input: {
+    name?: string;
+    color?: string;
+    memberIds?: string[];
+    parentId?: string | null;
+  }) => string | null;
+  /** Правка имени/цвета ЛГ (Ф-70) и свёртывание/развёртывание (Ф-72).
+   *  Имя уникализируется, цвет приводится к палитре. Одна операция истории. */
+  updateGroup: (
+    id: string,
+    patch: Partial<Pick<DomainGroup, 'name' | 'color' | 'collapsed'>>,
+  ) => void;
+  /** Удаление ЛГ (Ф-73): ДБ остаются, становятся несгруппированными;
+   *  вложенные ЛГ удаляются тоже, их ДБ — несгруппированными.
+   *  Одна операция истории. */
+  deleteGroup: (id: string) => void;
+  /** Включение ДБ в ЛГ или исключение (groupId = null) — перетаскивание
+   *  и команды для нескольких выбранных ДБ (Ф-74). Одна операция истории.
+   *  Опустевшая ЛГ получает якорь position для отображения пустой рамки. */
+  setDomainsGroup: (blockIds: string[], groupId: string | null) => void;
+  /** Свернуть/развернуть все ЛГ одной операцией истории (Ф-72). */
+  setAllGroupsCollapsed: (collapsed: boolean) => void;
+  /** Раскрытие свёрнутых ЛГ-предков перечисленных ДБ (Ф-76) — без записи
+   *  в историю (подсветка не является операцией правки), сохраняется в
+   *  автосохранение. */
+  revealDomains: (blockIds: string[]) => void;
 
   /* ---- Режим «Диаграммы последовательности» (v0.02.01) ---- */
   /** Создание ДП (имя по умолчанию «Новая ДП» уникализируется; имя можно задать —
@@ -551,10 +596,21 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
   /** Удаление домена (Ф-15): стрелки удаляются, функции возвращаются в пул.
    *  v0.02.01: каскад в той же операции истории — домен снимается из линий
    *  жизни всех ДП, его стрелки ДП удаляются, блоки чистятся (5.6); после
-   *  удаления внутренние домены перенумеровываются без разрывов (Ф-32). */
+   *  удаления внутренние домены перенумеровываются без разрывов (Ф-32).
+   *  v0.02.03: опустевшая от удаления ЛГ получает якорь position — пустая
+   *  рамка остаётся на прежнем месте. */
   deleteDomain: (id) => {
     const { project, past } = get();
     if (!project.architecture.blocks.some((b) => b.id === id)) return;
+    // Якорь для опустевшей ЛГ: охват членов до удаления.
+    const formerGroupId = project.architecture.blocks.find((b) => b.id === id)?.groupId;
+    let emptyAnchor: { x: number; y: number } | null = null;
+    if (formerGroupId) {
+      emptyAnchor =
+        blocksRectAnchor(
+          project.architecture.blocks.filter((b) => b.groupId === formerGroupId),
+        ) ?? null;
+    }
     const blocks = renumberArchitecture({
       ...project.architecture,
       blocks: project.architecture.blocks.filter((b) => b.id !== id),
@@ -564,12 +620,17 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     );
     const assignments = project.assignments.filter((a) => a.block !== id);
     const cascade = cascadeSequences(project.sequences ?? [], new Set(blocks.map((b) => b.id)));
+    const groups = project.architecture.groups ?? [];
+    const nextGroups =
+      formerGroupId && emptyAnchor
+        ? groups.map((g) => (g.id === formerGroupId ? { ...g, position: emptyAnchor! } : g))
+        : groups;
     set({
       past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
       future: [],
       project: {
         ...project,
-        architecture: { blocks, edges },
+        architecture: { blocks, edges, groups: nextGroups },
         assignments,
         sequences: cascade.sequences,
       },
@@ -736,6 +797,186 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
       past: [],
       future: [],
     });
+  },
+
+  /* ---------------------------------------------------------------- */
+  /* Логические группы (ЛГ) — v0.02.03, Ф-70…Ф-76                       */
+  /* ---------------------------------------------------------------- */
+
+  /** Создание ЛГ (Ф-70, Ф-71): члены-ДБ, имя, цвет, родительская ЛГ.
+   *  Лимиты: не более MAX_DOMAIN_GROUPS ЛГ, глубина вложенности до
+   *  MAX_LG_DEPTH (П-71). Опустевшие от переноса членов ЛГ получают якорь
+   *  position. Одна операция истории. */
+  createGroup: (input) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    if (groups.length >= MAX_DOMAIN_GROUPS) return null;
+    const existingIds = new Set(project.architecture.blocks.map((b) => b.id));
+    const memberIds = [...new Set((input.memberIds ?? []).filter((id) => existingIds.has(id)))];
+    const known = groups.some((g) => g.id === input.parentId);
+    const parentId = input.parentId && known ? input.parentId : null;
+    if (!depthAllowed(groups, parentId)) return null;
+    const ids = new Set(groups.map((g) => g.id));
+    const id = nextId('lg-', ids);
+    const base = (input.name ?? '').trim().slice(0, LG_NAME_LIMIT) || 'Новая ЛГ';
+    const group: DomainGroup = {
+      id,
+      name: uniqueGroupName(groups, base),
+      color: normalizeGroupColor(input.color),
+      collapsed: false,
+      ...(parentId ? { parentId } : {}),
+      // Якорь для будущего опустевания: центр охвата членов.
+      ...(memberIds.length > 0
+        ? {
+            // Якорь на случай будущего опустевания ЛГ: верхний левый угол охвата членов.
+            position: blocksRectAnchor(
+              project.architecture.blocks.filter((b) => memberIds.includes(b.id)),
+            ) ?? undefined,
+          }
+        : {}),
+    };
+    const blocks = project.architecture.blocks.map((b) =>
+      memberIds.includes(b.id) ? { ...b, groupId: id } : b,
+    );
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: {
+        ...project,
+        architecture: { ...project.architecture, blocks, groups: [...groups, group] },
+      },
+      selection: { kind: 'group', id },
+    });
+    scheduleSave(get().project);
+    return id;
+  },
+
+  /** Правка имени/цвета/свёрнутости ЛГ (Ф-70, Ф-72). Одна операция истории. */
+  updateGroup: (id, patch) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    if (!groups.some((g) => g.id === id)) return;
+    const nextGroups = groups.map((g) => {
+      if (g.id !== id) return g;
+      const next = { ...g };
+      if (patch.name !== undefined) {
+        const base = patch.name.trim().slice(0, LG_NAME_LIMIT);
+        if (base.length > 0) next.name = uniqueGroupName(groups, base);
+      }
+      if (patch.color !== undefined) next.color = normalizeGroupColor(patch.color);
+      if (patch.collapsed !== undefined) next.collapsed = patch.collapsed;
+      return next;
+    });
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: { ...project, architecture: { ...project.architecture, groups: nextGroups } },
+    });
+    scheduleSave(get().project);
+  },
+
+  /** Удаление ЛГ (Ф-73): поддерево ЛГ удаляется, все его ДБ становятся
+   *  несгруппированными; ДБ не удаляются. Одна операция истории. */
+  deleteGroup: (id) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    if (!groups.some((g) => g.id === id)) return;
+    const removed = new Set(groupSubtree(groups, id));
+    const nextGroups = groups.filter((g) => !removed.has(g.id));
+    const blocks = project.architecture.blocks.map((b) =>
+      b.groupId && removed.has(b.groupId) ? (() => {
+        const { groupId: _dropped, ...rest } = b;
+        return rest;
+      })() : b,
+    );
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: { ...project, architecture: { ...project.architecture, blocks, groups: nextGroups } },
+      selection: null,
+    });
+    scheduleSave(get().project);
+  },
+
+  /** Включение/исключение ДБ (Ф-74): пакетная правка groupId. Опустевшая
+   *  ЛГ получает якорь position (охват членов до переноса). Одна операция
+   *  истории. Якорь хранится и у непустой ЛГ, но геометрией не используется,
+   *  пока у ЛГ есть члены. */
+  setDomainsGroup: (blockIds, groupId) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    if (groupId !== null && !groups.some((g) => g.id === groupId)) return;
+    const wanted = new Set(blockIds);
+    if (wanted.size === 0) return;
+    // Якорь опустевания для каждой прежней группы переносимых ДБ:
+    // охват членов до переноса — пустая рамка остаётся на прежнем месте.
+    const anchors = new Map<string, { x: number; y: number }>();
+    for (const block of project.architecture.blocks) {
+      if (!wanted.has(block.id) || !block.groupId || block.groupId === groupId) continue;
+      if (anchors.has(block.groupId)) continue;
+      const anchor = blocksRectAnchor(
+        project.architecture.blocks.filter((b) => b.groupId === block.groupId),
+      );
+      if (anchor) anchors.set(block.groupId, anchor);
+    }
+    const nextGroups = groups.map((g) =>
+      anchors.has(g.id) ? { ...g, position: anchors.get(g.id) } : g,
+    );
+    const blocks = project.architecture.blocks.map((b) => {
+      if (!wanted.has(b.id)) return b;
+      if (groupId === null) {
+        const { groupId: _dropped, ...rest } = b;
+        return rest;
+      }
+      return { ...b, groupId };
+    });
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: {
+        ...project,
+        architecture: { ...project.architecture, blocks, groups: nextGroups },
+      },
+    });
+    scheduleSave(get().project);
+  },
+
+  /** Свернуть/развернуть все ЛГ (Ф-72) — одна операция истории. */
+  setAllGroupsCollapsed: (collapsed) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    if (groups.length === 0) return;
+    if (groups.every((g) => (g.collapsed ?? false) === collapsed)) return;
+    const nextGroups = groups.map((g) => ({ ...g, collapsed }));
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: { ...project, architecture: { ...project.architecture, groups: nextGroups } },
+    });
+    scheduleSave(get().project);
+  },
+
+  /** Раскрытие свёрнутых ЛГ-предков перечисленных ДБ (Ф-76): подсветка ДБ
+   *  из таблиц и карточек целей видит домен целиком. Без записи в историю
+   *  (подсветка не меняет модель проекта), но сохраняется в автосохранение. */
+  revealDomains: (blockIds) => {
+    const { project } = get();
+    const groups = project.architecture.groups ?? [];
+    if (groups.length === 0) return;
+    const wanted = new Set(blockIds);
+    const expand = new Set<string>();
+    for (const block of project.architecture.blocks) {
+      if (!wanted.has(block.id) || !block.groupId) continue;
+      // Цепочка предков от корня: раскрываем каждый свёрнутый.
+      for (const id of groupAncestors(groups, block.groupId).reverse().concat(block.groupId)) {
+        const group = groups.find((g) => g.id === id);
+        if (group?.collapsed) expand.add(id);
+      }
+    }
+    if (expand.size === 0) return;
+    const nextGroups = groups.map((g) => (expand.has(g.id) ? { ...g, collapsed: false } : g));
+    set({ project: { ...project, architecture: { ...project.architecture, groups: nextGroups } } });
+    scheduleSave(get().project);
   },
 
   /* ---------------------------------------------------------------- */

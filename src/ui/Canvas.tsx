@@ -21,7 +21,7 @@
  * портов домена сворачивают стрелки порта (свёрнутые не отображаются до
  * явного открытия или смены режима); мини-навигатор слева снизу (как в Archi);
  * кнопки масштаба с видимыми иконками справа снизу, включая «вместить»;
- * вид канвы (пан/зум) и ручные позиции доменов запоминаются в localStorage.
+ * Вид канвы (пан/зум) и ручные позиции доменов запоминаются в localStorage.
  * Стрелки с обходом доменов (v0.01.04): форма стрелок рассчитывается
  * в src/engine/edgeRouting.ts (решётка A* вокруг доменов) — стрелки идут
  * по свободным сторонам, а не сквозь блоки; при перемещении домена
@@ -50,6 +50,18 @@
  * операция с историей); сброс на внешний системный блок отклоняется
  * с подсказкой. Для координат сброса канва обёрнута в ReactFlowProvider
  * (screenToFlowPosition пересчитывает экранные координаты в координаты модели).
+ * Логические группы (ЛГ, v0.02.03, Ф-70…Ф-76): рамки ЛГ — узлы типа «lgframe»
+ * под доменами (положение выводится из позиций ДБ — computeGroupGeometry);
+ * мультивыбор ДБ (Ctrl-клик и рамка выбора Shift — selectionKeyCode) живёт
+ * в viewStore.domainSelection и не теряется при синхронизации с хранилищем;
+ * перетаскивание ДБ внутрь/из рамки включает/исключает ДБ (центр узла —
+ * самая глубокая ЛГ под курсором, Ф-74); связи скрытых ДБ свёрнутых ЛГ
+ * переносятся на рамку ЛГ (remapEdgesForDisplay, Ф-72), внутренние связи
+ * свёрнутой ЛГ не отображаются, рамки развёрнутых ЛГ — не препятствие
+ * трассировки (связи идут сквозь границу); контекстные меню (правый клик
+ * по домену, рамке и канве) — команды ЛГ; Delete удаляет выбранную ЛГ
+ * (ДБ остаются, Ф-73); подсветка/фокус скрытого ДБ раскрывает его ЛГ
+ * (revealDomains, Ф-76). Меню ЛГ продублировано в тулбаре «Правка» (TopBar).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
@@ -82,11 +94,21 @@ import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
 import {
+  computeGroupGeometry,
+  computeGroupVisibility,
+  groupDepths,
+  remapEdgesForDisplay,
+  type GroupGeometry,
+  type LgRect,
+} from '../engine/groups';
+import {
   routeEdges,
   type RoutePoint,
   type RouteRect,
 } from '../engine/edgeRouting';
 import { domainSizeFactors, sizeForFactor } from '../engine/sizing';
+import { depthAllowed } from '../engine/groups';
+import { LG_COLORS, MAX_DOMAIN_GROUPS, MAX_LG_DEPTH } from '../engine/types';
 import {
   frameBounds,
   isInsideFrame,
@@ -96,6 +118,12 @@ import {
 import { MAX_DOMAINS } from '../engine/types';
 import type { Status } from '../engine/types';
 import { DomainNode, type DomainFlowNode, type DomainNodeData } from './DomainNode';
+import {
+  GroupFrameNode,
+  type GroupFrameFlowNode,
+  type GroupFrameNodeData,
+} from './GroupFrameNode';
+import { CanvasContextMenu, type ContextMenuEntry } from './CanvasContextMenu';
 import { CanvasControls } from './CanvasControls';
 import { RoutingEdge, type RoutingEdgeData } from './RoutingEdge';
 import { ru } from '../i18n/ru';
@@ -112,10 +140,10 @@ export interface PerimeterNodeData extends Record<string, unknown> {
 /** Тип рамки периметра. */
 export type PerimeterFlowNode = Node<PerimeterNodeData, 'perimeter'>;
 
-/** Узлы канвы: домены и рамка периметра. */
-export type CanvasNode = DomainFlowNode | PerimeterFlowNode;
+/** Узлы канвы: домены, рамка периметра и рамки ЛГ (v0.02.03). */
+export type CanvasNode = DomainFlowNode | PerimeterFlowNode | GroupFrameFlowNode;
 
-const nodeTypes = { domain: DomainNode, perimeter: PerimeterNode } as const;
+const nodeTypes = { domain: DomainNode, perimeter: PerimeterNode, lgframe: GroupFrameNode } as const;
 const edgeTypes = { routing: RoutingEdge } as const;
 
 /**
@@ -131,10 +159,18 @@ const edgeTypes = { routing: RoutingEdge } as const;
 function FocusController() {
   const { setCenter, setViewport, getNodes, getZoom } = useReactFlow();
   useEffect(() => {
-    const focusNode = (id: string): void => {
+    const focusNode = (id: string, attempt = 0): void => {
       if (!id) return;
       const node = getNodes().find((n) => n.id === id);
-      if (!node) return;
+      if (!node) {
+        // Ф-76 (v0.02.03): домен внутри свёрнутой ЛГ — раскрываем её
+        // (revealDomains без записи в историю) и повторяем после монтажа узла.
+        if (attempt < 2) {
+          useSkibStore.getState().revealDomains([id]);
+          window.setTimeout(() => focusNode(id, attempt + 1), 90);
+        }
+        return;
+      }
       const width = node.measured?.width ?? 240;
       const height = node.measured?.height ?? 120;
       // Центр домена: все узлы канвы — верхнего уровня, позиция абсолютная.
@@ -264,6 +300,13 @@ function CanvasInner() {
   const deleteEdge = useSkibStore((s) => s.deleteEdge);
   const updatePositions = useSkibStore((s) => s.updatePositions);
   const applyAutoLayout = useSkibStore((s) => s.applyAutoLayout);
+  // Логические группы (v0.02.03, Ф-70…Ф-76).
+  const updateGroup = useSkibStore((s) => s.updateGroup);
+  const deleteGroup = useSkibStore((s) => s.deleteGroup);
+  const setDomainsGroup = useSkibStore((s) => s.setDomainsGroup);
+  // Мультивыбор доменов ДАП (v0.02.03, Ф-74): Ctrl-клик и рамка выбора.
+  const domainSelection = useViewStore((s) => s.domainSelection);
+  const setDomainSelection = useViewStore((s) => s.setDomainSelection);
   // Настройки вида канвы (v0.01.02): показ стрелок и фокус на периметре.
   // Свёрнутые порты стрелок (v0.01.03): ключ `${blockId}:in|out` → свёрнут.
   // Подсветка из таблицы ДВБ (v0.01.04): идентификатор домена под курсором.
@@ -287,6 +330,15 @@ function CanvasInner() {
   const [hoverFocus, setHoverFocus] = useState<{ kind: 'edge' | 'node'; id: string } | null>(null);
   // Вид канвы: восстановление сохранённого пан/зум; при отсутствии — «вместить».
   const initialViewport = useMemo(() => readStoredViewport(), []);
+  // Контекстное меню канвы (v0.02.03): команды ЛГ для домена, рамки и канвы.
+  const [ctxMenu, setCtxMenu] = useState<{
+    kind: 'domain' | 'group' | 'pane';
+    groupId?: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  // Цель перетаскивания домена (подсветка рамки ЛГ при drag — Ф-74).
+  const [dropGroup, setDropGroup] = useState<string | null>(null);
 
   const { costs, trust } = useMemo(() => recalcCosts(project), [project]);
   const { goalStatuses, domainStatuses } = useMemo(() => recalcCoverage(project), [project]);
@@ -333,13 +385,21 @@ function CanvasInner() {
   // Рамка периметра строится по внутренним доменам; внешние — вне рамки.
   const frame = useMemo(() => frameBounds(project.architecture), [project.architecture]);
 
+  // Логические группы (v0.02.03): видимость ЛГ и ДБ (Ф-72) и геометрия рамок.
+  const visibility = useMemo(
+    () => computeGroupVisibility(project.architecture),
+    [project.architecture],
+  );
+
   // Фокус на внутреннем периметре (v0.01.02): внешние системы скрыты.
+  // v0.02.03: ДБ внутри свёрнутых ЛГ скрыты (Ф-72).
   const visibleBlocks = useMemo(
     () =>
-      focusInternal
+      (focusInternal
         ? project.architecture.blocks.filter((b) => !b.external)
-        : project.architecture.blocks,
-    [project.architecture.blocks, focusInternal],
+        : project.architecture.blocks
+      ).filter((b) => !visibility.hiddenBlocks.has(b.id)),
+    [project.architecture.blocks, focusInternal, visibility],
   );
 
   // Внешние системы и их связи скрыты в режиме фокуса (v0.01.02).
@@ -377,7 +437,10 @@ function CanvasInner() {
         position: block.position ?? { x: 0, y: 0 },
         // Выделение синхронизировано с хранилищем (v0.01.04): клик по строке
         // таблицы ДВБ выбирает домен и на канве, не только в инспекторе.
-        selected: selection?.kind === 'domain' && selection.id === block.id,
+        // v0.02.03: мультивыбор ДБ (Ф-74) — флаг из viewStore.domainSelection.
+        selected:
+          (selection?.kind === 'domain' && selection.id === block.id) ||
+          domainSelection.includes(block.id),
         data: {
           blockId: block.id,
           name: block.name,
@@ -429,11 +492,103 @@ function CanvasInner() {
     // Автоматические размеры доменов (v0.01.08).
     sizeMode,
     sizeFactors,
+    // Мультивыбор ДБ (v0.02.03, Ф-74).
+    domainSelection,
   ]);
 
   // Состояние узлов канвы: живёт до трассировки — routing читает актуальные
   // позиции и измеренные габариты (в том числе во время перетаскивания).
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<CanvasNode>(nodes);
+
+  /* Логические группы (v0.02.03, Ф-70…Ф-74): рамки — узлы «lgframe» в том же
+     состоянии канвы (иначе React Flow держит их видимостью «hidden» до
+     измерения, которое невозможно применить). */
+  const liveRects = useMemo(() => {
+    const map = new Map<string, LgRect>();
+    for (const node of rfNodes) {
+      if (node.type !== 'domain') continue;
+      map.set(node.id, {
+        x: node.position.x,
+        y: node.position.y,
+        width: node.measured?.width ?? NODE_ESTIMATED_WIDTH,
+        height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
+      });
+    }
+    return map;
+  }, [rfNodes]);
+
+  const frameGeometry = useMemo(
+    () => computeGroupGeometry(project.architecture, liveRects, visibility),
+    [project.architecture, liveRects, visibility],
+  );
+
+  // Узлы-рамки ЛГ (под доменами): развёрнутые рамки и свёрнутые блоки.
+  const lgNodes = useMemo<CanvasNode[]>(() => {
+    const groups = project.architecture.groups ?? [];
+    if (groups.length === 0) return [];
+    const depths = groupDepths(groups);
+    const ordered = groups
+      .filter(
+        (g) => visibility.visibleExpanded.has(g.id) || visibility.visibleCollapsed.has(g.id),
+      )
+      .sort((a, b) => (depths.get(a.id) ?? 0) - (depths.get(b.id) ?? 0));
+    const list: CanvasNode[] = [];
+    for (const group of ordered) {
+      const geometry = frameGeometry.get(group.id);
+      if (!geometry) continue;
+      const data: GroupFrameNodeData = {
+        groupId: group.id,
+        name: group.name,
+        color: group.color,
+        collapsed: geometry.collapsed,
+        empty: geometry.empty,
+        memberCount: project.architecture.blocks.filter((b) => b.groupId === group.id).length,
+        selected: selection?.kind === 'group' && selection.id === group.id,
+        dropTarget: dropGroup === group.id,
+        onToggleCollapse: (groupId: string) => {
+          const current = useSkibStore
+            .getState()
+            .project.architecture.groups?.find((g) => g.id === groupId);
+          updateGroup(groupId, { collapsed: !(current?.collapsed ?? false) });
+        },
+        onOpenMenu: (groupId: string, x: number, y: number) => {
+          setCtxMenu({ kind: 'group', groupId, x, y });
+        },
+        onRename: (groupId: string) => {
+          window.dispatchEvent(
+            new CustomEvent('skib-lg-dialog', {
+              detail: { mode: 'rename', groupId },
+            }),
+          );
+        },
+      };
+      list.push({
+        id: group.id,
+        type: 'lgframe' as const,
+        position: { x: geometry.rect.x, y: geometry.rect.y },
+        draggable: false,
+        selectable: false,
+        focusable: false,
+        deletable: false,
+        zIndex: -1,
+        data,
+        style: { width: geometry.rect.width, height: geometry.rect.height },
+      });
+    }
+    return list;
+  }, [
+    project.architecture,
+    visibility,
+    frameGeometry,
+    selection,
+    dropGroup,
+    updateGroup,
+  ]);
+
+  // Полный список узлов канвы: узлы состояния (включая рамки ЛГ).
+  // Рамки сливаются в состояние эффектом ниже — измерения React Flow
+  // применяются к ним, как к доменам.
+  const displayNodes = rfNodes;
 
   // Источник подсветки: наведение приоритетнее выделения из хранилища.
   const focus = useMemo<{ kind: 'edge' | 'node'; id: string } | null>(() => {
@@ -470,6 +625,15 @@ function CanvasInner() {
     [project.architecture.edges, externalIds, focusInternal, collapsedPorts],
   );
 
+  // Перенос связей на рамки свёрнутых ЛГ (v0.02.03, Ф-72): конец скрытого ДБ
+  // ведёт к ближайшей видимой свёрнутой ЛГ; связи внутри одной свёрнутой ЛГ
+  // (internal) не отображаются; у развёрнутых ЛГ связи идут как есть —
+  // сквозь границу рамки.
+  const routedEdges = useMemo(() => {
+    const remapped = remapEdgesForDisplay(modelEdges, visibility);
+    return remapped.filter((edge) => !edge.internal);
+  }, [modelEdges, visibility]);
+
   // Централизованная трассировка стрелок (v0.01.07–v0.01.09): готовые
   // ломаные для каждой видимой стрелки и стороны портов. С v0.01.09 весь
   // цикл трассировки живёт в движке (routeEdges в src/engine/edgeRouting.ts):
@@ -481,10 +645,13 @@ function CanvasInner() {
     paths: Map<string, RoutePoint[]>;
     sides: Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>;
   }>(() => {
-    if (!showEdges || modelEdges.length === 0) {
+    if (!showEdges || routedEdges.length === 0) {
       return { paths: new Map(), sides: new Map() };
     }
-    // Прямоугольники доменов — по узлам канвы (актуальны во время drag).
+    // Прямоугольники доменов — по узлам канвы (актуальны во время drag);
+    // рамки свёрнутых ЛГ — как обычные препятствия (Ф-72): к ним крепятся
+    // перенесённые стрелки. Развёрнутые рамки — не препятствия: связи идут
+    // сквозь границу ЛГ.
     const rects = new Map<string, RouteRect>();
     for (const node of rfNodes) {
       if (node.type !== 'domain') continue;
@@ -495,12 +662,18 @@ function CanvasInner() {
         height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
       });
     }
-    return routeEdges({ rects, edges: modelEdges });
-  }, [rfNodes, modelEdges, showEdges]);
+    for (const [groupId, geometry] of frameGeometry) {
+      if (geometry.collapsed) rects.set(groupId, geometry.rect);
+    }
+    return routeEdges({
+      rects,
+      edges: routedEdges.map((edge) => ({ id: edge.id, from: edge.from, to: edge.to })),
+    });
+  }, [rfNodes, routedEdges, showEdges, frameGeometry]);
 
   const edges = useMemo<Edge[]>(() => {
     if (!showEdges) return [];
-    return modelEdges.map((edge) => {
+    return routedEdges.map((edge) => {
       // Цвет стрелки — целостность потока: зелёная из доверенного источника,
       // красная — низкоцелостный поток (3.5 v0.01.01).
       const color = trust.edges.get(edge.id) === 'green' ? TRUST_COLORS.green.border : TRUST_COLORS.red.border;
@@ -539,7 +712,7 @@ function CanvasInner() {
         className: dimmed ? 'skib-edge skib-edge--dim' : 'skib-edge',
       } as Edge;
     });
-  }, [modelEdges, routing, showEdges, trust, theme, focusedEdgeIds]);
+  }, [routedEdges, routing, showEdges, trust, theme, focusedEdgeIds]);
 
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(edges);
 
@@ -550,6 +723,69 @@ function CanvasInner() {
   useEffect(() => {
     setRfEdges(edges);
   }, [edges, setRfEdges]);
+
+  // Слияние рамок ЛГ в состояние канвы (v0.02.03): после базовой
+  // синхронизации рамки добавляются/обновляются по идентификатору;
+  // сравнение по значениям — при неизменной геометрии состояние
+  // не трогается (сходимость без зацикливания).
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const oldLg = prev.filter((node) => node.type === 'lgframe');
+      const same =
+        oldLg.length === lgNodes.length &&
+        oldLg.every((node, index) => {
+          const next = lgNodes[index];
+          if (!next || node.id !== next.id) return false;
+          const a = node.data as GroupFrameNodeData;
+          const b = next.data as GroupFrameNodeData;
+          return (
+            node.position.x === next.position.x &&
+            node.position.y === next.position.y &&
+            node.style?.width === next.style?.width &&
+            node.style?.height === next.style?.height &&
+            a.name === b.name &&
+            a.color === b.color &&
+            a.collapsed === b.collapsed &&
+            a.empty === b.empty &&
+            a.memberCount === b.memberCount &&
+            a.selected === b.selected &&
+            a.dropTarget === b.dropTarget
+          );
+        });
+      if (same) return prev;
+      const base = prev.filter((node) => node.type !== 'lgframe');
+      return [...base, ...lgNodes];
+    });
+  }, [lgNodes, setRfNodes]);
+
+  // Мультивыбор ДБ (v0.02.03, Ф-74): выбор канвы (Ctrl-клик, рамка выбора)
+  // синхронизируется с viewStore; инспектор показывает последний выбранный ДБ.
+  const handleSelectionChange = useCallback(
+    ({ nodes: selected }: { nodes: CanvasNode[] }) => {
+      const ids = selected.filter((node) => node.type === 'domain').map((node) => node.id);
+      const current = useViewStore.getState().domainSelection;
+      if (ids.length === current.length && ids.every((id, index) => id === current[index])) return;
+      setDomainSelection(ids);
+      if (ids.length > 0) {
+        const storeSelection = useSkibStore.getState().selection;
+        if (storeSelection?.kind !== 'domain' || !ids.includes(storeSelection.id)) {
+          setSelection({ kind: 'domain', id: ids[ids.length - 1] });
+        }
+      } else if (useSkibStore.getState().selection?.kind === 'domain') {
+        // Канва не оставила выбранных ДБ — инспектор закрывается (выбор
+        // стрелки/цели не затрагивается: они синхронизируются отдельно).
+        setSelection(null);
+      }
+    },
+    [setDomainSelection, setSelection],
+  );
+
+  // Сброс мультивыбора при отмене/загрузке/удалении (selection стал null).
+  useEffect(() => {
+    if (selection === null && useViewStore.getState().domainSelection.length > 0) {
+      setDomainSelection([]);
+    }
+  }, [selection, setDomainSelection]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => {
@@ -645,6 +881,217 @@ function CanvasInner() {
     [deleteEdge],
   );
 
+  /* Логические группы (v0.02.03, Ф-74): перетаскивание ДБ внутрь рамки ЛГ
+     включает их в группу, за пределы — исключает. Рамки перетаскиваемых
+     членов исключаются из геометрии (рамка следует за членом и иначе
+     перекрывала бы цель); целевой считается наименьший содержащий
+     прямоугольник — для вложенных ЛГ это самая глубокая рамка. Во время
+     drag рамка-цель подсвечивается (dropGroup). */
+  const dropGeometryFor = useCallback(
+    (excludeIds: ReadonlySet<string>) => {
+      if (excludeIds.size === 0) return frameGeometry;
+      const rects = new Map(liveRects);
+      for (const id of excludeIds) rects.delete(id);
+      return computeGroupGeometry(project.architecture, rects, visibility);
+    },
+    [frameGeometry, liveRects, project.architecture, visibility],
+  );
+
+  const dropCandidateFor = useCallback(
+    (
+      position: { x: number; y: number },
+      width: number,
+      height: number,
+      geometry: Map<string, GroupGeometry>,
+    ): string | null => {
+      const centerX = position.x + width / 2;
+      const centerY = position.y + height / 2;
+      let best: { id: string; area: number } | null = null;
+      for (const [groupId, geometryItem] of geometry) {
+        const rect = geometryItem.rect;
+        if (
+          centerX >= rect.x &&
+          centerX <= rect.x + rect.width &&
+          centerY >= rect.y &&
+          centerY <= rect.y + rect.height
+        ) {
+          const area = rect.width * rect.height;
+          if (!best || area < best.area) best = { id: groupId, area };
+        }
+      }
+      return best?.id ?? null;
+    },
+    [],
+  );
+
+  const handleNodeDrag = useCallback(
+    (_event: unknown, node: CanvasNode) => {
+      if (node.type !== 'domain') return;
+      // Позиция — из живых прямоугольников канвы (изменения перетаскивания
+      // уже применены к состоянию); параметр node может нести устаревшую позицию.
+      const rect = liveRects.get(node.id);
+      if (!rect) return;
+      const geometry = dropGeometryFor(new Set([node.id]));
+      const candidate = dropCandidateFor({ x: rect.x, y: rect.y }, rect.width, rect.height, geometry);
+      setDropGroup((prev) => (prev === candidate ? prev : candidate));
+    },
+    [dropCandidateFor, dropGeometryFor, liveRects],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_event: unknown, node: CanvasNode, nodes: CanvasNode[]) => {
+      setDropGroup(null);
+      const store = useSkibStore.getState();
+      const dragged = (nodes ?? []).filter((n) => n.type === 'domain');
+      const list = dragged.length > 0 ? dragged : node.type === 'domain' ? [node] : [];
+      if (list.length === 0) return;
+      // Итоговые позиции — из хранилища: к моменту drag stop изменения
+      // позиции уже применены (handleNodesChange → updatePositions).
+      const geometry = dropGeometryFor(new Set(list.map((item) => item.id)));
+      const byTarget = new Map<string | null, string[]>();
+      for (const item of list) {
+        const block = store.project.architecture.blocks.find((b) => b.id === item.id);
+        if (!block) continue;
+        const rect = liveRects.get(item.id);
+        const position = block.position ?? { x: 0, y: 0 };
+        const target = dropCandidateFor(
+          position,
+          rect?.width ?? NODE_ESTIMATED_WIDTH,
+          rect?.height ?? NODE_ESTIMATED_HEIGHT,
+          geometry,
+        );
+        byTarget.set(target, [...(byTarget.get(target) ?? []), item.id]);
+      }
+      for (const [target, ids] of byTarget) {
+        const changed = ids.some(
+          (id) =>
+            (store.project.architecture.blocks.find((b) => b.id === id)?.groupId ?? null) !== target,
+        );
+        if (changed) store.setDomainsGroup(ids, target);
+      }
+    },
+    [dropCandidateFor, dropGeometryFor, liveRects],
+  );
+
+  /* Контекстные меню (v0.02.03): по домену — команды ЛГ для мультивыбора;
+     по рамке ЛГ — свёртывание, переименование, цвет, вложенная ЛГ, удаление;
+     по канве — создание ЛГ из выделенных. */
+  const ctxEntries = useMemo<ContextMenuEntry[]>(() => {
+    const groups = project.architecture.groups ?? [];
+    const selected = domainSelection;
+    const groupedSelected = selected.filter((id) =>
+      project.architecture.blocks.some((b) => b.id === id && b.groupId),
+    ).length;
+    if (ctxMenu?.kind === 'domain') {
+      return [
+        {
+          label: ru.lg.menuDomainTitle,
+          disabled: true,
+          hint: ru.lg.selectedCount(selected.length),
+        },
+        {
+          label: ru.lg.ctxCreate(selected.length),
+          disabled: selected.length === 0,
+          testId: 'lg-ctx-create',
+          onSelect: () => {
+            if (selected.length === 0) return;
+            window.dispatchEvent(
+              new CustomEvent('skib-lg-dialog', {
+                detail: { mode: 'create', memberIds: selected },
+              }),
+            );
+          },
+        },
+        { kind: 'separator' },
+        ...groups.map((group) => ({
+          kind: 'item' as const,
+          label: ru.lg.ctxAddTo(group.name),
+          dot: group.color,
+          disabled: selected.length === 0,
+          testId: `lg-ctx-add-${group.id}`,
+          onSelect: () => setDomainsGroup(selected, group.id),
+        })),
+        {
+          label: ru.lg.ctxRemove,
+          disabled: groupedSelected === 0,
+          testId: 'lg-ctx-remove',
+          onSelect: () => setDomainsGroup(selected, null),
+        },
+      ];
+    }
+    if (ctxMenu?.kind === 'group') {
+      const group = groups.find((g) => g.id === ctxMenu.groupId);
+      if (!group) return [];
+      const collapsed = group.collapsed ?? false;
+      return [
+        {
+          label: ru.lg.menuGroupTitle(group.name),
+          disabled: true,
+          hint: ru.lg.selectedCount(selected.length),
+        },
+        {
+          label: collapsed ? ru.lg.ctxExpand : ru.lg.ctxCollapse,
+          testId: 'lg-ctx-toggle',
+          onSelect: () => updateGroup(group.id, { collapsed: !collapsed }),
+        },
+        {
+          label: ru.lg.ctxRename,
+          testId: 'lg-ctx-rename',
+          onSelect: () => {
+            window.dispatchEvent(
+              new CustomEvent('skib-lg-dialog', {
+                detail: { mode: 'rename', groupId: group.id },
+              }),
+            );
+          },
+        },
+        {
+          label: ru.lg.ctxCreateNested,
+          disabled: selected.length === 0 || !depthAllowed(groups, group.id),
+          testId: 'lg-ctx-create-nested',
+          hint: depthAllowed(groups, group.id) ? undefined : ru.errors.lgFailed(MAX_DOMAIN_GROUPS, MAX_LG_DEPTH),
+          onSelect: () => {
+            window.dispatchEvent(
+              new CustomEvent('skib-lg-dialog', {
+                detail: { mode: 'create', memberIds: selected, parentId: group.id },
+              }),
+            );
+          },
+        },
+        { kind: 'separator' },
+        {
+          kind: 'swatches',
+          label: ru.lg.ctxColor,
+          colors: LG_COLORS,
+          current: group.color,
+          testId: 'lg-ctx-color',
+          onPick: (color: string) => updateGroup(group.id, { color }),
+        },
+        { kind: 'separator' },
+        {
+          label: ru.lg.ctxDelete,
+          testId: 'lg-ctx-delete',
+          onSelect: () => deleteGroup(group.id),
+        },
+      ];
+    }
+    return [
+      {
+        label: ru.lg.ctxCreate(selected.length),
+        disabled: selected.length === 0,
+        testId: 'lg-ctx-create',
+        onSelect: () => {
+          if (selected.length === 0) return;
+          window.dispatchEvent(
+            new CustomEvent('skib-lg-dialog', {
+              detail: { mode: 'create', memberIds: selected },
+            }),
+          );
+        },
+      },
+    ];
+  }, [ctxMenu, project.architecture, domainSelection, setDomainsGroup, updateGroup, deleteGroup]);
+
   // Автоматическая раскладка (v0.01.03, v0.01.07): слои по связям внутри
   // периметра, внешние системы по сторонам рамки (источники — слева,
   // приёмники — справа), зазоры — по измеренным габаритам узлов; свёрнутые
@@ -674,7 +1121,8 @@ function CanvasInner() {
     toast({ title: ru.canvas.layoutApplied });
   }, [applyAutoLayout, expandAllPorts, toast, getNodes]);
 
-  // Delete удаляет только выбранную стрелку (НФ-10); домены удаляются из инспектора (Ф-15).
+  // Delete удаляет выбранную стрелку (НФ-10) или выбранную ЛГ (Ф-73: ДБ
+  // остаются, становятся несгруппированными); домены удаляются из инспектора (Ф-15).
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if (event.key !== 'Delete') return;
@@ -686,11 +1134,14 @@ function CanvasInner() {
       if (current?.kind === 'edge') {
         event.preventDefault();
         deleteEdge(current.id);
+      } else if (current?.kind === 'group') {
+        event.preventDefault();
+        deleteGroup(current.id);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [deleteEdge]);
+  }, [deleteEdge, deleteGroup]);
 
   // Сброс карточки функции на канву (v0.01.06): на свободном месте сразу
   // создаётся новый домен безопасности с функцией внутри; на внутреннем
@@ -754,12 +1205,13 @@ function CanvasInner() {
       onDrop={handleCanvasDrop}
     >
       <ReactFlow
-        nodes={rfNodes}
+        nodes={displayNodes}
         edges={rfEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
+        onSelectionChange={handleSelectionChange}
         onConnect={handleConnect}
         onConnectStart={handleConnectStart}
         onConnectEnd={handleConnectEnd}
@@ -767,9 +1219,65 @@ function CanvasInner() {
         onEdgesDelete={(deleted) => deleted.forEach((edge) => handleEdgeDelete(edge.id))}
         onNodeClick={(_, node) => {
           if (node.id === '__perimeter') return;
+          if (node.type === 'lgframe') {
+            // Клик по плашке/свёрнутому блоку ЛГ — выбор группы (Ф-70);
+            // мультивыбор ДБ сбрасывается, чтобы команды «ЛГ» не применялись к ДБ.
+            setSelection({ kind: 'group', id: node.id });
+            setDomainSelection([]);
+            return;
+          }
           setSelection({ kind: 'domain', id: node.id });
         }}
-        onPaneClick={() => setSelection(null)}
+        onPaneClick={() => {
+          setSelection(null);
+          setDomainSelection([]);
+        }}
+        onNodeDrag={handleNodeDrag}
+        onNodeDragStop={handleNodeDragStop}
+        onNodeContextMenu={(event, node) => {
+          if (node.id === '__perimeter') return;
+          event.preventDefault();
+          if (node.type === 'lgframe') {
+            setSelection({ kind: 'group', id: node.id });
+            setDomainSelection([]);
+            setCtxMenu({ kind: 'group', groupId: node.id, x: event.clientX, y: event.clientY });
+            return;
+          }
+          // ДБ не в мультивыборе — выбираем только его (Ф-74).
+          const selected = useViewStore.getState().domainSelection;
+          if (!selected.includes(node.id)) {
+            setDomainSelection([node.id]);
+            setSelection({ kind: 'domain', id: node.id });
+          }
+          setCtxMenu({ kind: 'domain', x: event.clientX, y: event.clientY });
+        }}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          // Правый клик внутри развёрнутой рамки — меню этой ЛГ (наименьший
+          // содержащий прямоугольник); по свободному месту — меню канвы.
+          let best: { id: string; area: number } | null = null;
+          for (const [groupId, geometry] of frameGeometry) {
+            if (geometry.collapsed) continue;
+            const rect = geometry.rect;
+            if (
+              point.x >= rect.x &&
+              point.x <= rect.x + rect.width &&
+              point.y >= rect.y &&
+              point.y <= rect.y + rect.height
+            ) {
+              const area = rect.width * rect.height;
+              if (!best || area < best.area) best = { id: groupId, area };
+            }
+          }
+          if (best) {
+            setSelection({ kind: 'group', id: best.id });
+            setDomainSelection([]);
+            setCtxMenu({ kind: 'group', groupId: best.id, x: event.clientX, y: event.clientY });
+          } else {
+            setCtxMenu({ kind: 'pane', x: event.clientX, y: event.clientY });
+          }
+        }}
         onEdgeMouseEnter={(_, edge) => setHoverFocus({ kind: 'edge', id: edge.id })}
         onEdgeMouseLeave={() => setHoverFocus((current) => (current?.kind === 'edge' ? null : current))}
         onNodeMouseEnter={(_, node) => {
@@ -813,6 +1321,12 @@ function CanvasInner() {
           maskColor={theme === 'dark' ? 'rgba(24, 24, 27, 0.72)' : 'rgba(250, 250, 250, 0.72)'}
           nodeColor={(node) => {
             if (node.id === '__perimeter') return 'transparent';
+            if (node.type === 'lgframe') {
+              // Свёрнутая ЛГ видна в мини-навигаторе цветом ЛГ; развёрнутая
+              // рамка — прозрачна (не заслоняет ДБ).
+              const lgData = node.data as GroupFrameNodeData;
+              return lgData.collapsed || lgData.empty ? lgData.color : 'transparent';
+            }
             const data = node.data as DomainNodeData;
             if (data.external) return data.externalTrusted ? TRUST_COLORS.green.border : TRUST_COLORS.red.border;
             if (data.trustClass === 'ddbpcd') return TRUST_COLORS.yellow.border;
@@ -821,11 +1335,12 @@ function CanvasInner() {
           // Подсветка домена из таблицы ДВБ (v0.01.04) и краткая подсветка
           // критичных доменов цели (v0.01.09): голубой контур узла в
           // мини-навигаторе — как на самой диаграмме.
-          nodeStrokeColor={(node) =>
-            node.id === highlightedDomainId || flashDomainIds?.has(node.id)
+          nodeStrokeColor={(node) => {
+            if (node.type === 'lgframe') return 'transparent';
+            return node.id === highlightedDomainId || flashDomainIds?.has(node.id)
               ? HIGHLIGHT_COLOR
-              : 'transparent'
-          }
+              : 'transparent';
+          }}
           nodeStrokeWidth={highlightedDomainId || flashDomainIds ? 2 : 1}
         />
         {/* Кнопки вида канвы (v0.01.02–v0.01.03): стрелки, периметр, раскладка.
@@ -887,6 +1402,15 @@ function CanvasInner() {
           </Button>
         </Panel>
       </ReactFlow>
+      {/* Контекстное меню канвы (v0.02.03): команды ЛГ для домена, рамки, канвы. */}
+      {ctxMenu && (
+        <CanvasContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          entries={ctxEntries}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
       {project.architecture.blocks.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="rounded-md border border-border bg-popover/95 px-6 py-4 text-sm text-muted-foreground">

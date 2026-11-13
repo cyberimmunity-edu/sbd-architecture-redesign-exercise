@@ -19,12 +19,12 @@ test.beforeEach(async ({ page }) => {
 async function loadRobot(page: import('@playwright/test').Page) {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 }
 
 test('Э-02: загрузка architecture.yaml и security.yaml через диалоги', async ({ page }) => {
   await page.getByTestId('file-architecture').setInputFiles(resolve(FIXTURES, 'robot/architecture.yaml'));
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 4');
   await expect(page.getByTestId('summary-bar')).toContainText('размещено 0 из 0 функций');
 
@@ -37,6 +37,7 @@ test('Э-02: загрузка architecture.yaml и security.yaml через ди
 
 test('Э-02b: загрузка архитектуры из PlantUML эквивалентна YAML (Ф-3), включая внешние системы', async ({ page }) => {
   await page.getByTestId('file-puml').setInputFiles(resolve(FIXTURES, 'robot/architecture.puml'));
+  // PlantUML не переносит ЛГ: рамки групп нет — 7 узлов.
   await expect(page.locator('.react-flow__node')).toHaveCount(7);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 4');
   await expect(page.getByTestId('summary-bar')).toContainText('внешние системы: 2');
@@ -62,7 +63,7 @@ test('Э-08: экспорт state.yaml и повторный импорт даю
   await page.reload();
   await page.getByTestId('file-state').setInputFiles(path!);
   // Проект пуст → замена без подтверждения (Ф-25).
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 4');
 });
 
@@ -79,7 +80,7 @@ test('Э-09: некорректный YAML — панель ошибок с ко
   await expect(panel).toContainText('E-102');
   await expect(panel).toContainText('Ошибки — файл не применён');
   // Текущий проект не изменён (Ф-6).
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 4');
   // Индикатор валидации в верхней панели — красный.
   await expect(page.locator('header')).toContainText('Ошибки');

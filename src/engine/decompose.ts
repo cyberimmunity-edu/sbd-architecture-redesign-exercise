@@ -102,6 +102,8 @@ export function decompose(project: Project, input: DecomposeInput): DecomposeRes
   }
 
   // Транзакция: создание потомков, переподключение стрелок, возврат функций в пул (T-D-03).
+  // v0.02.03: потомки наследуют ЛГ исходного домена (рамка ЛГ продолжает
+  // охватывать заменённые домены), группы архитектуры сохраняются.
   const childIds: string[] = [];
   const children: Block[] = input.children.map((child, index) => {
     const id = generateChildId(project, input.blockId, index);
@@ -110,6 +112,7 @@ export function decompose(project: Project, input: DecomposeInput): DecomposeRes
       id,
       name: child.name,
       cost: child.cost,
+      ...(parent.groupId ? { groupId: parent.groupId } : {}),
       position: {
         x: (parent.position?.x ?? 0) + (index % 2) * 300,
         y: (parent.position?.y ?? 0) + Math.floor(index / 2) * 200,
@@ -140,7 +143,7 @@ export function decompose(project: Project, input: DecomposeInput): DecomposeRes
     ok: true,
     project: {
       ...project,
-      architecture: { blocks: newBlocks, edges: newEdges },
+      architecture: { ...project.architecture, blocks: newBlocks, edges: newEdges },
       assignments,
     },
   };

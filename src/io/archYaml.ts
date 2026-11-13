@@ -6,8 +6,8 @@
 
 import { dump, load, YAMLException } from 'js-yaml';
 import type { Architecture, ImportMessage } from '../engine/types';
-import { FILE_VERSION } from '../engine/types';
-import { ERR, err, warn } from './errors';
+import { FILE_VERSION, LG_DEFAULT_COLOR } from '../engine/types';
+import { ERR, WARN, err, warn } from './errors';
 import {
   allowedKeys,
   archInnerSchema,
@@ -15,6 +15,8 @@ import {
   collectUnknownKeys,
   issuePath,
 } from './schema';
+import { normalizeGroups } from '../engine/groups';
+import type { GroupIssue } from '../engine/groups';
 import { validateArchitecture } from './validate';
 
 export interface ParseResult<T> {
@@ -40,6 +42,9 @@ export function parseArchInner(data: unknown): ParseResult<Architecture> {
     return { errors, warnings };
   }
   const raw = parsed.data;
+  // Логические группы (v0.02.03, Ф-70): разбор с защитной нормализацией
+  // (неизвестные ссылки W-010, цвет вне палитры W-011, циклы родителя W-012).
+  const groupIssues: GroupIssue[] = [];
   const model: Architecture = {
     blocks: raw.blocks.map((block) => ({
       id: block.id,
@@ -52,6 +57,8 @@ export function parseArchInner(data: unknown): ParseResult<Architecture> {
       ...(block.trusted ? { trusted: true } : {}),
       // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
       ...(!block.external && block.forceTrusted ? { forceTrusted: true } : {}),
+      // Логическая группа блока (v0.02.03, Ф-70).
+      ...(block.group ? { groupId: block.group } : {}),
     })),
     edges: raw.edges.map((edge) => ({
       id: edge.id,
@@ -59,13 +66,38 @@ export function parseArchInner(data: unknown): ParseResult<Architecture> {
       to: edge.to,
       label: edge.label,
     })),
+    ...(raw.groups
+      ? {
+          groups: raw.groups.map((group) => ({
+            id: group.id,
+            name: group.name,
+            // Цвет не задан — серый по умолчанию (без W-011: цвет не указан).
+            color: group.color ?? LG_DEFAULT_COLOR,
+            ...(group.collapsed ? { collapsed: true } : {}),
+            ...(group.parent ? { parentId: group.parent } : {}),
+            ...(group.position ? { position: { x: group.position.x, y: group.position.y } } : {}),
+          })),
+        }
+      : {}),
   };
-  const semantic = validateArchitecture(model);
+  const normalized = normalizeGroups(model);
+  groupIssues.push(...normalized.issues);
+  for (const issue of groupIssues) {
+    const path = issue.path ?? `groups`;
+    if (issue.kind === 'unknownRef') {
+      warnings.push(warn(WARN.W010, `ссылка на несуществующую группу «${issue.ref}» у «${issue.id}» игнорируется — объект остаётся несгруппированным`, { path }));
+    } else if (issue.kind === 'badColor') {
+      warnings.push(warn(WARN.W011, `цвет группы «${issue.id}» вне палитры ЛГ (красный, жёлтый и зелёный зарезервированы под доверие ДБ) — заменён серым`, { path }));
+    } else {
+      warnings.push(warn(WARN.W012, `цикл вложенности групп с участием «${issue.id}» — связь с родителем удалена`, { path }));
+    }
+  }
+  const semantic = validateArchitecture(normalized.architecture);
   if (semantic.some((m) => m.code.startsWith('E'))) {
     return { errors: [...errors, ...semantic], warnings };
   }
   warnings.push(...semantic);
-  return { errors, warnings, model };
+  return { errors, warnings, model: normalized.architecture };
 }
 
 /** Разбор уже распознанного объекта architecture.yaml. */
@@ -111,7 +143,7 @@ export function parseArchitectureYaml(text: string): ParseResult<Architecture> {
   return parseArchitectureData(data);
 }
 
-/** Экспорт архитектуры: блоки и стрелки с координатами (Ф-24). */
+/** Экспорт архитектуры: блоки, стрелки и логические группы с координатами (Ф-24). */
 export function serializeArchitectureYaml(
   architecture: Architecture,
   system?: { name?: string; description?: string },
@@ -129,6 +161,8 @@ export function serializeArchitectureYaml(
       ...(b.external && b.trusted ? { trusted: true } : {}),
       // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
       ...(!b.external && b.forceTrusted ? { forceTrusted: true } : {}),
+      // Логическая группа блока (v0.02.03, Ф-70).
+      ...(b.groupId ? { group: b.groupId } : {}),
       ...(b.position ? { position: { x: b.position.x, y: b.position.y } } : {}),
     })),
     edges: architecture.edges.map((e) => ({
@@ -137,6 +171,19 @@ export function serializeArchitectureYaml(
       to: e.to,
       ...(e.label ? { label: e.label } : {}),
     })),
+    // Логические группы ДБ (v0.02.03, Ф-70…Ф-76) — опциональная секция.
+    ...(architecture.groups && architecture.groups.length > 0
+      ? {
+          groups: architecture.groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            color: g.color,
+            ...(g.collapsed ? { collapsed: true } : {}),
+            ...(g.parentId ? { parent: g.parentId } : {}),
+            ...(g.position ? { position: { x: g.position.x, y: g.position.y } } : {}),
+          })),
+        }
+      : {}),
   };
   return dump(payload, { lineWidth: 120, noRefs: true });
 }

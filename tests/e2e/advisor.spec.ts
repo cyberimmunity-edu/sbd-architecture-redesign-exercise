@@ -33,7 +33,7 @@ test('v0.01.08: «Проверить» на чистой модели — тос
 test('v0.01.08: «Проверить» на примере без размещений — E-501 и W-006', async ({ page }) => {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 
   await page.getByTestId('check-diagram').click();
   const panel = page.getByTestId('validation-panel');
@@ -51,7 +51,7 @@ test('v0.01.08: «Проверить» на примере без размеще
 test('v0.01.08: панель «Советы» показывает цели и экономию, применение вручную', async ({ page }) => {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 
   const panel = page.getByTestId('advisor-panel');
   await expect(panel).toBeVisible();

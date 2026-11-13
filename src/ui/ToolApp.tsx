@@ -64,6 +64,7 @@ import { SummaryPanel } from './SummaryPanel';
 import { DvbPanel } from './DvbPanel';
 import { AdvisorPanel } from './AdvisorPanel';
 import { DecomposeDialog } from './DecomposeDialog';
+import { GroupDialog, LG_DIALOG_EVENT, type LgDialogRequest } from './GroupDialog';
 import { ValidationPanel } from './ValidationPanel';
 import { HelpDialog } from './HelpDialog';
 import { SeqLeftPanel } from './sequence/SeqLeftPanel';
@@ -122,6 +123,9 @@ export function ToolApp() {
 
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [decomposeBlockId, setDecomposeBlockId] = useState<string | null>(null);
+  // Диалог логической группы (v0.02.03, Ф-70): создание/переименование —
+  // событие skib-lg-dialog из канвы, тулбара «Правка» и инспектора.
+  const [lgDialog, setLgDialog] = useState<LgDialogRequest | null>(null);
   // Диалог краткой справки по интерфейсу (v0.01.02).
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -139,6 +143,16 @@ export function ToolApp() {
     };
     window.addEventListener('skib-decompose', handler);
     return () => window.removeEventListener('skib-decompose', handler);
+  }, []);
+
+  // Диалог ЛГ открывается из канвы, тулбара «Правка» и инспектора (Ф-70).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<LgDialogRequest>).detail;
+      if (detail) setLgDialog(detail);
+    };
+    window.addEventListener(LG_DIALOG_EVENT, handler);
+    return () => window.removeEventListener(LG_DIALOG_EVENT, handler);
   }, []);
 
   // Горячие клавиши: Ctrl+Z — отмена, Ctrl+Y — повтор (НФ-10).
@@ -674,6 +688,12 @@ export function ToolApp() {
         key={decomposeBlockId ?? 'closed'}
         blockId={decomposeBlockId}
         onClose={() => setDecomposeBlockId(null)}
+      />
+      {/* Диалог логической группы (v0.02.03, Ф-70). */}
+      <GroupDialog
+        key={lgDialog === null ? 'lg-closed' : `${lgDialog.mode}-${lgDialog.groupId ?? 'new'}-${lgDialog.memberIds?.join(',') ?? ''}-${lgDialog.parentId ?? ''}`}
+        request={lgDialog}
+        onClose={() => setLgDialog(null)}
       />
       {/* Краткая справка по интерфейсу (v0.01.02). */}
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />

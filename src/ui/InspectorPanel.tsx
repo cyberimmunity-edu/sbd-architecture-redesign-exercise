@@ -45,6 +45,7 @@ import { useSkibStore } from '../store/projectStore';
 import { FOCUS_NODE_EVENT, useViewStore } from '../store/viewStore';
 import { goalDistribution } from '../engine/coverage';
 import { recalcCosts } from '../engine/cost';
+import { groupMemberCount } from '../engine/groups';
 import type { DomainTrustClass } from '../engine/trust';
 import { ru } from '../i18n/ru';
 import { TRUST_COLORS, StatusBadge } from './status';
@@ -59,6 +60,9 @@ export function InspectorPanel() {
   const deleteEdge = useSkibStore((s) => s.deleteEdge);
   const unplaceFunction = useSkibStore((s) => s.unplaceFunction);
   const placeFunction = useSkibStore((s) => s.placeFunction);
+  // Логические группы (v0.02.03, Ф-70): правка и удаление ЛГ из инспектора.
+  const updateGroup = useSkibStore((s) => s.updateGroup);
+  const deleteGroup = useSkibStore((s) => s.deleteGroup);
   const setHighlightedDomain = useViewStore((s) => s.setHighlightedDomain);
   const clearFlash = useViewStore((s) => s.flashDomains);
 
@@ -110,6 +114,23 @@ export function InspectorPanel() {
       const otherBlocks = project.architecture.blocks.filter(
         (b) => b.id !== block.id && !b.external,
       );
+      // Строка членства в ЛГ (v0.02.03, Ф-70) — общая для обоих типов домена.
+      const memberGroup = block.groupId
+        ? (project.architecture.groups ?? []).find((g) => g.id === block.groupId)
+        : undefined;
+      const groupRow = memberGroup ? (
+        <p
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          title={ru.lg.inspectorHint}
+        >
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full ring-1 ring-black/10"
+            style={{ background: memberGroup.color }}
+            aria-hidden
+          />
+          {ru.lg.domainInGroup(memberGroup.name)}
+        </p>
+      ) : null;
 
       if (isExternal) {
         // Внешняя система: имя и доверенность; стоимость не определяется.
@@ -154,6 +175,7 @@ export function InspectorPanel() {
               </p>
             </div>
             <p className="text-xs text-muted-foreground">{ru.canvas.noCostExternal}</p>
+            {groupRow}
             <p className="text-xs text-muted-foreground">{ru.inspector.internalOnlyHint}</p>
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -278,6 +300,7 @@ export function InspectorPanel() {
                 ))}
               </div>
             </div>
+            {groupRow}
             <p className="text-[11px] italic text-muted-foreground">{ru.inspector.internalOnlyHint}</p>
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -303,6 +326,73 @@ export function InspectorPanel() {
           </div>
         );
       }
+    }
+  } else if (selection?.kind === 'group') {
+    // Секция ЛГ (v0.02.03, Ф-70…Ф-73): имя, цвет, состав, свертывание,
+    // переименование (диалог) и удаление (ДБ остаются).
+    const group = (project.architecture.groups ?? []).find((g) => g.id === selection.id);
+    if (group) {
+      const collapsed = group.collapsed ?? false;
+      body = (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold">
+            {ru.lg.inspectorTitle}:{' '}
+            <span className="font-mono text-xs text-muted-foreground">{group.id}</span>
+            {group.parentId && (
+              <span className="ml-2 rounded px-1.5 py-0.5 align-middle text-[10px] font-medium text-muted-foreground" style={{ border: '1px dashed currentColor' }}>
+                {ru.lg.inspectorNestedBadge}
+              </span>
+            )}
+          </h3>
+          <p className="flex items-center gap-2 text-sm text-foreground">
+            <span
+              className="inline-block h-3.5 w-3.5 rounded-full ring-1 ring-black/10"
+              style={{ background: group.color }}
+              aria-hidden
+            />
+            {group.name}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {ru.lg.inspectorMembers(groupMemberCount(project.architecture, group.id))}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              data-testid="inspector-lg-toggle"
+              onClick={() => updateGroup(group.id, { collapsed: !collapsed })}
+            >
+              {collapsed ? ru.lg.inspectorExpand : ru.lg.inspectorCollapse}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              data-testid="inspector-lg-rename"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('skib-lg-dialog', {
+                    detail: { mode: 'rename', groupId: group.id },
+                  }),
+                )
+              }
+            >
+              {ru.lg.inspectorRename}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8"
+              data-testid="inspector-lg-delete"
+              onClick={() => deleteGroup(group.id)}
+            >
+              {ru.lg.inspectorDelete}
+            </Button>
+          </div>
+          <p className="text-[11px] italic text-muted-foreground">{ru.lg.inspectorHint}</p>
+        </div>
+      );
     }
   } else if (selection?.kind === 'card') {
     const fn = fnById.get(selection.id);

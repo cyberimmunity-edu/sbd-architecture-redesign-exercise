@@ -1,7 +1,8 @@
 /**
  * Хранилище настроек вида канвы — v0.01.02, свёрнутые порты — v0.01.03,
  * подсветка домена из таблиц ДВБ — v0.01.04, краткая подсветка критичных
- * доменов цели — v0.01.09, вмещение доменов цели — v0.01.10.
+ * доменов цели — v0.01.09, вмещение доменов цели — v0.01.10,
+ * мультивыбор доменов и раскрытие ЛГ при подсветке — v0.02.03.
  *
  * Настройки вида (показ стрелок-связей, фокус на внутреннем периметре,
  * свёрнутые порты стрелок, подсветка из таблиц, краткая подсветка доменов)
@@ -35,6 +36,7 @@
 
 import { create } from 'zustand';
 import type { SizeMode } from '../engine/sizing';
+import { useSkibStore } from './projectStore';
 
 /** Выбор объекта в режиме ДП (П-10): ДП, линия жизни, стрелка или блок. */
 export type SeqSelection =
@@ -93,11 +95,17 @@ export interface ViewState {
   seqColorsFromDap: boolean;
   /** Выделенные стрелки для команд блоков (Shift/Ctrl, Ф-46). */
   seqSelectedArrows: string[];
+  /** Мультивыбор доменов ДАП (Ctrl-клик и рамка выбора, v0.02.03, Ф-74):
+   *  идентификаторы блоков; команды ЛГ применяются ко всему набору.
+   *  Не сохраняется и в историю не пишется — настройки вида. */
+  domainSelection: string[];
   setMode: (mode: AppMode) => void;
   setActiveSequence: (id: string | null) => void;
   setSeqSelection: (selection: SeqSelection | null) => void;
   toggleSeqColors: () => void;
   setSeqSelectedArrows: (ids: string[]) => void;
+  /** Задать мультивыбор доменов ДАП (v0.02.03). */
+  setDomainSelection: (ids: string[]) => void;
   toggleShowEdges: () => void;
   toggleFocusInternal: () => void;
   /** Свернуть/развернуть стрелки порта (v0.01.03). */
@@ -131,6 +139,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
   seqSelection: null,
   seqColorsFromDap: false,
   seqSelectedArrows: [],
+  domainSelection: [],
   setMode: (mode) =>
     set({
       mode,
@@ -142,6 +151,7 @@ export const useViewStore = create<ViewState>((set, get) => ({
     set({ seqSelection: selection, seqSelectedArrows: selection ? get().seqSelectedArrows : [] }),
   toggleSeqColors: () => set({ seqColorsFromDap: !get().seqColorsFromDap }),
   setSeqSelectedArrows: (ids) => set({ seqSelectedArrows: ids }),
+  setDomainSelection: (ids) => set({ domainSelection: ids }),
   toggleShowEdges: () =>
     // Смена режима вида возвращает свёрнутые стрелки (v0.01.03).
     set({ showEdges: !get().showEdges, collapsedPorts: {} }),
@@ -152,8 +162,16 @@ export const useViewStore = create<ViewState>((set, get) => ({
       collapsedPorts: { ...get().collapsedPorts, [key]: !get().collapsedPorts[key] },
     }),
   expandAllPorts: () => set({ collapsedPorts: {} }),
-  setHighlightedDomain: (id) => set({ highlightedDomainId: id }),
+  setHighlightedDomain: (id) => {
+    // Ф-76: подсвечиваемый ДБ внутри свёрнутой ЛГ — ЛГ раскрывается,
+    // иначе подсветка и фокус были бы невозможны (без истории операций).
+    if (id) useSkibStore.getState().revealDomains([id]);
+    set({ highlightedDomainId: id });
+  },
   flashDomains: (ids) => {
+    // Ф-76: краткая подсветка критичных доменов цели также раскрывает
+    // свёрнутые ЛГ-предки (без записи в историю операций).
+    useSkibStore.getState().revealDomains(ids);
     if (flashTimer) clearTimeout(flashTimer);
     // Пустой набор (у цели нет критичных доменов) — подсветки нет: иначе
     // были бы приглушены все домены диаграммы без единого выделенного.

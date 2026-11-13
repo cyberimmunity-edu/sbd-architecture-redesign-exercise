@@ -346,7 +346,7 @@ test('T-U-10: регрессия ДАП не сломана — декомпоз
   // Возврат в ДАП: домены на канве с полными названиями.
   await page.getByTestId('mode-architecture').click();
   await page.waitForTimeout(400);
-  await expect(page.locator('.react-flow__node')).toHaveCount(23); // 22 блока + рамка периметра
+  await expect(page.locator('.react-flow__node')).toHaveCount(23); // 22 блока + рамка периметра (фикстура vessel-full без ЛГ)
   await expect(page.locator('.react-flow__node').filter({ hasText: '01. ' }).first()).toBeVisible();
   // «+ Домен» — очередной номер 19 (после 18 внутренних).
   await page.getByTestId('add-domain').click();

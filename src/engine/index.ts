@@ -14,6 +14,41 @@ export {
   TRUST_SHORT,
 } from './trust';
 export type { DomainTrustClass, TrustColor, TrustResult, FrameBounds } from './trust';
+export {
+  groupDepths,
+  groupAncestors,
+  groupSubtree,
+  depthUnderParent,
+  depthAllowed,
+  groupBlockMembers,
+  blocksOfGroup,
+  groupMemberCount,
+  subtreeBlockIds,
+  blocksRectAnchor,
+  isGroupEmpty,
+  isAllowedGroupColor,
+  normalizeGroupColor,
+  uniqueGroupName,
+  computeGroupVisibility,
+  remapEdgeEnd,
+  remapEdgesForDisplay,
+  unionRects,
+  computeGroupGeometry,
+  normalizeGroups,
+  LG_FRAME_PADDING,
+  LG_COLLAPSED_WIDTH,
+  LG_COLLAPSED_HEIGHT,
+} from './groups';
+export type {
+  LgRect,
+  BlockSize,
+  GroupVisibility,
+  RemappedEdge,
+  GroupGeometry,
+  GroupIssue,
+  GroupIssueKind,
+  NormalizedGroups,
+} from './groups';
 export { decompose } from './decompose';
 export type { DecomposeInput, DecomposeChildSpec, DecomposeEdgeAssignment, DecomposeResult } from './decompose';
 export { canAddDomain, canAddEdge, limitsReport } from './limits';

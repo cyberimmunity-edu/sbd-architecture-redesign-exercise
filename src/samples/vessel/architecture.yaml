@@ -6,14 +6,17 @@ blocks:
   - id: blk-gps-ins
     name: "01. Навигация GPS/INS"
     cost: 3
+    group: lg-1
     position: { x: 530, y: 80 }
   - id: blk-cam
     name: "02. Камера (техническое зрение)"
     cost: 2
+    group: lg-2
     position: { x: 530, y: 548 }
   - id: blk-lidar
     name: "03. Лидар"
     cost: 2
+    group: lg-2
     position: { x: 530, y: 782 }
   - id: blk-nav
     name: "04. Навигационный вычислитель"
@@ -30,10 +33,12 @@ blocks:
   - id: blk-ai
     name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
     cost: 5
+    group: lg-4
     position: { x: 1790, y: 197 }
   - id: blk-avoid
     name: "08. Подсистема расхождения"
     cost: 3
+    group: lg-3
     position: { x: 2210, y: 197 }
   - id: blk-cargo
     name: "09. Контроль груза и выгрузки"
@@ -42,6 +47,7 @@ blocks:
   - id: blk-radio
     name: "10. Радиосвязь"
     cost: 2
+    group: lg-1
     position: { x: 530, y: 314 }
   - id: ext-shore
     name: "Береговой пост (СУДС)"
@@ -119,3 +125,20 @@ edges:
     from: blk-ota
     to: blk-ai
     label: "обновление моделей ИИ"
+groups:
+  # Логические группы (v0.02.03, Ф-70…Ф-76): связь и позиционирование,
+  # сенсорный контур и «Бортовой интеллект» с вложенной «Оценкой обстановки»
+  # (Ф-71, глубина 2). Цвета — из палитры П-15 без красного/жёлтого/зелёного.
+  - id: lg-1
+    name: "Связь и позиционирование"
+    color: "#1E88E5"
+  - id: lg-2
+    name: "Сенсорный контур"
+    color: "#00897B"
+  - id: lg-3
+    name: "Бортовой интеллект"
+    color: "#8E24AA"
+  - id: lg-4
+    name: "Оценка обстановки"
+    color: "#D81B60"
+    parent: lg-3

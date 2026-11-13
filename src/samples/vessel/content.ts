@@ -29,14 +29,17 @@ blocks:
   - id: blk-gps-ins
     name: "01. Навигация GPS/INS"
     cost: 3
+    group: lg-1
     position: { x: 530, y: 80 }
   - id: blk-cam
     name: "02. Камера (техническое зрение)"
     cost: 2
+    group: lg-2
     position: { x: 530, y: 548 }
   - id: blk-lidar
     name: "03. Лидар"
     cost: 2
+    group: lg-2
     position: { x: 530, y: 782 }
   - id: blk-nav
     name: "04. Навигационный вычислитель"
@@ -53,10 +56,12 @@ blocks:
   - id: blk-ai
     name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
     cost: 5
+    group: lg-4
     position: { x: 1790, y: 197 }
   - id: blk-avoid
     name: "08. Подсистема расхождения"
     cost: 3
+    group: lg-3
     position: { x: 2210, y: 197 }
   - id: blk-cargo
     name: "09. Контроль груза и выгрузки"
@@ -65,6 +70,7 @@ blocks:
   - id: blk-radio
     name: "10. Радиосвязь"
     cost: 2
+    group: lg-1
     position: { x: 530, y: 314 }
   - id: ext-shore
     name: "Береговой пост (СУДС)"
@@ -142,6 +148,23 @@ edges:
     from: blk-ota
     to: blk-ai
     label: "обновление моделей ИИ"
+groups:
+  # Логические группы (v0.02.03, Ф-70…Ф-76): связь и позиционирование,
+  # сенсорный контур и «Бортовой интеллект» с вложенной «Оценкой обстановки»
+  # (Ф-71, глубина 2). Цвета — из палитры П-15 без красного/жёлтого/зелёного.
+  - id: lg-1
+    name: "Связь и позиционирование"
+    color: "#1E88E5"
+  - id: lg-2
+    name: "Сенсорный контур"
+    color: "#00897B"
+  - id: lg-3
+    name: "Бортовой интеллект"
+    color: "#8E24AA"
+  - id: lg-4
+    name: "Оценка обстановки"
+    color: "#D81B60"
+    parent: lg-3
 `;
 
 export const DEMO_SECURITY_YAML = `version: 1
@@ -285,54 +308,60 @@ architecture:
     - id: blk-gps-ins
       name: "01. Навигация GPS/INS"
       cost: 3
-      position: { x: 60, y: 60 }
+      group: lg-1
+      position: { x: 530, y: 80 }
     - id: blk-cam
       name: "02. Камера (техническое зрение)"
       cost: 2
-      position: { x: 60, y: 240 }
+      group: lg-2
+      position: { x: 530, y: 548 }
     - id: blk-lidar
       name: "03. Лидар"
       cost: 2
-      position: { x: 60, y: 400 }
+      group: lg-2
+      position: { x: 530, y: 782 }
     - id: blk-nav
       name: "04. Навигационный вычислитель"
       cost: 4
-      position: { x: 400, y: 60 }
+      position: { x: 1370, y: 314 }
     - id: blk-vision
       name: "05. Анализ видеопотока"
       cost: 3
-      position: { x: 400, y: 240 }
+      position: { x: 950, y: 548 }
     - id: blk-ota
       name: "06. Подсистема OTA-обновления"
       cost: 3
-      position: { x: 400, y: 400 }
+      position: { x: 950, y: 314 }
     - id: blk-ai
       name: "07. Бортовой ИИ (оценка обстановки и планирование маршрута)"
       cost: 5
-      position: { x: 760, y: 60 }
+      group: lg-4
+      position: { x: 1790, y: 197 }
     - id: blk-avoid
       name: "08. Подсистема расхождения"
       cost: 3
-      position: { x: 760, y: 240 }
+      group: lg-3
+      position: { x: 2210, y: 197 }
     - id: blk-cargo
       name: "09. Контроль груза и выгрузки"
       cost: 2
-      position: { x: 760, y: 420 }
+      position: { x: 1790, y: 431 }
     - id: blk-radio
       name: "10. Радиосвязь"
       cost: 2
-      position: { x: 400, y: 560 }
+      group: lg-1
+      position: { x: 530, y: 314 }
     - id: ext-shore
       name: "Береговой пост (СУДС)"
       cost: 0
       external: true
       trusted: true
-      position: { x: 1180, y: 60 }
+      position: { x: 80, y: 373 }
     - id: ext-lock
       name: "Оператор шлюза"
       cost: 0
       external: true
-      position: { x: 1180, y: 380 }
+      position: { x: 2660, y: 314 }
   edges:
     - id: e-shore-radio
       from: ext-shore
@@ -398,6 +427,20 @@ architecture:
       from: blk-ota
       to: blk-ai
       label: "обновление моделей ИИ"
+  groups:
+    - id: lg-1
+      name: "Связь и позиционирование"
+      color: "#1E88E5"
+    - id: lg-2
+      name: "Сенсорный контур"
+      color: "#00897B"
+    - id: lg-3
+      name: "Бортовой интеллект"
+      color: "#8E24AA"
+    - id: lg-4
+      name: "Оценка обстановки"
+      color: "#D81B60"
+      parent: lg-3
 security:
   assumptions:
     - id: asm-shore

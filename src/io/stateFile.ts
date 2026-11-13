@@ -138,6 +138,8 @@ export function serializeStateYaml(project: Project): string {
         ...(b.external && b.trusted ? { trusted: true } : {}),
         // Принудительный ввод внутреннего домена в ДВБ (v0.01.06).
         ...(!b.external && b.forceTrusted ? { forceTrusted: true } : {}),
+        // Логическая группа блока (v0.02.03, Ф-70).
+        ...(b.groupId ? { group: b.groupId } : {}),
         ...(b.position ? { position: { x: b.position.x, y: b.position.y } } : {}),
       })),
       edges: project.architecture.edges.map((e) => ({
@@ -146,6 +148,20 @@ export function serializeStateYaml(project: Project): string {
         to: e.to,
         ...(e.label ? { label: e.label } : {}),
       })),
+      // Логические группы ДБ (v0.02.03, Ф-70…Ф-76) — опциональная секция;
+      // файлы v0.02.02 и старше читаются старыми версиями с W-001.
+      ...(project.architecture.groups && project.architecture.groups.length > 0
+        ? {
+            groups: project.architecture.groups.map((g) => ({
+              id: g.id,
+              name: g.name,
+              color: g.color,
+              ...(g.collapsed ? { collapsed: true } : {}),
+              ...(g.parentId ? { parent: g.parentId } : {}),
+              ...(g.position ? { position: { x: g.position.x, y: g.position.y } } : {}),
+            })),
+          }
+        : {}),
     },
     security: {
       ...(project.security.assumptions && project.security.assumptions.length > 0

@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
 test('Э-06: красная → жёлтая после fn-sanitize → зелёная после fn-sign', async ({ page }) => {

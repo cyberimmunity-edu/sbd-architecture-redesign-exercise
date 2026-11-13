@@ -83,6 +83,25 @@ export function validateArchitecture(arch: Architecture): ImportMessage[] {
       );
     }
   }
+  // Логические группы (v0.02.03, Ф-70): ссылки на блоки уже нормализованы
+  // парсером (W-010); здесь — уникальность, шаблон id и длина имени.
+  const groupIds = new Set<string>();
+  for (let i = 0; i < (arch.groups ?? []).length; i++) {
+    const group = arch.groups![i];
+    const path = `groups[${i}]`;
+    if (groupIds.has(group.id)) {
+      messages.push(err(ERR.E101, `дубликат id группы ${group.id}`, { path: `${path}.id` }));
+    }
+    groupIds.add(group.id);
+    pushIdErrors(messages, group.id, 'группы', `${path}.id`);
+    if (typeof group.name !== 'string' || group.name.length < 1 || group.name.length > MAX_NAME) {
+      messages.push(
+        err(ERR.E002, `имя группы ${group.id} должно быть строкой от 1 до ${MAX_NAME} символов`, {
+          path: `${path}.name`,
+        }),
+      );
+    }
+  }
   return messages;
 }
 

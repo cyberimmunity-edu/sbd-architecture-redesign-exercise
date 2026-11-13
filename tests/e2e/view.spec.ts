@@ -18,8 +18,8 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
-  // 4 внутренних домена + 2 внешние системы + рамка периметра.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  // 4 внутренних домена + 2 внешние системы + рамка периметра + рамка ЛГ (v0.02.03).
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
 async function dropCard(page: import('@playwright/test').Page, cardId: string, blockId: string) {
@@ -60,14 +60,14 @@ test('v0.01.02: кнопка «Периметр» скрывает внешни�
   await expect(page.getByTestId('focus-internal')).toHaveAttribute('aria-pressed', 'false');
 
   await page.getByTestId('focus-internal').click();
-  // Остаются 4 внутренних домена и рамка периметра; внешние системы скрыты.
-  await expect(page.locator('.react-flow__node')).toHaveCount(5);
+  // Остаются 4 внутренних домена, рамка периметра и рамка ЛГ; внешние системы скрыты.
+  await expect(page.locator('.react-flow__node')).toHaveCount(6);
   // Скрыты 3 связи с внешними системами, остаются 3 внутренние.
   await expect(page.locator('.react-flow__edge')).toHaveCount(3);
   await expect(page.locator('[data-block-id^="ext-"]')).toHaveCount(0);
 
   await page.getByTestId('focus-internal').click();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
 
   // Расчёты остаются полными: внешние потоки учитываются в C_системы.
@@ -163,7 +163,7 @@ test('v0.01.03: кнопка «Раскладка» выстраивает до�
   await page.getByTestId('auto-layout').click();
   await expect(page.getByText('Раскладка применена').first()).toBeVisible();
   // Все узлы и стрелки на месте, расчёты не изменились.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.locator('.react-flow__edge')).toHaveCount(6);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 4');
 

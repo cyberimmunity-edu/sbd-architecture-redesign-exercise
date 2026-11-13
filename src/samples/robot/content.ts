@@ -8,6 +8,8 @@
  * Зарядная станция — недоверенная (красная, по умолчанию). Подсистема
  * восприятия без функций — НДБ; планировщик и модуль связи — ДДБПЦД (входят
  * красные стрелки), привод движения — ДДБ. C_системы с размещениями = 486.
+ * Логическая группа (v0.02.03, Ф-70): «Контур управления движением»
+ * охватывает планировщика и привод; цвет — серый по умолчанию (П-15).
  */
 
 export const DEMO_ARCHITECTURE_YAML = `version: 1
@@ -22,10 +24,12 @@ blocks:
   - id: blk-plan
     name: "02. Планировщик маршрута"
     cost: 4
+    group: lg-1
     position: { x: 950, y: 80 }
   - id: blk-drive
     name: "03. Привод движения"
     cost: 3
+    group: lg-1
     position: { x: 1370, y: 80 }
   - id: blk-link
     name: "04. Модуль связи"
@@ -67,6 +71,10 @@ edges:
     from: blk-link
     to: ext-ctrl
     label: "телеметрия"
+groups:
+  - id: lg-1
+    name: "Контур управления движением"
+    color: "#607D8B"
 `;
 
 export const DEMO_SECURITY_YAML = `version: 1
@@ -153,11 +161,13 @@ architecture:
     - id: blk-plan
       name: "02. Планировщик маршрута"
       cost: 4
+      group: lg-1
       position: { x: 420, y: 120 }
     - id: blk-drive
       name: "03. Привод движения"
       cost: 3
-      position: { x: 780, y: 200 }
+      group: lg-1
+      position: { x: 780, y: 120 }
     - id: blk-link
       name: "04. Модуль связи"
       cost: 2
@@ -198,6 +208,10 @@ architecture:
       from: blk-link
       to: ext-ctrl
       label: "телеметрия"
+  groups:
+    - id: lg-1
+      name: "Контур управления движением"
+      color: "#607D8B"
 security:
   goals:
     - id: g-safe

@@ -1,6 +1,6 @@
 # Руководство разработчика
 
-Версия соответствует 0.02.02. Слои и запреты — раздел 8.2 ТЗ; структура каталогов —
+Версия соответствует 0.02.03. Слои и запреты — раздел 8.2 ТЗ; структура каталогов —
 Приложение Д ТЗ; модель доверия — раздел 3.5 ТЗ.
 
 ## 1. Архитектура слоёв и поток данных
@@ -66,6 +66,28 @@ v0.01.x (W-001). Модули: `src/engine/sequence.ts` (автонумерац�
 мини-карта рисует линии жизни и стрелки собственным nodeComponent).
 Мини-карте нужны явные `width`/`height` узла — управляемый массив `nodes`
 без `onNodesChange` не получает dimension-изменения.
+
+Логические группы (v0.02.03, Ф-70…Ф-76) добавляют `DomainGroup
+{ id, name, color, collapsed?, parentId?, position? }` как
+`Architecture.groups?` и поле `Block.groupId?` — секция `groups` и поле
+`group` в architecture.yaml/state.yaml опциональны, файлы старых версий
+читаются без изменений (W-001 не возникает: ключи добавлены в allowedKeys).
+Модули: `src/engine/groups.ts` — чистые функции (вложенность и глубина
+Ф-71, видимость и перенос связей свёрнутых ЛГ Ф-72 — `computeGroupVisibility`,
+`remapEdgesForDisplay`, геометрия рамок `computeGroupGeometry`, защитная
+нормализация файла `normalizeGroups` с W-010…W-012); store-действия
+`createGroup/updateGroup/deleteGroup/setDomainsGroup/setAllGroupsCollapsed/
+revealDomains` в `src/store/projectStore.ts` (по одному шагу истории;
+`revealDomains` — раскрытие ЛГ при подсветке без истории, Ф-76);
+`src/ui/GroupFrameNode.tsx` (рамка/плашка/свёрнутый блок; тело рамки
+`pointer-events: none` — клики проходят к доменам), `src/ui/GroupDialog.tsx`
+(создание/переименование, событие `skib-lg-dialog`), `src/ui/CanvasContextMenu.tsx`.
+В канве рамки ЛГ живут в том же состоянии узлов, что и домены (иначе
+React Flow оставляет их `visibility: hidden` до измерения), геометрия
+кэшируется по содержимому; мультивыбор ДБ — `viewStore.domainSelection`
+(наполнение — `onSelectionChange`, при смене набора канва сбрасывает его
+только для доменов). Цвета ЛГ — палитра `LG_COLORS` без красного/жёлтого/
+зелёного доверия (П-15); строки — только в i18n (`ru.lg`, НФ-8).
 
 ## 4. Адаптация стека к среде исполнения
 

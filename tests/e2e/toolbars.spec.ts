@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
   // 4 внутренних домена + 2 внешние системы + рамка периметра.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
 test('v0.02.02: пять тулбаров на месте; скрытие через меню ≡ и показ обратно', async ({ page }) => {

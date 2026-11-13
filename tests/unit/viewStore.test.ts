@@ -126,6 +126,8 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'activeSequenceId',
       'collapsedPorts',
       'cycleSizeMode',
+      // Мультивыбор доменов ДАП (v0.02.03, Ф-74) — вид, не модель.
+      'domainSelection',
       'expandAllPorts',
       'flashDomainIds',
       'flashDomains',
@@ -137,6 +139,7 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'seqSelectedArrows',
       'seqSelection',
       'setActiveSequence',
+      'setDomainSelection',
       'setHighlightedDomain',
       'setMode',
       'setSeqSelectedArrows',

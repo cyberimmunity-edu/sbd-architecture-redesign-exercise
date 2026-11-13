@@ -63,6 +63,7 @@ export function HelpDialog({
           <HelpSection title={ru.help.blockCharTitle} items={ru.help.blockChar} />
           <HelpSection title={ru.help.colorsTitle} items={ru.help.colors} />
           <HelpSection title={ru.help.viewTitle} items={ru.help.view} />
+          <HelpSection title={ru.help.lgTitle} items={ru.help.lg} />
           <HelpSection title={ru.help.checkTitle} items={ru.help.check} />
         </div>
         <DialogFooter>

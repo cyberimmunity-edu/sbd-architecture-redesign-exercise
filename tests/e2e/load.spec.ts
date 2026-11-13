@@ -18,7 +18,7 @@ async function loadRobot(page: import('@playwright/test').Page) {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
   // 4 внутренних домена + 2 внешние системы + рамка периметра.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 }
 
 test('Э-01: старт и пример 1 — 4 внутренних домена, 2 внешние системы, 7 карточек, C_системы = 4, цели красные', async ({

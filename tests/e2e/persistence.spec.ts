@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
   // 4 внутренних домена + 2 внешние системы + рамка периметра.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
 test('Э-07: после перезагрузки состояния, стоимости и статусы идентичны', async ({ page }) => {
@@ -39,7 +39,7 @@ test('Э-07: после перезагрузки состояния, стоим�
   await page.waitForTimeout(1300);
 
   await page.reload();
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
   await expect(page.getByTestId('summary-bar')).toContainText('C_системы: 486');
   await expect(page.getByTestId('summary-bar')).toContainText('размещено 5 из 7 функций');
   await expect(page.locator('[data-block-id="blk-drive"]')).toContainText('C_домена = 45');

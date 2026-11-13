@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByTestId('demo-project').click();
   await page.getByTestId('demo-robot').click();
   // 4 внутренних домена + 2 внешние системы + рамка периметра.
-  await expect(page.locator('.react-flow__node')).toHaveCount(7);
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
 });
 
 test('Э-05: декомпозировать blk-plan — появляются «Планировщик маршрута.1» и «.2», карточки возвращаются в пул', async ({
@@ -39,7 +39,7 @@ test('Э-05: декомпозировать blk-plan — появляются «
   await page.getByRole('dialog').getByRole('button', { name: 'Декомпозировать' }).click();
 
   // Исходный домен удалён, появились два потомка того же уровня (плоская модель D5).
-  await expect(page.locator('.react-flow__node')).toHaveCount(8);
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
   await expect(page.locator('.react-flow__node', { hasText: 'Планировщик маршрута.1' })).toHaveCount(1);
   await expect(page.locator('.react-flow__node', { hasText: 'Планировщик маршрута.2' })).toHaveCount(1);
   await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(0);
