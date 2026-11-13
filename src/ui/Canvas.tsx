@@ -94,10 +94,15 @@ import { recalcCosts } from '../engine/cost';
 import { recalcCoverage } from '../engine/coverage';
 import { computeAutoLayout } from '../engine/layout';
 import {
+  blockRect,
   computeGroupGeometry,
   computeGroupVisibility,
+  clampDragDelta,
+  frameFromRects,
   groupDepths,
+  groupSubtree,
   remapEdgesForDisplay,
+  subtreeBlockIds,
   type GroupGeometry,
   type LgRect,
 } from '../engine/groups';
@@ -111,12 +116,13 @@ import { depthAllowed } from '../engine/groups';
 import { LG_COLORS, MAX_DOMAIN_GROUPS, MAX_LG_DEPTH } from '../engine/types';
 import {
   frameBounds,
+  FRAME_PADDING,
   isInsideFrame,
   NODE_ESTIMATED_HEIGHT,
   NODE_ESTIMATED_WIDTH,
 } from '../engine/trust';
 import { MAX_DOMAINS } from '../engine/types';
-import type { Status } from '../engine/types';
+import type { Block, Status } from '../engine/types';
 import { DomainNode, type DomainFlowNode, type DomainNodeData } from './DomainNode';
 import {
   GroupFrameNode,
@@ -268,6 +274,64 @@ function truncateLabel(label: string): string {
   return `${label.slice(0, EDGE_LABEL_LIMIT - 1).trimEnd()}…`;
 }
 
+/* Данные активного жеста перетаскивания (v0.02.03b, Ф-78) — модульная
+   переменная: канва в приложении одна; хук-правила (react-hooks/immutability)
+   запрещают мутировать ref, читаемый в эффектах. Содержит стартовые позиции
+   переносимых ДБ, ограничение периметра и итоговое приращение жеста. */
+interface DragGesture {
+  /** «domain» — одиночный ДБ или мультивыбор; «group» — ЛГ целиком. */
+  kind: 'domain' | 'group';
+  /** Идентификатор ЛГ (для kind «group»). */
+  groupId?: string;
+  /** Узел-якорь жеста (домен или рамка ЛГ). */
+  anchorId: string;
+  /** Стартовая позиция якоря. */
+  anchorStart: { x: number; y: number };
+  /** Переносимые ДБ: для «group» — всё поддерево ЛГ. */
+  movedIds: string[];
+  /** Члены, видимые на канве (у скрытых — только фиксация при завершении). */
+  liveIds: Set<string>;
+  /** Стартовые позиции переносимых ДБ. */
+  startPositions: Map<string, { x: number; y: number }>;
+  /** Стартовые прямоугольники переносимых ДБ (для ограничения периметром). */
+  startRects: LgRect[];
+  /** Рамка периметра на старте жеста; null — переносится вся система. */
+  clampBounds: LgRect | null;
+  /** Стартовые позиции вложенных рамок ЛГ (следуют за членами при
+   *  переносе ЛГ целиком — v0.02.03b, Ф-78). */
+  nestedFrames: Map<string, { x: number; y: number }>;
+  /** Итоговое ограниченное приращение (обновляется в onNodeDrag). */
+  lastDelta: { x: number; y: number };
+}
+
+let activeDragGesture: DragGesture | null = null;
+
+/** Стартовые прямоугольники внутренних ДБ (живые или оценочные). */
+function internalStartRects(blocks: Block[], liveRects: Map<string, LgRect>): Map<string, LgRect> {
+  const rects = new Map<string, LgRect>();
+  for (const block of blocks) {
+    if (block.external) continue;
+    const live = liveRects.get(block.id);
+    if (live) {
+      rects.set(block.id, live);
+      continue;
+    }
+    rects.set(block.id, blockRect(block, null));
+  }
+  return rects;
+}
+
+/** Рамка периметра на старте жеста; null — переносятся все внутренние ДБ. */
+function dragClampBounds(
+  blocks: Block[],
+  liveRects: Map<string, LgRect>,
+  movedIds: string[],
+): LgRect | null {
+  const allInternal = internalStartRects(blocks, liveRects);
+  const coversAll = [...allInternal.keys()].every((id) => movedIds.includes(id));
+  return coversAll ? null : frameFromRects([...allInternal.values()], FRAME_PADDING);
+}
+
 /** Рамка периметра целевой системы — неинтерактивный узел под доменами. */
 function PerimeterNode({ data }: NodeProps<PerimeterFlowNode>) {
   return (
@@ -339,6 +403,9 @@ function CanvasInner() {
   } | null>(null);
   // Цель перетаскивания домена (подсветка рамки ЛГ при drag — Ф-74).
   const [dropGroup, setDropGroup] = useState<string | null>(null);
+  // Переносимая ЛГ целиком (v0.02.03b, Ф-78): state вместо ref — слияние рамок
+  // (эффект) знает, какая рамка управляется жестом; данные жеста — в ref.
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
 
   const { costs, trust } = useMemo(() => recalcCosts(project), [project]);
   const { goalStatuses, domainStatuses } = useMemo(() => recalcCoverage(project), [project]);
@@ -435,12 +502,11 @@ function CanvasInner() {
         id: block.id,
         type: 'domain' as const,
         position: block.position ?? { x: 0, y: 0 },
-        // Выделение синхронизировано с хранилищем (v0.01.04): клик по строке
-        // таблицы ДВБ выбирает домен и на канве, не только в инспекторе.
-        // v0.02.03: мультивыбор ДБ (Ф-74) — флаг из viewStore.domainSelection.
-        selected:
-          (selection?.kind === 'domain' && selection.id === block.id) ||
-          domainSelection.includes(block.id),
+        // Выделение НЕ выводится из хранилища (v0.02.03b): React Flow — источник
+        // истины для флагов selected. Замена объектов узлов с устаревшим флагом
+        // сбрасывала бы выделение канвы и зацикливала синхронизацию
+        // (React #185, максимум глубины обновлений). Мост store→RF —
+        // отдельный эффект ниже; RF→store — handleSelectionChange.
         data: {
           blockId: block.id,
           name: block.name,
@@ -492,8 +558,6 @@ function CanvasInner() {
     // Автоматические размеры доменов (v0.01.08).
     sizeMode,
     sizeFactors,
-    // Мультивыбор ДБ (v0.02.03, Ф-74).
-    domainSelection,
   ]);
 
   // Состояние узлов канвы: живёт до трассировки — routing читает актуальные
@@ -566,7 +630,10 @@ function CanvasInner() {
         id: group.id,
         type: 'lgframe' as const,
         position: { x: geometry.rect.x, y: geometry.rect.y },
-        draggable: false,
+        // Перемещение ЛГ целиком (v0.02.03b, Ф-78): рамка перетаскивается,
+        // члены следуют за ней (Canvas.tsx, dragGestureRef). Ограничение —
+        // рамка периметра системы на старте жеста.
+        draggable: true,
         selectable: false,
         focusable: false,
         deletable: false,
@@ -716,9 +783,29 @@ function CanvasInner() {
 
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(edges);
 
-  // Синхронизация канвы с хранилищем проекта.
+  // Синхронизация канвы с хранилищем проекта (v0.02.03b): данные и позиции
+  // доменов — из memo; живое состояние канвы (выделение RF и измеренные
+  // габариты) сохраняется: React Flow при adoptUserNodes берёт selected
+  // из НОВОГО объекта узла, поэтому замена объектов с устаревшим флагом
+  // сбрасывала бы выделение и зацикливала RF↔store (React #185).
   useEffect(() => {
-    setRfNodes(nodes);
+    setRfNodes((prev) => {
+      const prevById = new Map(prev.map((node) => [node.id, node]));
+      return nodes.map((node) => {
+        const old = prevById.get(node.id);
+        if (!old) return node;
+        const selected = old.selected ?? false;
+        const measured = old.measured;
+        if (
+          (node.selected ?? false) === selected &&
+          node.measured?.width === measured?.width &&
+          node.measured?.height === measured?.height
+        ) {
+          return node;
+        }
+        return { ...node, selected, ...(measured ? { measured } : {}) };
+      });
+    });
   }, [nodes, setRfNodes]);
   useEffect(() => {
     setRfEdges(edges);
@@ -727,15 +814,20 @@ function CanvasInner() {
   // Слияние рамок ЛГ в состояние канвы (v0.02.03): после базовой
   // синхронизации рамки добавляются/обновляются по идентификатору;
   // сравнение по значениям — при неизменной геометрии состояние
-  // не трогается (сходимость без зацикливания).
+  // не трогается (сходимость без зацикливания). Во время перетаскивания
+  // ЛГ целиком слияние подавлено: позиция рамки управляется жестом (v0.02.03b).
   useEffect(() => {
     setRfNodes((prev) => {
+      // Во время переноса ЛГ целиком её рамка управляется жестом; рамки
+      // остальных ЛГ (вложенные — следуют за своими членами) обновляются.
+      const draggingGroup = draggingGroupId;
       const oldLg = prev.filter((node) => node.type === 'lgframe');
       const same =
         oldLg.length === lgNodes.length &&
         oldLg.every((node, index) => {
           const next = lgNodes[index];
           if (!next || node.id !== next.id) return false;
+          if (draggingGroup && node.id === draggingGroup) return true;
           const a = node.data as GroupFrameNodeData;
           const b = next.data as GroupFrameNodeData;
           return (
@@ -754,9 +846,41 @@ function CanvasInner() {
         });
       if (same) return prev;
       const base = prev.filter((node) => node.type !== 'lgframe');
-      return [...base, ...lgNodes];
+      const prevById = new Map(prev.map((item) => [item.id, item]));
+      const merged = lgNodes.map((node) =>
+        draggingGroup && node.id === draggingGroup && prevById.has(node.id)
+          ? (prevById.get(node.id) as CanvasNode)
+          : node,
+      );
+      return [...base, ...merged];
     });
-  }, [lgNodes, setRfNodes]);
+  }, [lgNodes, draggingGroupId, setRfNodes]);
+
+  // Мост выделения store→канва (v0.02.03b): хранилище (selection и
+  // domainSelection) патчит флаги selected живых узлов точечно — только
+  // несовпадающие. Состояние читается ВНУТРИ обновителя через getState():
+  // эффекты детей (SelectionListener → handleSelectionChange) выполняются
+  // раньше эффектов родителей, поэтому к моменту патча хранилище уже
+  // отражает жест канвы — мост не перезаписывает его устаревшим снимком
+  // (именно такая петля давала React #185). Зависимости closure — только
+  // триггер запуска эффекта при смене выделения в хранилище.
+  useEffect(() => {
+    setRfNodes((prev) => {
+      const freshSelection = useSkibStore.getState().selection;
+      const freshDomainSelection = useViewStore.getState().domainSelection;
+      const wanted = new Set<string>(freshDomainSelection);
+      if (freshSelection?.kind === 'domain') wanted.add(freshSelection.id);
+      let changed = false;
+      const next = prev.map((node) => {
+        if (node.type !== 'domain') return node;
+        const should = wanted.has(node.id);
+        if ((node.selected ?? false) === should) return node;
+        changed = true;
+        return { ...node, selected: should };
+      });
+      return changed ? next : prev;
+    });
+  }, [selection, domainSelection, setRfNodes]);
 
   // Мультивыбор ДБ (v0.02.03, Ф-74): выбор канвы (Ctrl-клик, рамка выбора)
   // синхронизируется с viewStore; инспектор показывает последний выбранный ДБ.
@@ -789,9 +913,64 @@ function CanvasInner() {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => {
-      onNodesChange(changes);
+      // Синхронизация RF→store СИНХРОННО с изменениями выделения (v0.02.03b):
+      // select-изменения применяются к хранилищу в момент диспетчеризации, а не
+      // в эффекте SelectionListener (он срабатывает позже — в фазе эффектов
+      // коммита). Иначе любой эффект-писатель флагов selected в этом же коммите
+      // видел бы устаревшее хранилище и затирал выделение жеста (React #185).
+      const selectChanges = changes.filter(
+        (change): change is Extract<NodeChange<CanvasNode>, { type: 'select' }> =>
+          change.type === 'select',
+      );
+      if (selectChanges.length > 0) {
+        const merged = new Set(useViewStore.getState().domainSelection);
+        for (const change of selectChanges) {
+          if (change.selected) merged.add(change.id);
+          else merged.delete(change.id);
+        }
+        const ids = [...merged].filter((id) =>
+          getNodes().some((node) => node.id === id && node.type === 'domain'),
+        );
+        const prev = useViewStore.getState().domainSelection;
+        if (ids.length !== prev.length || ids.some((id, index) => id !== prev[index])) {
+          setDomainSelection(ids);
+          const storeSelection = useSkibStore.getState().selection;
+          if (ids.length > 0) {
+            if (storeSelection?.kind !== 'domain' || !ids.includes(storeSelection.id)) {
+              setSelection({ kind: 'domain', id: ids[ids.length - 1] });
+            }
+          } else if (storeSelection?.kind === 'domain') {
+            setSelection(null);
+          }
+        }
+      }
+      // Ограничение периметра (v0.02.03b): для узлов активного жеста React Flow
+      // передаёт позицию своего трекера (без clamp) — заменяем на итоговую
+      // из жеста (старт + ограниченное приращение), чтобы модель получила
+      // позицию ДБ в рамках периметра.
+      const gesture = activeDragGesture;
+      const patched = gesture
+        ? (changes.map((change) => {
+            if (
+              change.type === 'position' &&
+              'position' in change &&
+              change.position &&
+              gesture.movedIds.includes(change.id)
+            ) {
+              const start = gesture.startPositions.get(change.id);
+              if (start) {
+                return {
+                  ...change,
+                  position: { x: start.x + gesture.lastDelta.x, y: start.y + gesture.lastDelta.y },
+                };
+              }
+            }
+            return change;
+          }) as NodeChange<CanvasNode>[])
+        : changes;
+      onNodesChange(patched);
       // Перемещение узлов применяется к модели при завершении перетаскивания.
-      const positionChanges = changes.filter(
+      const positionChanges = patched.filter(
         (change) => change.type === 'position' && change.dragging === false,
       ) as Array<{ type: 'position'; id: string; position?: { x: number; y: number } }>;
       if (positionChanges.length === 0) return;
@@ -815,7 +994,7 @@ function CanvasInner() {
       }
       if (Object.keys(positions).length > 0) updatePositions(positions);
     },
-    [onNodesChange, updatePositions, toast],
+    [getNodes, onNodesChange, setDomainSelection, setSelection, updatePositions, toast],
   );
 
   const handleEdgesChange = useCallback(
@@ -924,23 +1103,175 @@ function CanvasInner() {
     [],
   );
 
+  /* Перемещение ЛГ целиком и ограничение периметра (v0.02.03b, Ф-78):
+     рамка ЛГ перетаскивается — все её ДБ (прямые и вложенных ЛГ) смещаются
+     жёстко на то же приращение; вложенные рамки следуют за своими членами.
+     ДБ (одиночно, мультивыбором или в составе ЛГ) не покидают периметр
+     системы: приращение ограничивается видимой рамкой периметра на старте
+     жеста; перенос всех внутренних ДБ (вся система) — без ограничения.
+     Живое перемещение — в состоянии канвы; фиксация в модели — при
+     завершении жеста одной операцией (updatePositions — без записи
+     в историю, как у одиночного ДБ). Данные жеста — в модульной переменной
+     (канва в приложении одна; хук-правила запрещают мутировать ref,
+     читаемый в эффектах). */
+  const handleNodeDragStart = useCallback(
+    (_event: unknown, node: CanvasNode) => {
+      const store = useSkibStore.getState();
+      const arch = store.project.architecture;
+      if (node.type === 'lgframe') {
+        // ЛГ целиком: все ДБ поддерева (прямые и вложенных ЛГ).
+        const members = subtreeBlockIds(arch, node.id);
+        const liveIds = new Set(members.filter((id) => liveRects.has(id)));
+        const startPositions = new Map<string, { x: number; y: number }>();
+        const startRects: LgRect[] = [];
+        const allInternal = internalStartRects(arch.blocks, liveRects);
+        for (const id of members) {
+          const rect = allInternal.get(id);
+          if (rect) {
+            startPositions.set(id, { x: rect.x, y: rect.y });
+            startRects.push(rect);
+          }
+        }
+        // Вложенные рамки следуют за членами (живое перемещение, Ф-78):
+        // модель при жесте не меняется — рамки смещаются в состоянии канвы.
+        const descendants = new Set(groupSubtree(arch.groups ?? [], node.id));
+        descendants.delete(node.id);
+        const nestedFrames = new Map<string, { x: number; y: number }>();
+        if (descendants.size > 0) {
+          for (const item of getNodes()) {
+            if (item.type === 'lgframe' && descendants.has(item.id)) {
+              nestedFrames.set(item.id, { x: item.position.x, y: item.position.y });
+            }
+          }
+        }
+        activeDragGesture = {
+          kind: 'group',
+          groupId: node.id,
+          anchorId: node.id,
+          anchorStart: { x: node.position.x, y: node.position.y },
+          movedIds: members,
+          liveIds,
+          startPositions,
+          startRects,
+          clampBounds: dragClampBounds(arch.blocks, liveRects, members),
+          nestedFrames,
+          lastDelta: { x: 0, y: 0 },
+        };
+        setDraggingGroupId(node.id);
+        return;
+      }
+      if (node.type !== 'domain') return;
+      const block = arch.blocks.find((b) => b.id === node.id);
+      if (!block || block.external) return;
+      // Мультивыбор: React Flow тащит все выделенные ДБ вместе с якорем.
+      const selectedIds = getNodes()
+        .filter((n) => n.type === 'domain' && (n.selected ?? false))
+        .map((n) => n.id);
+      const movedIds = (node.selected ?? false) && selectedIds.includes(node.id)
+        ? selectedIds
+        : [node.id];
+      const startPositions = new Map<string, { x: number; y: number }>();
+      const startRects: LgRect[] = [];
+      const allInternal = internalStartRects(arch.blocks, liveRects);
+      for (const id of movedIds) {
+        const rect = allInternal.get(id);
+        if (rect) {
+          startPositions.set(id, { x: rect.x, y: rect.y });
+          startRects.push(rect);
+        }
+      }
+      activeDragGesture = {
+        kind: 'domain',
+        anchorId: node.id,
+        anchorStart: { x: node.position.x, y: node.position.y },
+        movedIds,
+        liveIds: new Set(movedIds),
+        startPositions,
+        startRects,
+        clampBounds: dragClampBounds(arch.blocks, liveRects, movedIds),
+        nestedFrames: new Map(),
+        lastDelta: { x: 0, y: 0 },
+      };
+    },
+    [getNodes, liveRects],
+  );
+
   const handleNodeDrag = useCallback(
     (_event: unknown, node: CanvasNode) => {
-      if (node.type !== 'domain') return;
-      // Позиция — из живых прямоугольников канвы (изменения перетаскивания
-      // уже применены к состоянию); параметр node может нести устаревшую позицию.
-      const rect = liveRects.get(node.id);
-      if (!rect) return;
-      const geometry = dropGeometryFor(new Set([node.id]));
-      const candidate = dropCandidateFor({ x: rect.x, y: rect.y }, rect.width, rect.height, geometry);
-      setDropGroup((prev) => (prev === candidate ? prev : candidate));
+      const gesture = activeDragGesture;
+      // Подсветка рамки-цели при перетаскивании одиночного ДБ (Ф-74);
+      // ЛГ переносится целиком — перегруппировка по сбросу не применяется.
+      if (node.type === 'domain' && gesture?.kind === 'domain') {
+        const rect = liveRects.get(node.id);
+        if (rect) {
+          const geometry = dropGeometryFor(new Set([node.id]));
+          const candidate = dropCandidateFor(
+            { x: rect.x, y: rect.y },
+            rect.width,
+            rect.height,
+            geometry,
+          );
+          setDropGroup((prev) => (prev === candidate ? prev : candidate));
+        }
+      }
+      if (!gesture || node.id !== gesture.anchorId) return;
+      const raw = {
+        x: node.position.x - gesture.anchorStart.x,
+        y: node.position.y - gesture.anchorStart.y,
+      };
+      const clamped = clampDragDelta(raw, gesture.startRects, gesture.clampBounds);
+      gesture.lastDelta = clamped;
+      // Живое перемещение членов (видимых) и вложенных рамок ЛГ
+      // в состоянии канвы.
+      setRfNodes((prev) =>
+        prev.map((item) => {
+          if (item.type === 'lgframe' && gesture.nestedFrames.has(item.id)) {
+            const frameStart = gesture.nestedFrames.get(item.id)!;
+            return {
+              ...item,
+              position: { x: frameStart.x + clamped.x, y: frameStart.y + clamped.y },
+            };
+          }
+          if (item.type !== 'domain' || !gesture.liveIds.has(item.id)) return item;
+          const start = gesture.startPositions.get(item.id);
+          if (!start) return item;
+          return {
+            ...item,
+            position: { x: start.x + clamped.x, y: start.y + clamped.y },
+          };
+        }),
+      );
     },
-    [dropCandidateFor, dropGeometryFor, liveRects],
+    [dropCandidateFor, dropGeometryFor, liveRects, setRfNodes],
   );
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: CanvasNode, nodes: CanvasNode[]) => {
       setDropGroup(null);
+      const gesture = activeDragGesture;
+      if (gesture && node.id === gesture.anchorId) {
+        if (gesture.kind === 'group') {
+          // Фиксация переноса ЛГ целиком: все члены поддерева одним шагом;
+          // пустая ЛГ — якорь рамки сохраняется как position группы.
+          const delta = gesture.lastDelta;
+          activeDragGesture = null;
+          setDraggingGroupId(null);
+          if (gesture.movedIds.length === 0) {
+            updateGroup(node.id, {
+              position: { x: node.position.x, y: node.position.y },
+            });
+          } else {
+            const positions: Record<string, { x: number; y: number }> = {};
+            for (const id of gesture.movedIds) {
+              const start = gesture.startPositions.get(id);
+              if (start) positions[id] = { x: start.x + delta.x, y: start.y + delta.y };
+            }
+            if (Object.keys(positions).length > 0) updatePositions(positions);
+          }
+          return;
+        }
+        activeDragGesture = null;
+      }
       const store = useSkibStore.getState();
       const dragged = (nodes ?? []).filter((n) => n.type === 'domain');
       const list = dragged.length > 0 ? dragged : node.type === 'domain' ? [node] : [];
@@ -970,7 +1301,7 @@ function CanvasInner() {
         if (changed) store.setDomainsGroup(ids, target);
       }
     },
-    [dropCandidateFor, dropGeometryFor, liveRects],
+    [dropCandidateFor, dropGeometryFor, liveRects, updateGroup, updatePositions],
   );
 
   /* Контекстные меню (v0.02.03): по домену — команды ЛГ для мультивыбора;
@@ -1232,6 +1563,7 @@ function CanvasInner() {
           setSelection(null);
           setDomainSelection([]);
         }}
+        onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
         onNodeContextMenu={(event, node) => {

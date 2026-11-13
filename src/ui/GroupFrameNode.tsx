@@ -95,16 +95,17 @@ export const GroupFrameNode = memo(function GroupFrameNode({
           }}
         />
         {/* Плашка имени: выбор кликом, переименование двойным кликом,
-            свёртывание кнопкой, контекстное меню правым кликом. */}
+            свёртывание кнопкой, контекстное меню правым кликом,
+            перетаскивание — ЛГ целиком (v0.02.03b, Ф-78). */}
         <div
-          className="nodrag nopan absolute left-4 top-0 flex max-w-[calc(100%-56px)] -translate-y-1/2 items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-sm"
+          className="nopan absolute left-4 top-0 flex max-w-[calc(100%-56px)] -translate-y-1/2 items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-sm"
           data-testid={`lg-chip-${data.groupId}`}
           style={{
             borderColor: alpha(data.color, '99'),
             background: alpha(data.color, '2E'),
             backdropFilter: 'blur(2px)',
             pointerEvents: 'auto',
-            cursor: 'pointer',
+            cursor: 'grab',
           }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => {

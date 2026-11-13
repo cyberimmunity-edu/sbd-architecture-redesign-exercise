@@ -72,12 +72,16 @@ test('v0.02.03: ДБ включается в ЛГ перетаскиванием
   await page.mouse.up();
   await expect(page.getByTestId('lg-chip-lg-2')).toContainText('(3)');
 
-  // Вынос домена на свободное место слева от рамки — исключение из ЛГ.
+  // Вынос домена на свободное место внутри периметра системы — справа от
+  // рамки, под свёрнутой зоной рамки lg-1 (v0.02.03b, Ф-78: ДБ не тащится
+  // за периметр — старая точка «слева от рамки» теперь за его границей).
   const perc = page.locator('.react-flow__node[data-id="blk-perc"]');
   const percBox = (await perc.boundingBox())!;
   await page.mouse.move(percBox.x + percBox.width / 2, percBox.y + percBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(frameBox.x - 250, frameBox.y + frameBox.height + 120, { steps: 10 });
+  await page.mouse.move(frameBox.x + frameBox.width + 160, frameBox.y + frameBox.height - 80, {
+    steps: 10,
+  });
   await page.mouse.up();
   await expect(page.getByTestId('lg-chip-lg-2')).toContainText('(2)');
 });
@@ -158,4 +162,75 @@ test('v0.02.03: ЛГ сохраняются в автосохранении и �
   // Развёртывание после перезагрузки возвращает членов.
   await page.getByTestId('lg-toggle-lg-1').click();
   await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+});
+
+test('v0.02.03b: ЛГ перемещается целиком плашкой; ДБ не покидают периметр (Ф-78)', async ({
+  page,
+}) => {
+  // Позиции узлов читаются из transform канвы (координаты потока).
+  const nodePos = (id: string) =>
+    page.evaluate((nodeId) => {
+      const el = document.querySelector(`.react-flow__node[data-id="${nodeId}"]`);
+      if (!el) return null;
+      const m = el.getAttribute('style')?.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null;
+    }, id);
+
+  // Перетаскивание плашки ЛГ — группа целиком: члены и рамка смещаются
+  // на одну дельту.
+  const beforePlan = (await nodePos('blk-plan'))!;
+  const beforeDrive = (await nodePos('blk-drive'))!;
+  const beforeFrame = (await nodePos('lg-1'))!;
+  const chip = page.getByTestId('lg-chip-lg-1');
+  const chipBox = (await chip.boundingBox())!;
+  await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    chipBox.x + chipBox.width / 2 + 100,
+    chipBox.y + chipBox.height / 2 + 70,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  const afterPlan = (await nodePos('blk-plan'))!;
+  const afterDrive = (await nodePos('blk-drive'))!;
+  const afterFrame = (await nodePos('lg-1'))!;
+  const dx = afterPlan.x - beforePlan.x;
+  const dy = afterPlan.y - beforePlan.y;
+  expect(dx).toBeGreaterThan(0);
+  expect(dy).toBeGreaterThan(0);
+  expect(afterDrive.x - beforeDrive.x).toBeCloseTo(dx, 0);
+  expect(afterDrive.y - beforeDrive.y).toBeCloseTo(dy, 0);
+  expect(afterFrame.x - beforeFrame.x).toBeCloseTo(dx, 0);
+  expect(afterFrame.y - beforeFrame.y).toBeCloseTo(dy, 0);
+
+  // Перенос сохраняется в модели и переживает перезагрузку.
+  await page.waitForTimeout(600); // дебаунс автосохранения 300 мс
+  await page.reload();
+  await expect(page.locator('.react-flow__node')).toHaveCount(8);
+  expect((await nodePos('blk-plan'))!.x).toBeCloseTo(afterPlan.x, 0);
+
+  // ДБ не тащится за периметр: дальнейшее движение курсора за границей
+  // не меняет позицию узла.
+  const perc = page.locator('.react-flow__node[data-id="blk-perc"]');
+  const percBox = (await perc.boundingBox())!;
+  await page.mouse.move(percBox.x + percBox.width / 2, percBox.y + percBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    percBox.x + percBox.width / 2 + 1400,
+    percBox.y + percBox.height / 2 + 800,
+    { steps: 12 },
+  );
+  await page.waitForTimeout(150);
+  const mid = (await nodePos('blk-perc'))!;
+  await page.mouse.move(
+    percBox.x + percBox.width / 2 + 2200,
+    percBox.y + percBox.height / 2 + 1400,
+    { steps: 8 },
+  );
+  await page.waitForTimeout(150);
+  const mid2 = (await nodePos('blk-perc'))!;
+  await page.mouse.up();
+  expect(mid2.x).toBeCloseTo(mid.x, 0);
+  expect(mid2.y).toBeCloseTo(mid.y, 0);
+  expect((await nodePos('blk-perc'))!.x).toBeCloseTo(mid.x, 0);
 });

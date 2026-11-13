@@ -35,6 +35,8 @@ export {
   unionRects,
   computeGroupGeometry,
   normalizeGroups,
+  frameFromRects,
+  clampDragDelta,
   LG_FRAME_PADDING,
   LG_COLLAPSED_WIDTH,
   LG_COLLAPSED_HEIGHT,

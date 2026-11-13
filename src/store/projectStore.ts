@@ -131,11 +131,12 @@ interface SkibStore {
     memberIds?: string[];
     parentId?: string | null;
   }) => string | null;
-  /** Правка имени/цвета ЛГ (Ф-70) и свёртывание/развёртывание (Ф-72).
+  /** Правка имени/цвета ЛГ (Ф-70), свёртывание/развёртывание (Ф-72) и
+   *  якоря пустой ЛГ (v0.02.03b: перетаскивание пустой рамки).
    *  Имя уникализируется, цвет приводится к палитре. Одна операция истории. */
   updateGroup: (
     id: string,
-    patch: Partial<Pick<DomainGroup, 'name' | 'color' | 'collapsed'>>,
+    patch: Partial<Pick<DomainGroup, 'name' | 'color' | 'collapsed' | 'position'>>,
   ) => void;
   /** Удаление ЛГ (Ф-73): ДБ остаются, становятся несгруппированными;
    *  вложенные ЛГ удаляются тоже, их ДБ — несгруппированными.
@@ -865,6 +866,7 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
       }
       if (patch.color !== undefined) next.color = normalizeGroupColor(patch.color);
       if (patch.collapsed !== undefined) next.collapsed = patch.collapsed;
+      if (patch.position !== undefined) next.position = patch.position;
       return next;
     });
     set({

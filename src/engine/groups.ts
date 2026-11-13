@@ -417,6 +417,48 @@ export function computeGroupGeometry(
 }
 
 /* ------------------------------------------------------------------ */
+/* Перемещение ЛГ целиком и ограничение периметром (v0.02.03b)          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Рамка периметра по живым прямоугольникам внутренних ДБ: охват с отступом.
+ * Совпадает с видимой пунктирной рамкой периметра (FRAME_PADDING в trust.ts).
+ */
+export function frameFromRects(rects: LgRect[], padding: number): LgRect | null {
+  const cover = unionRects(rects);
+  if (!cover) return null;
+  return {
+    x: cover.x - padding,
+    y: cover.y - padding,
+    width: cover.width + padding * 2,
+    height: cover.height + padding * 2,
+  };
+}
+
+/**
+ * Приращение перетаскивания, при котором охват набора прямоугольников
+ * остаётся в границах рамки (ДБ не покидают периметр системы — v0.02.03b).
+ * bounds = null (переносятся все внутренние ДБ) — приращение без ограничения.
+ */
+export function clampDragDelta(
+  delta: { x: number; y: number },
+  rects: LgRect[],
+  bounds: LgRect | null,
+): { x: number; y: number } {
+  if (!bounds || rects.length === 0) return delta;
+  const cover = unionRects(rects);
+  if (!cover) return delta;
+  const minX = bounds.x - cover.x;
+  const maxX = bounds.x + bounds.width - (cover.x + cover.width);
+  const minY = bounds.y - cover.y;
+  const maxY = bounds.y + bounds.height - (cover.y + cover.height);
+  return {
+    x: Math.max(minX, Math.min(delta.x, maxX)),
+    y: Math.max(minY, Math.min(delta.y, maxY)),
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /* Нормализация при разборе файлов (W-010…W-012)                       */
 /* ------------------------------------------------------------------ */
 

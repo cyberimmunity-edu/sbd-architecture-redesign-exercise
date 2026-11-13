@@ -6,9 +6,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  clampDragDelta,
   computeGroupGeometry,
   computeGroupVisibility,
   depthAllowed,
+  frameFromRects,
   groupAncestors,
   groupDepths,
   groupSubtree,
@@ -307,5 +309,48 @@ describe('Геометрия рамок ЛГ (Ф-70, Ф-72)', () => {
     const box = nestedGeo.get('lg-1')!;
     expect(box.rect.x).toBe(200);
     expect(box.rect.y).toBe(300);
+  });
+});
+
+describe('Перемещение ЛГ целиком и ограничение периметром (v0.02.03b, Ф-78)', () => {
+  const rect = (x: number, y: number, width = 100, height = 50) => ({ x, y, width, height });
+
+  it('frameFromRects строит охват с отступом; без прямоугольников — null', () => {
+    expect(frameFromRects([], 60)).toBeNull();
+    const frame = frameFromRects([rect(100, 200), rect(300, 80)], 60)!;
+    expect(frame.x).toBe(40);
+    expect(frame.y).toBe(20);
+    // Охват 100..400 × 80..250 + отступ 60 с каждой стороны.
+    expect(frame.width).toBe(420);
+    expect(frame.height).toBe(290);
+  });
+
+  it('clampDragDelta не выпускает прямоугольники за рамку периметра', () => {
+    const bounds = rect(40, 20, 420, 290);
+    const moved = [rect(100, 200)];
+    // Влево: левая грань ДБ упирается в левую грань рамки.
+    expect(clampDragDelta({ x: -200, y: 0 }, moved, bounds)).toEqual({ x: -60, y: 0 });
+    // Вверх: верхняя грань упирается в верхнюю грань рамки.
+    expect(clampDragDelta({ x: 0, y: -500 }, moved, bounds)).toEqual({ x: 0, y: -180 });
+    // Внутри рамки — приращение не меняется.
+    expect(clampDragDelta({ x: 30, y: 10 }, moved, bounds)).toEqual({ x: 30, y: 10 });
+  });
+
+  it('clampDragDelta: набор прямоугольников ограничен охватом, а не одним ДБ', () => {
+    const bounds = rect(40, 20, 420, 290);
+    const moved = [rect(100, 80), rect(300, 200)];
+    // Охват набора 100..400 × 80..250: вправо можно на 60 (до правой грани),
+    // вниз — на 60; один ДБ позволил бы больше.
+    expect(clampDragDelta({ x: 200, y: 200 }, moved, bounds)).toEqual({ x: 60, y: 60 });
+  });
+
+  it('clampDragDelta: без рамки (переносится вся система) приращение без ограничений', () => {
+    const moved = [rect(100, 80)];
+    expect(clampDragDelta({ x: 500, y: -900 }, moved, null)).toEqual({ x: 500, y: -900 });
+    // Пустой набор — тоже без ограничений.
+    expect(clampDragDelta({ x: 10, y: 20 }, [], { x: 0, y: 0, width: 10, height: 10 })).toEqual({
+      x: 10,
+      y: 20,
+    });
   });
 });
