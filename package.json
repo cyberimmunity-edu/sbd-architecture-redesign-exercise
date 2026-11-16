@@ -1,7 +1,10 @@
 {
   "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.02.03b",
+  "version": "0.03.01b",
   "private": true,
+  "bin": {
+    "skib": "cli/skib.mjs"
+  },
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
@@ -13,6 +16,7 @@
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:cli": "node tests/cli/run.mjs",
     "test": "npm run test:unit && npm run test:e2e"
   },
   "dependencies": {

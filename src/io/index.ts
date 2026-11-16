@@ -9,4 +9,4 @@ export { parseSequencesYaml, serializeSequencesYaml, parseSequencesInner, serial
 export type { SequencesParseResult, LinkMode } from './sequencesYaml';
 export { parseSeqPlantUml, serializeSeqPuml } from './seqPlantuml';
 export type { SeqPumlModel, SeqPumlResult } from './seqPlantuml';
-export { ERR, WARN, err, warn, hasErrors } from './errors';
+export { ERR, WARN, err, warn, hasErrors, HINTS, hintFor } from './errors';

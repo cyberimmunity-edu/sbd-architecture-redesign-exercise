@@ -12,7 +12,7 @@ from pathlib import Path
 MAKEFILE = Path('/home/z/my-project/Makefile')
 DRY_TARGETS = [
     'help', 'install', 'dev', 'build', 'preview', 'lint', 'test-unit',
-    'test-unit-coverage', 'test-e2e', 'test', 'zip', 'docker-build',
+    'test-unit-coverage', 'test-e2e', 'test', 'cli', 'check-makefile', 'zip', 'docker-build',
     'docker-run', 'docker-start', 'docker-stop', 'docker-logs',
     'docker-shell', 'clean', 'distclean',
 ]

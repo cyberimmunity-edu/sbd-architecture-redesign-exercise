@@ -60,14 +60,16 @@ test('v0.01.08: панель «Советы» показывает цели и �
   await expect(page.locator('[data-testid^="advice-goal-coverage"]').first()).toBeVisible();
 
   // Размещаем критичные функции: link и plan станут ДДБПЦД с
-  // низкоцелостными входами — появятся советы про посредника и
-  // декомпозицию с оценкой экономии.
+  // низкоцелостными входами — появятся советы про посредника с оценкой
+  // экономии; декомпозиция (v0.03.01) не предлагается: в доменах только
+  // критичные функции, интерфейсный домен уже минимальный.
   await dropCard(page, 'fn-auth', 'blk-link');
   await dropCard(page, 'fn-sanitize', 'blk-plan');
   await dropCard(page, 'fn-estop', 'blk-drive');
 
   const savings = page.getByTestId('advice-saving');
   await expect(savings.first()).toBeVisible();
+  await expect(page.getByTestId('advice-ddbpcd-split')).toHaveCount(0);
   // Автоприменения нет: ни один совет не меняет модель — C_системы
   // и состав ДВБ остаются прежними, функции можно снять вручную.
   const costBefore = await page.getByTestId('summary-bar').textContent();

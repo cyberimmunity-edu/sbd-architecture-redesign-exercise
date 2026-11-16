@@ -228,11 +228,19 @@ zod 4, js-yaml 5, порты dev/preview 3000/4173 (переопределяют
   два Г-образных кандидата через середину зазора.
 - **Советчик (advisor.ts)** — чистая `computeAdvice(project): Advice[]`;
   каждый кандидат «что-если» собирается клоном архитектуры и пересчитывается
-  `recalcCosts` → точная ΔC. Панель `AdvisorPanel.tsx` в правой колонке под
-  таблицей ДВБ; клик — `setSelection` + событие `FOCUS_NODE_EVENT`
-  (механизм v0.01.04). Автоприменения нет сознательно — решение за студентом.
+  `recalcCosts` → точная ΔC. Вариантный перебор разбиений (v0.03.01b):
+  `partitionCandidate(project, blockId, movedIds, routing)` — общий кандидат
+  с маршрутами `downstream` (валидатор остаётся) и `gateway` (валидатор
+  выносится в шлюз, красные стрелки перенаправляются), `splitVariants` —
+  перебор подмножеств функций (все при n ≤ 10, иначе эвристическое
+  семейство) с выдачей топ-3 на домен (`MAX_VARIANTS_PER_DOMAIN`);
+  классы `trusted-split`/`gateway-split` выводятся из класса новой части.
+  Панель `AdvisorPanel.tsx` в правой колонке под таблицей ДВБ; клик —
+  `setSelection` + событие `FOCUS_NODE_EVENT` (механизм v0.01.04).
+  Автоприменения нет сознательно — решение за студентом.
 - **Аудит трассировки (audit.ts)** — `validateProject(project)` возвращает
-  E-501/E-502/W-006; коды в реестре `io/errors.ts`. Кнопка «Проверить»
+  E-501/E-502/W-006 и W-013 (forceTrusted при красном входе, v0.03.01b);
+  коды в реестре `io/errors.ts`. Кнопка «Проверить»
   в TopBar → `setValidation({ …, context: 'diagram' })`; `ValidationPanel`
   выбирает заголовки по `context`, «файл не применён» не выводится.
 - **Размеры (sizing.ts, viewStore)** — `domainSizeFactors(project, costs,

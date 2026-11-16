@@ -37,6 +37,10 @@ function adviceText(advice: Advice, blockName: (id: string) => string): string {
       return ru.advisor.ddbpcdSplit(name, advice.params.moved ?? 0);
     case 'ddb-regroup':
       return ru.advisor.ddbRegroup(name, advice.params.moved ?? 0);
+    case 'trusted-split':
+      return ru.advisor.trustedSplit(name, advice.params.moved ?? 0);
+    case 'gateway-split':
+      return ru.advisor.gatewaySplit(name, advice.params.moved ?? 0);
     case 'filter-domain':
       return ru.advisor.filterDomain(name, advice.params.redIncoming ?? 0);
     case 'cost-leader':

@@ -11,7 +11,13 @@
  *   неполным размещением обязательных функций: безусловная цель не может
  *   опираться на предположения, пробел недопустим строже обычной цели;
  * - W-006 — функция связана с целями (implements), но не размещена ни в
- *   одном домене — цепочка «цель → функция → домен» разорвана.
+ *   одном домене — цепочка «цель → функция → домен» разорвана;
+ * - W-013 — домен введён в ДВБ принудительно (forceTrusted), но принимает
+ *   низкоцелостный (красный) поток (v0.03.01b, сверка с независимой
+ *   моделью анализатора): исходящие потоки считаются зелёными по флагу,
+ *   а не по контролю целостности — признак требует явного обоснования
+ *   (например, доверенный датчик в составе ДВБ); иначе контроль
+ *   целостности моделируется функцией безопасности.
  *
  * Валидация загрузки файлов (io/validate.ts) проверяет структуру и не
  * дублируется здесь; сообщения не блокируют работу — только информируют.
@@ -19,6 +25,7 @@
  */
 
 import type { ImportMessage, Project } from './types';
+import { computeTrust } from './trust';
 import { ERR, WARN, err, warn } from '../io/errors';
 
 export function validateProject(project: Project): ImportMessage[] {
@@ -68,6 +75,27 @@ export function validateProject(project: Project): ImportMessage[] {
         ),
       );
     }
+  }
+  // W-013: принудительный ввод в ДВБ при красном входе — флаг маскирует
+  // незавершённый контур целостности (v0.03.01b, сверка с анализатором).
+  // forceTrusted — полноправный признак модели (доверенные датчики и т.п.),
+  // но при красном входе исходящие потоки «зелёные по флагу», поэтому
+  // обоснование должно быть явным.
+  const trust = computeTrust(project);
+  for (let i = 0; i < project.architecture.blocks.length; i++) {
+    const block = project.architecture.blocks[i];
+    if (block.external || !block.forceTrusted) continue;
+    const redIncoming = project.architecture.edges.some(
+      (edge) => edge.to === block.id && trust.edges.get(edge.id) === 'red',
+    );
+    if (!redIncoming) continue;
+    messages.push(
+      warn(
+        WARN.W013,
+        `домен ${block.id} («${block.name}») введён в ДВБ принудительно (forceTrusted), но принимает низкоцелостный (красный) поток: исходящие потоки зелёные по флагу, а не по контролю целостности — проверьте обоснование признака`,
+        { path: `architecture.blocks[${i}]` },
+      ),
+    );
   }
   return messages;
 }

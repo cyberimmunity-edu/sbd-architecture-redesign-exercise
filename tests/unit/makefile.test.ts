@@ -50,12 +50,12 @@ describe('Makefile (правило проекта: проверки запуск
     expect(empty).toEqual([]);
   });
 
-  it('цель check запускает проверку Makefile перед lint и test', () => {
+  it('цель check запускает проверку Makefile перед lint, cli, cli-тестами и test (v0.03.01b)', () => {
     const steps = recipeOf('check')
       .filter((line) => line.startsWith('\t'))
       .map((line) => line.trim().replace('$(MAKE) ', '').trim())
       .filter(Boolean);
-    expect(steps).toEqual(['check-makefile', 'lint', 'test']);
+    expect(steps).toEqual(['check-makefile', 'lint', 'cli', 'test-cli', 'test']);
   });
 
   it('состав .PHONY соответствует объявленным целям', () => {

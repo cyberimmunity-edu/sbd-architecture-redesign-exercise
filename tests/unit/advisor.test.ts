@@ -1,15 +1,41 @@
 /**
- * Тесты советчика — v0.01.08. Советы обязаны быть детерминированными,
+ * Тесты советчика — v0.03.01b. Советы обязаны быть детерминированными,
  * оценка экономии — точной (кандидат пересчитывается recalcCosts),
- * каталог — покрывать С1–С7 из обсуждения v0.01.08.
+ * каталог — покрывать С1–С7 из обсуждения v0.01.08 плюс вариантный
+ * перебор разбиений v0.03.01b.
+ *
+ * v0.03.01 (отзыв тестирования): совет ddbpcd-split больше не предлагается
+ * интерфейсному домену, состоящему только из критичных функций (домен уже
+ * минимальный); переносимым набором являются некритичные функции. Блок
+ * «Экономика рекомендаций» проверяет на примерах репозитория (robot 486,
+ * vessel 943), что deltaC каждого совета равна разности пересчётов текущей
+ * и кандидатной моделей, а кандидаты корректны и не зацикливают каталог.
+ *
+ * v0.03.01b (сверка с независимой моделью анализатора): для каждого
+ * доверенного домена перебираются варианты разбиения на две части
+ * («валидатор + исполнитель» — trusted-split, «шлюз с функциями» —
+ * gateway-split, вынос некритичных — С1/С2), каждому домену выдаётся
+ * до трёх лучших по точной deltaC; честная модель примера пользователя
+ * (лидар — интерфейсный ДБ без forceTrusted, C_блока 3) даёт C = 335.
  */
 
 import { describe, expect, it } from 'vitest';
-import { computeAdvice, type Advice } from '../../src/engine/advisor';
+import { readFileSync } from 'node:fs';
+import {
+  adviceCandidate,
+  computeAdvice,
+  partitionCandidate,
+  splitCandidate,
+  splitVariants,
+  MAX_VARIANTS_PER_DOMAIN,
+  type Advice,
+} from '../../src/engine/advisor';
 import { recalcCosts } from '../../src/engine/cost';
+import { computeTrust } from '../../src/engine/trust';
+import { parseStateYaml } from '../../src/io/stateFile';
 import type { Assignment, Block, Edge, Goal, Project, SecurityFunction } from '../../src/engine/types';
 
-/** Сценарий 1: ДДБПЦД с двумя функциями и недоверенной внешней системой. */
+/** Сценарий 1: ДДБПЦД с критичной и некритичной функциями, недоверенная внешняя система. */
 function ddbpcdProject(): Project {
   const blocks: Block[] = [
     { id: 'ext-sensor', name: 'Внешний датчик', cost: 0, external: true, position: { x: 0, y: 0 } },
@@ -23,7 +49,7 @@ function ddbpcdProject(): Project {
   const goals: Goal[] = [{ id: 't-main', name: 'Достоверные данные' }];
   const functions: SecurityFunction[] = [
     { id: 'f-a', name: 'Фильтрация', cost: 3, implements: [{ goal: 't-main', weight: 'mandatory' }] },
-    { id: 'f-b', name: 'Обработка', cost: 7, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+    { id: 'f-b', name: 'Обработка', cost: 7 },
   ];
   const assignments: Assignment[] = [
     { function: 'f-a', block: 'd-main' },
@@ -32,17 +58,75 @@ function ddbpcdProject(): Project {
   return { architecture: { blocks, edges }, security: { goals, functions }, assignments, meta: {} };
 }
 
-describe('Советчик — С1 декомпозиция ДДБПЦД (v0.01.08)', () => {
-  it('предлагает декомпозицию с точной экономией кандидата', () => {
+/** Сценарий 2: ДДБПЦД из одних критичных функций — интерфейсный домен минимальный. */
+function ddbpcdMinimalProject(): Project {
+  const project = ddbpcdProject();
+  const functions: SecurityFunction[] = project.security.functions.map((fn) => ({
+    ...fn,
+    implements: [{ goal: 't-main', weight: 'mandatory' }],
+  }));
+  return { ...project, security: { ...project.security, functions } };
+}
+
+function loadSample(name: string): Project {
+  const text = readFileSync(new URL(`../../src/samples/${name}/state.yaml`, import.meta.url), 'utf8');
+  const parsed = parseStateYaml(text);
+  expect(parsed.errors).toEqual([]);
+  return parsed.model!;
+}
+
+describe('Советчик — С1 вынос некритичных функций из ДДБПЦД (v0.03.01)', () => {
+  it('предлагает вынос некритичных функций с точной экономией кандидата', () => {
     const project = ddbpcdProject();
     const advices = computeAdvice(project);
     const split = advices.find((advice) => advice.kind === 'ddbpcd-split');
     expect(split).toBeDefined();
     expect(split!.blocks).toEqual(['d-main']);
-    expect(split!.functions).toEqual(['f-b']); // f-a остаётся принимать поток
-    // Экономия: было 1001 (1000 + 1); стало 135 (ceil(3×3×1.5×10)) +
-    // 245 (7×7×1×5) + 1 → 1001 − 381 = 620 (C_блока делится между частями).
-    expect(split!.deltaC).toBe(620);
+    expect(split!.functions).toEqual(['f-b']); // критичная f-a остаётся принимать поток
+    // Кандидат: d-main (C_блока 3, f-a, E=3, M=1.5, K=10) = ceil(3×3×1.5×10) = 135;
+    // d-main-split (C_блока 7, f-b, НДБ K=0.1) = ceil(7×7×0.1) = 5; d-sink = 1.
+    // Было 1001 → стало 141, экономия 860.
+    expect(split!.deltaC).toBe(860);
+    expect(split!.params.moved).toBe(1);
+  });
+
+  it('интерфейсный домен из одних критичных функций уже минимальный — декомпозиция не предлагается', () => {
+    // Отзыв тестирования v0.03.01: совет «декомпозировать» давался всегда,
+    // даже когда состав домена минимален (только функции повышения целостности).
+    const project = ddbpcdMinimalProject();
+    const advices = computeAdvice(project);
+    expect(advices.find((advice) => advice.kind === 'ddbpcd-split')).toBeUndefined();
+    // Посредник по-прежнему предлагается — это другой совет (С3).
+    expect(advices.find((advice) => advice.kind === 'filter-domain')).toBeDefined();
+  });
+
+  it('в минимум не попадает и домен из одной функции', () => {
+    const project = ddbpcdMinimalProject();
+    const alone: Project = {
+      ...project,
+      assignments: [{ function: 'f-a', block: 'd-main' }],
+    };
+    expect(computeAdvice(alone).find((advice) => advice.kind === 'ddbpcd-split')).toBeUndefined();
+  });
+
+  it('идентификаторы кандидата не конфликтуют с существующими (уникальные суффиксы)', () => {
+    const project = ddbpcdProject();
+    const occupied: Project = {
+      ...project,
+      architecture: {
+        ...project.architecture,
+        blocks: [
+          ...project.architecture.blocks,
+          { id: 'd-main-split', name: 'Занято', cost: 1 },
+        ],
+        edges: [...project.architecture.edges, { id: 'd-main-split-link', from: 'd-main', to: 'd-sink' }],
+      },
+    };
+    const candidate = splitCandidate(occupied, 'd-main');
+    expect(candidate).not.toBeNull();
+    const ids = candidate!.project.architecture.blocks.map((b) => b.id);
+    expect(new Set(ids).size).toBe(ids.length); // дубликатов нет
+    expect(candidate!.project.architecture.blocks.find((b) => b.id === 'd-main-split-2')).toBeDefined();
   });
 
   it('предлагает дешёвого посредника для низкоцелостного входа (С3)', () => {
@@ -72,9 +156,170 @@ describe('Советчик — С1 декомпозиция ДДБПЦД (v0.01.
     for (let i = 1; i < savings.length; i += 1) {
       expect(savings[i - 1]).toBeGreaterThanOrEqual(savings[i]);
     }
-    // Посредник даёт 490, декомпозиция — 620: декомпозиция выгоднее — она первая.
-    expect(first[0].kind).toBe('ddbpcd-split');
-    expect(first[1].kind).toBe('filter-domain');
+    // Посредник даёт 490, вынос некритичных — 860, шлюз с функциями — 905:
+    // советы отсортированы по экономии — шлюз первый.
+    expect(first[0].kind).toBe('gateway-split');
+    expect(first[0].deltaC).toBe(905);
+    expect(first[1].kind).toBe('ddbpcd-split');
+    expect(first[1].deltaC).toBe(860);
+    expect(first[2].kind).toBe('filter-domain');
+  });
+});
+
+describe('Советчик — вариантный перебор разбиений (v0.03.01b)', () => {
+  it('trusted-split: исполнитель выходит из-под красного входа в отдельный ДДБ', () => {
+    const project = loadSample('robot');
+    const { systemCost } = recalcCosts(project);
+    expect(systemCost).toBe(486);
+    // blk-plan: fn-sanitize + fn-geofence — оба варианта разбиения дают 140.
+    const planVariants = splitVariants(project, 'blk-plan');
+    expect(planVariants.map((v) => [v.kind, v.deltaC])).toEqual([
+      ['trusted-split', 140],
+      ['trusted-split', 140],
+    ]);
+    expect(planVariants[0].functions).toEqual(['fn-geofence']);
+    expect(planVariants[1].functions).toEqual(['fn-sanitize']);
+    // Кандидат: валидатор остаётся ДДБПЦД и принимает красную стрелку,
+    // исполнитель — новый ДДБ с зелёным входом от валидатора.
+    const candidate = partitionCandidate(project, 'blk-plan', ['fn-geofence'], 'downstream')!;
+    const recalc = recalcCosts(candidate.project);
+    expect(recalc.systemCost).toBe(346);
+    expect(recalc.trust.internal.get('blk-plan')).toBe('ddbpcd');
+    expect(recalc.trust.internal.get('blk-plan-exec')).toBe('ddb');
+    // Красная стрелка осталась у валидатора; между частями — новый поток.
+    const redEdge = candidate.project.architecture.edges.find((e) => e.id === 'e-perc-plan')!;
+    expect(redEdge.to).toBe('blk-plan');
+    expect(candidate.project.architecture.edges.some((e) => e.from === 'blk-plan' && e.to === 'blk-plan-exec')).toBe(true);
+    // Кандидат совпадает с оценкой совета.
+    const advice = computeAdvice(project).find(
+      (a) => a.kind === 'trusted-split' && a.blocks[0] === 'blk-plan' && a.functions[0] === 'fn-geofence',
+    )!;
+    expect(advice.deltaC).toBe(systemCost - recalc.systemCost);
+  });
+
+  it('gateway-split: валидатор выносится в шлюз, красные стрелки перенаправляются', () => {
+    const project = ddbpcdProject();
+    const candidate = partitionCandidate(project, 'd-main', ['f-a'], 'gateway')!;
+    expect(candidate.newId).toBe('d-main-gw');
+    const recalc = recalcCosts(candidate.project);
+    // Было 1001; стало: шлюз ДДБПЦД 90 (3×3×1×10) + исходная часть НДБ 5
+    // (ceil(7×7×0.1)) + приёмник 1 → экономия 905.
+    expect(recalc.systemCost).toBe(96);
+    expect(recalc.trust.internal.get('d-main-gw')).toBe('ddbpcd');
+    expect(recalc.trust.internal.get('d-main')).toBe('ndb');
+    // Красная стрелка перенаправлена шлюзу; шлюз отдаёт зелёный поток.
+    expect(candidate.project.architecture.edges.find((e) => e.id === 'e-in')!.to).toBe('d-main-gw');
+    expect(candidate.project.architecture.edges.some((e) => e.from === 'd-main-gw' && e.to === 'd-main')).toBe(true);
+    // Совет и кандидат — одна модель.
+    const advice = computeAdvice(project).find((a) => a.kind === 'gateway-split')!;
+    expect(advice.functions).toEqual(['f-a']);
+    expect(advice.deltaC).toBe(905);
+    expect(recalcCosts(adviceCandidate(project, advice)!.project).systemCost).toBe(96);
+  });
+
+  it('forceTrusted не наследуется вынесенной частью, но остаётся у исходной', () => {
+    const blocks: Block[] = [
+      { id: 'ext-src', name: 'Среда', cost: 0, external: true },
+      { id: 'd-forced', name: 'Принудительно доверенный', cost: 10, forceTrusted: true },
+    ];
+    const edges: Edge[] = [{ id: 'e-in', from: 'ext-src', to: 'd-forced' }];
+    const goals: Goal[] = [{ id: 't-main', name: 'Цель' }];
+    const functions: SecurityFunction[] = [
+      { id: 'f-1', name: 'Ф-1', cost: 3, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+      { id: 'f-2', name: 'Ф-2', cost: 2, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+    ];
+    const project: Project = {
+      architecture: { blocks, edges },
+      security: { goals, functions },
+      assignments: [
+        { function: 'f-1', block: 'd-forced' },
+        { function: 'f-2', block: 'd-forced' },
+      ],
+      meta: {},
+    };
+    const candidate = partitionCandidate(project, 'd-forced', ['f-2'], 'downstream')!;
+    const original = candidate.project.architecture.blocks.find((b) => b.id === 'd-forced')!;
+    const moved = candidate.project.architecture.blocks.find((b) => b.id === 'd-forced-exec')!;
+    expect(original.forceTrusted).toBe(true);
+    expect(moved.forceTrusted).toBeUndefined();
+  });
+
+  it('на домен выдаётся не более трёх лучших вариантов, наборы не повторяются', () => {
+    const blocks: Block[] = [
+      { id: 'ext-src', name: 'Среда', cost: 0, external: true },
+      { id: 'd-big', name: 'Большой домен', cost: 10 },
+    ];
+    const edges: Edge[] = [{ id: 'e-in', from: 'ext-src', to: 'd-big' }];
+    const goals: Goal[] = [{ id: 't-main', name: 'Цель' }];
+    const functions: SecurityFunction[] = [
+      { id: 'f-1', name: 'Ф-1', cost: 3, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+      { id: 'f-2', name: 'Ф-2', cost: 5, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+      { id: 'f-3', name: 'Ф-3', cost: 7, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+      { id: 'f-4', name: 'Ф-4', cost: 2 },
+    ];
+    const project: Project = {
+      architecture: { blocks, edges },
+      security: { goals, functions },
+      assignments: functions.map((fn) => ({ function: fn.id, block: 'd-big' })),
+      meta: {},
+    };
+    // 4 функции → 14 непустых собственных подмножеств; выдача — не более 3.
+    const variants = splitVariants(project, 'd-big');
+    expect(variants.length).toBeLessThanOrEqual(MAX_VARIANTS_PER_DOMAIN);
+    expect(variants.length).toBe(MAX_VARIANTS_PER_DOMAIN);
+    const keys = variants.map((v) => v.functions.join(','));
+    expect(new Set(keys).size).toBe(keys.length);
+    for (let i = 1; i < variants.length; i += 1) {
+      expect(variants[i - 1].deltaC!).toBeGreaterThanOrEqual(variants[i].deltaC!);
+    }
+    // Советы-разбиения домена согласованы с общим списком советов
+    // (в проекте также есть посредник и структурные советы).
+    const splitKinds = new Set(['ddbpcd-split', 'ddb-regroup', 'trusted-split', 'gateway-split']);
+    const fromProject = computeAdvice(project).filter(
+      (a) => a.blocks[0] === 'd-big' && splitKinds.has(a.kind),
+    );
+    expect(fromProject).toEqual(variants);
+  });
+
+  it('домены с числом функций выше порога перебора используют эвристическое семейство', () => {
+    const blocks: Block[] = [
+      { id: 'ext-src', name: 'Среда', cost: 0, external: true },
+      { id: 'd-huge', name: 'Большой домен', cost: 10 },
+    ];
+    const edges: Edge[] = [{ id: 'e-in', from: 'ext-src', to: 'd-huge' }];
+    const goals: Goal[] = [{ id: 't-main', name: 'Цель' }];
+    const functions: SecurityFunction[] = Array.from({ length: 12 }, (_, i) => ({
+      id: `f-${String(i + 1).padStart(2, '0')}`,
+      name: `Ф-${i + 1}`,
+      cost: i + 1,
+      implements: i % 2 === 0 ? [{ goal: 't-main', weight: 'mandatory' }] : [],
+    }));
+    const project: Project = {
+      architecture: { blocks, edges },
+      security: { goals, functions },
+      assignments: functions.map((fn) => ({ function: fn.id, block: 'd-huge' })),
+      meta: {},
+    };
+    const first = splitVariants(project, 'd-huge');
+    const second = splitVariants(project, 'd-huge');
+    expect(first).toEqual(second); // детерминизм
+    expect(first.length).toBeLessThanOrEqual(MAX_VARIANTS_PER_DOMAIN);
+    for (const variant of first) {
+      const candidate = adviceCandidate(project, variant)!;
+      expect(candidate).not.toBeNull();
+      expect(recalcCosts(candidate.project).systemCost).toBeLessThan(recalcCosts(project).systemCost);
+    }
+  });
+
+  it('перебор не предлагается доменам из одной функции и внешним системам', () => {
+    const project = loadSample('robot');
+    expect(splitVariants(project, 'blk-perc')).toEqual([]); // НДБ без функций
+    expect(splitVariants(project, 'ext-ctrl')).toEqual([]); // внешняя система
+    const single: Project = {
+      ...ddbpcdMinimalProject(),
+      assignments: [{ function: 'f-a', block: 'd-main' }],
+    };
+    expect(splitVariants(single, 'd-main')).toEqual([]);
   });
 });
 
@@ -107,6 +352,11 @@ describe('Советчик — С2 некритичные функции в ДД
     // Было 500 (10×10×1×5) + 1; стало 125 (5×5×1×5) + 3 (ceil(5×5×0.1)) + 1
     // → 501 − 129 = 372.
     expect(regroup!.deltaC).toBe(372);
+    // Кандидат по построению совпадает с оценкой совета.
+    const candidate = adviceCandidate(project, regroup!)!;
+    expect(recalcCosts(candidate.project).systemCost).toBe(129);
+    // Вынесенные функции не наследуют forceTrusted — новый домен НДБ.
+    expect(candidate.project.architecture.blocks.find((b) => b.id === 'd-core-ndb')!.forceTrusted).toBeUndefined();
   });
 });
 
@@ -195,36 +445,150 @@ describe('Советчик — С4–С6 структурные советы (v0
   });
 });
 
-describe('Советчик — согласованность с recalcCosts (v0.01.08)', () => {
+describe('Советчик — согласованность с recalcCosts (v0.03.01)', () => {
   it('экономия совета равна разности пересчётов текущей и кандидатной моделей', () => {
     const project = ddbpcdProject();
     const { systemCost } = recalcCosts(project);
     const split = computeAdvice(project).find((advice) => advice.kind === 'ddbpcd-split')!;
     expect(systemCost).toBe(1001);
-    // Кандидат воспроизводится тестом независимо: d-main без f-b, блок
-    // d-main-split с f-b и C_блока 7, связь между частями.
-    const candidate = recalcCosts({
-      architecture: {
-        blocks: [
-          { id: 'ext-sensor', name: 'Внешний датчик', cost: 0, external: true },
-          { id: 'd-main', name: 'Основной домен', cost: 3 },
-          { id: 'd-main-split', name: 'Основной домен', cost: 7 },
-          { id: 'd-sink', name: 'Приёмник', cost: 1 },
-        ],
-        edges: [
-          { id: 'e-in', from: 'ext-sensor', to: 'd-main' },
-          { id: 'e-out', from: 'd-main', to: 'd-sink' },
-          { id: 'e-link', from: 'd-main', to: 'd-main-split' },
-        ],
-      },
-      security: project.security,
-      assignments: [
-        { function: 'f-a', block: 'd-main' },
-        { function: 'f-b', block: 'd-main-split' },
-      ],
-      meta: {},
+    // Кандидат строится тем же кодом, что и оценка совета (adviceCandidate).
+    const candidate = adviceCandidate(project, split)!;
+    const candidateCost = recalcCosts(candidate.project).systemCost;
+    expect(split.deltaC).toBe(systemCost - candidateCost);
+    expect(candidateCost).toBe(141);
+    // Перенесённые функции находятся в новом домене-кандидате.
+    expect(candidate.project.assignments.find((a) => a.function === 'f-b')!.block).toBe('d-main-split');
+    // Новый домен недоверенный: некритичная функция не вводит в ДВБ.
+    expect(computeTrust(candidate.project).internal.get('d-main-split')).toBe('ndb');
+  });
+});
+
+describe('Экономика рекомендаций на примерах репозитория (v0.03.01)', () => {
+  const samples = ['robot', 'vessel'] as const;
+  const controls: Record<string, number> = { robot: 486, vessel: 943 };
+
+  for (const sample of samples) {
+    const project = loadSample(sample);
+    const { systemCost, trust } = recalcCosts(project);
+    const advices = computeAdvice(project);
+
+    it(`${sample}: контрольное число примера не изменилось (C_системы = ${controls[sample]})`, () => {
+      expect(systemCost).toBe(controls[sample]);
     });
-    expect(split.deltaC).toBe(systemCost - candidate.systemCost);
-    expect(candidate.systemCost).toBe(381);
+
+    it(`${sample}: deltaC каждого совета равна разности пересчётов кандидата`, () => {
+      const withSaving = advices.filter((advice) => advice.deltaC !== null && advice.deltaC > 0);
+      expect(withSaving.length).toBeGreaterThan(0);
+      for (const advice of withSaving) {
+        const candidate = adviceCandidate(project, advice);
+        expect(candidate, `кандидат для ${advice.kind}`).not.toBeNull();
+        const candidateCost = recalcCosts(candidate!.project).systemCost;
+        expect(systemCost - candidateCost).toBe(advice.deltaC);
+        // Экономика советов: кандидат дешевле текущей модели.
+        expect(candidateCost).toBeLessThan(systemCost);
+      }
+    });
+
+    it(`${sample}: переносимым набором ddbpcd-split являются некритичные функции`, () => {
+      const byFnId = new Map(project.security.functions.map((fn) => [fn.id, fn]));
+      for (const block of project.architecture.blocks) {
+        if (block.external) continue;
+        if (trust.internal.get(block.id) !== 'ddbpcd') continue;
+        const placed = project.assignments
+          .filter((a) => a.block === block.id)
+          .map((a) => byFnId.get(a.function)!)
+          .filter(Boolean)
+          .sort((a, b) => a.id.localeCompare(b.id));
+        const nonCritical = placed.filter((fn) => (fn.implements ?? []).length === 0);
+        const advice = advices.find((a) => a.kind === 'ddbpcd-split' && a.blocks[0] === block.id);
+        if (nonCritical.length === 0 || placed.length < 2) {
+          // Интерфейсный домен уже минимальный — декомпозиция не предлагается.
+          expect(advice, `${block.id}: некритичных нет — совета быть не должно`).toBeUndefined();
+        } else {
+          expect(advice, `${block.id}: должен быть совет выноса некритичных`).toBeDefined();
+          expect(advice!.functions).toEqual(nonCritical.map((fn) => fn.id));
+        }
+      }
+    });
+
+    it(`${sample}: повторное применение кандидата ddbpcd-split не порождает новый совет для того же домена`, () => {
+      for (const advice of advices.filter((a) => a.kind === 'ddbpcd-split')) {
+        const candidate = adviceCandidate(project, advice)!;
+        const again = computeAdvice(candidate.project).filter(
+          (a) => a.kind === 'ddbpcd-split' && a.blocks[0] === advice.blocks[0],
+        );
+        expect(again, `повторный совет для ${advice.blocks[0]}`).toHaveLength(0);
+      }
+    });
+
+    it(`${sample}: список советов детерминирован`, () => {
+      expect(computeAdvice(project)).toEqual(advices);
+    });
+  }
+
+  it('robot: интерфейсные домены (blk-plan, blk-link) не получают совет декомпозиции', () => {
+    const project = loadSample('robot');
+    const targets = computeAdvice(project)
+      .filter((advice) => advice.kind === 'ddbpcd-split')
+      .map((advice) => advice.blocks[0]);
+    expect(targets).not.toContain('blk-plan');
+    expect(targets).not.toContain('blk-link');
+  });
+});
+
+describe('Честная модель примера пользователя (v0.03.01b, сверка с анализатором)', () => {
+  /**
+   * Фикстура tests/fixtures/vessel-user-state.yaml — модель «Безэкипажное
+   * судно-доставщик». В v0.03.01b лидар (интерфейсный ДБ) моделируется
+   * честно: forceTrusted снят, C_блока повышен 2 → 3. Модель совпадает
+   * с базой независимого отчёта анализатора: C_системы = 335.
+   */
+  function loadUserFixture(): Project {
+    const text = readFileSync(
+      new URL('../fixtures/vessel-user-state.yaml', import.meta.url),
+      'utf8',
+    );
+    const parsed = parseStateYaml(text);
+    expect(parsed.errors).toEqual([]);
+    return parsed.model!;
+  }
+
+  it('лидар — интерфейсный ДБ без forceTrusted: C_системы = 335, как в отчёте анализатора', () => {
+    const project = loadUserFixture();
+    const lidar = project.architecture.blocks.find((b) => b.id === 'blk-lidar')!;
+    expect(lidar.forceTrusted).toBeUndefined();
+    expect(lidar.cost).toBe(3);
+    const { systemCost, costs, trust } = recalcCosts(project);
+    expect(systemCost).toBe(335);
+    expect(trust.internal.get('blk-lidar')).toBe('ndb'); // НДБ: ceil(3×1×0.1) = 1
+    expect(costs.get('blk-lidar')!.domainCost).toBe(1);
+    // dom-4 «Аварийный уход от столкновения» вернулся в ДДБПЦД (K = 10):
+    // единственный красный вход — от недоверенного лидара.
+    expect(trust.internal.get('dom-4')).toBe('ddbpcd');
+    expect(costs.get('dom-4')!.domainCost).toBe(105);
+  });
+
+  it('советчик воспроизводит «бонус» отчёта: посредник перед dom-4 даёт −42', () => {
+    const project = loadUserFixture();
+    const advices = computeAdvice(project);
+    // Шлюз dom-4-gw из отчёта анализатора: −42 у.е., домен понижается до ДДБ.
+    const filter = advices.find((a) => a.kind === 'filter-domain' && a.blocks[0] === 'dom-4')!;
+    expect(filter).toBeDefined();
+    expect(filter.deltaC).toBe(42);
+    expect(filter.params.mediatorCost).toBe(1);
+    expect(filter.params.mediatorForceTrusted).toBe(1);
+    const candidate = adviceCandidate(project, filter)!;
+    const recalc = recalcCosts(candidate.project);
+    expect(recalc.trust.internal.get('dom-4')).toBe('ddb');
+    expect(recalc.trust.internal.get('dom-4-filter')).toBe('ddbpcd');
+    // Вариантный перебор для dom-4 и dom-6: варианты «валидатор + исполнитель».
+    const splits = advices.filter(
+      (a) => (a.blocks[0] === 'dom-4' || a.blocks[0] === 'dom-6') && a.kind === 'trusted-split',
+    );
+    expect(splits.length).toBeGreaterThan(0);
+    for (const advice of splits) {
+      const splitCandidate = adviceCandidate(project, advice)!;
+      expect(recalcCosts(splitCandidate.project).systemCost).toBe(335 - advice.deltaC!);
+    }
   });
 });

@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "skib-lab/state-v1",
+  "title": "Моделирование СКИБ — state.yaml v1",
+  "description": "Схема файла рабочего состояния state.yaml (раздел 6.4 ТЗ): архитектура, цели и функции безопасности, размещения, диаграммы последовательности, логические группы. Схема описывает типы и обязательность; диапазоны, уникальность и ссылочную целостность проверяет семантическая валидация (CLI: skib validate / skib check; коды E-101…E-609). Неизвестные поля игнорируются с предупреждением W-001, поэтому additionalProperties не запрещены.",
+  "type": "object",
+  "required": ["version", "architecture", "security", "assignments"],
+  "properties": {
+    "version": { "const": 1, "description": "Версия формата — только 1 (иначе E-401)." },
+    "architecture": {
+      "type": "object",
+      "required": ["blocks", "edges"],
+      "properties": {
+        "system": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "maxLength": 80 },
+            "description": { "type": "string", "maxLength": 500 }
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "description": "Домены безопасности (ДБ) и внешние системы; всего не более 200 (MAX_DOMAINS).",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "cost"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "cost": { "type": "integer", "minimum": 0 },
+              "position": {
+                "type": "object",
+                "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+              },
+              "external": { "type": "boolean", "description": "Внешняя (смежная) система — вне периметра и вне C_системы." },
+              "trusted": { "type": "boolean", "description": "Только для external: доверенная внешняя система (зелёная)." },
+              "forceTrusted": { "type": "boolean", "description": "Только для внутренних: принудительный ввод в ДВБ (v0.01.06)." },
+              "group": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$", "description": "Id логической группы (ЛГ) из architecture.groups (v0.02.03)." }
+            }
+          }
+        },
+        "edges": {
+          "type": "array",
+          "description": "Стрелки потоков данных; не более 500 (MAX_EDGES); from != to (E-104).",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "required": ["id", "from", "to"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "to": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "label": { "type": "string", "maxLength": 60 }
+            }
+          }
+        },
+        "groups": {
+          "type": "array",
+          "description": "Логические группы ДБ (v0.02.03, Ф-70…Ф-76); не более 20 (MAX_DOMAIN_GROUPS), вложенность до 3 (MAX_LG_DEPTH). Цвет — из палитры LG_COLORS; красный, жёлтый и зелёный зарезервированы под уровни доверия ДБ.",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+              "color": {
+                "type": "string",
+                "enum": ["#607D8B", "#1E88E5", "#3F51B5", "#8E24AA", "#D81B60", "#00897B", "#6D4C41", "#455A64"]
+              },
+              "collapsed": { "type": "boolean" },
+              "parent": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "position": {
+                "type": "object",
+                "properties": { "x": { "type": "number" }, "y": { "type": "number" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": ["goals", "functions"],
+      "properties": {
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "text"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "text": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          }
+        },
+        "goals": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "description": { "type": "string", "maxLength": 500 },
+              "unconditional": { "type": "boolean", "description": "ПЛО — цель «при любых обстоятельствах» (v0.01.05)." }
+            }
+          }
+        },
+        "functions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "cost"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "cost": { "type": "integer", "minimum": 0 },
+              "implements": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["goal", "weight"],
+                  "properties": {
+                    "goal": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+                    "weight": { "enum": ["mandatory", "optional"] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "description": "Размещение функций в доменах: не более одного размещения на функцию (правило 3.2).",
+      "items": {
+        "type": "object",
+        "required": ["function", "block"],
+        "properties": {
+          "function": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+          "block": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" }
+        }
+      }
+    },
+    "sequences": {
+      "type": "array",
+      "description": "Диаграммы последовательности (ДП, v0.02.01, Ф-55): не более 20 ДП (MAX_SEQUENCES).",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "lifelines", "arrows", "blocks"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+          "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+          "lifelines": {
+            "type": "array",
+            "maxItems": 24,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+            "description": "Id блоков архитектуры (линии жизни), без повторов, порядок = слева направо."
+          },
+          "arrows": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": ["id", "from", "to"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+                "from": { "type": "string" },
+                "to": { "type": "string" },
+                "label": { "type": "string", "maxLength": 60 }
+              }
+            }
+          },
+          "blocks": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "required": ["id", "kind", "name", "arrows"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+                "kind": { "enum": ["group", "loop", "cond"] },
+                "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+                "color": { "type": "string" },
+                "arrows": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                "thenLabel": { "type": "string", "maxLength": 60 },
+                "elseLabel": { "type": "string", "maxLength": 60 },
+                "elseFrom": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "savedAt": { "type": "string" },
+        "source": { "type": "string" }
+      }
+    }
+  }
+}

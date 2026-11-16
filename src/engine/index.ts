@@ -55,7 +55,30 @@ export { decompose } from './decompose';
 export type { DecomposeInput, DecomposeChildSpec, DecomposeEdgeAssignment, DecomposeResult } from './decompose';
 export { canAddDomain, canAddEdge, limitsReport } from './limits';
 export { computeAdvice } from './advisor';
-export type { Advice, AdviceKind } from './advisor';
+export type { Advice, AdviceKind, AdviceCandidate } from './advisor';
+export {
+  splitCandidate,
+  regroupCandidate,
+  filterCandidate,
+  partitionCandidate,
+  splitVariants,
+  adviceCandidate,
+  uniqueId,
+  MAX_VARIANTS_PER_DOMAIN,
+  MAX_ENUM_FUNCTIONS,
+} from './advisor';
+export type { SplitRouting } from './advisor';
+/** Метрики системы для внешних инструментов (v0.03.01, CLI/MCP). */
+export { computeMetrics } from './metrics';
+export type {
+  SystemMetrics,
+  DvbMetrics,
+  CompositionMetrics,
+  GoalsMetrics,
+  SequencesMetrics,
+  GroupsMetrics,
+  AdviceMetrics,
+} from './metrics';
 export { validateProject } from './audit';
 /** Режим «Диаграммы последовательности» и автонумерация доменов (v0.02.01). */
 export {

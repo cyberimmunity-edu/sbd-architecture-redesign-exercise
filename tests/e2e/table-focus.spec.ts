@@ -7,6 +7,12 @@
  */
 
 import { expect, test } from '@playwright/test';
+import { APP_VERSION } from '../../src/engine/types';
+
+/** Экранирование спецсимволов регэкспа (версия содержит точки). */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -29,8 +35,8 @@ async function dropCard(page: import('@playwright/test').Page, cardId: string, b
 
 test('v0.01.04: заголовок страницы показывает актуальную версию', async ({ page }) => {
   // Версия проверяется по единому источнику APP_VERSION (см. src/engine/types.ts):
-  // при выпуске новой версии строка обновляется вместе с APP_VERSION.
-  await expect(page).toHaveTitle(/Моделирование СКИБ — v0\.02\.03b/);
+  // регэксп строится из константы — при выпуске новой версии тест править не нужно.
+  await expect(page).toHaveTitle(new RegExp(`Моделирование СКИБ — v${escapeRegExp(APP_VERSION)}`));
   // Бейдж версии в верхней панели — тот же единый источник APP_VERSION.
   await expect(page.locator('.react-flow')).toBeVisible();
 });

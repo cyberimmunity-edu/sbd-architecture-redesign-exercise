@@ -14,8 +14,7 @@ blocks:
       'y': 99.25
   - id: blk-lidar
     name: Лидар
-    cost: 2
-    forceTrusted: true
+    cost: 3
     position:
       x: 512
       'y': 493.25

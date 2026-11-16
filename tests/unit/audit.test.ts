@@ -1,7 +1,8 @@
 /**
- * Тесты семантической проверки диаграммы — v0.01.08. Трассировка
- * «цель → функция → домен»: E-501 (обязательные функции цели не размещены),
- * E-502 (ПЛО-цель), W-006 (функция с целями без размещения).
+ * Тесты семантической проверки диаграммы — v0.01.08, W-013 — v0.03.01b.
+ * Трассировка «цель → функция → домен»: E-501 (обязательные функции цели
+ * не размещены), E-502 (ПЛО-цель), W-006 (функция с целями без размещения),
+ * W-013 (forceTrusted при красном входе — обоснование признака).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -83,5 +84,57 @@ describe('Проверка диаграммы — трассировка цел�
     // Цель без обязательных функций не попадает в E-501/E-502; единственное
     // сообщение — W-006 на саму неразмещённую функцию.
     expect(validateProject(project).map((message) => message.code)).toEqual(['W-006']);
+  });
+});
+
+describe('Проверка диаграммы — обоснование forceTrusted (W-013, v0.03.01b)', () => {
+  it('forceTrusted-домен с красным входом — W-013 с указанием места', () => {
+    // Ситуация примера пользователя: интерфейсный ДБ (лидар) объявлен
+    // доверенным по флагу и принимает красный поток из внешней среды —
+    // исходящие потоки «зелёные по флагу», обоснование должно быть явным.
+    const project = makeProject({
+      goals: [{ id: 't-1', name: 'Цель' }],
+      functions: [],
+      blocks: [
+        { id: 'ext-env', name: 'Среда', cost: 0, external: true },
+        { id: 'd-lidar', name: 'Лидар', cost: 2, forceTrusted: true },
+      ],
+      edges: [{ id: 'e-env-lidar', from: 'ext-env', to: 'd-lidar' }],
+    });
+    const messages = validateProject(project);
+    const w013 = messages.find((message) => message.code === 'W-013');
+    expect(w013).toBeDefined();
+    expect(w013!.message).toContain('d-lidar');
+    expect(w013!.message).toContain('forceTrusted');
+    expect(w013!.path).toBe('architecture.blocks[1]');
+  });
+
+  it('forceTrusted без красного входа — предупреждения нет (легитимный ввод в ДВБ)', () => {
+    // Доверенный датчик в составе системы: флаг обоснован, красных входов нет.
+    const project = makeProject({
+      goals: [{ id: 't-1', name: 'Цель' }],
+      functions: [],
+      blocks: [
+        { id: 'd-sensor', name: 'Датчик', cost: 2, forceTrusted: true },
+      ],
+      edges: [],
+    });
+    expect(validateProject(project)).toEqual([]);
+  });
+
+  it('красный вход без forceTrusted — обычная картина ДДБПЦД, W-013 нет', () => {
+    const project = makeProject({
+      goals: [{ id: 't-1', name: 'Цель' }],
+      functions: [
+        { id: 'f-1', name: 'Функция', cost: 1, implements: [{ goal: 't-1', weight: 'mandatory' }] },
+      ],
+      blocks: [
+        { id: 'ext-env', name: 'Среда', cost: 0, external: true },
+        { id: 'd-iface', name: 'Интерфейс', cost: 2 },
+      ],
+      edges: [{ id: 'e-env-iface', from: 'ext-env', to: 'd-iface' }],
+      assignments: [{ function: 'f-1', block: 'd-iface' }],
+    });
+    expect(validateProject(project)).toEqual([]);
   });
 });
