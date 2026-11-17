@@ -244,6 +244,54 @@ describe('Советчик — вариантный перебор разбие�
     expect(moved.forceTrusted).toBeUndefined();
   });
 
+  it('forceTrusted-домен без функций: разбиений нет, посредник — точная экономия', () => {
+    // Уточнённая семантика (v0.03.01d): интерфейсный ДБ с forceTrusted
+    // принудительно в ДВБ, но при красном входе он ДДБПЦД (K = 10), а не
+    // «зелёный». Добавление ФБ в ДБ — достаточное, но не необходимое
+    // условие ДВБ: forceTrusted-ДБ — «квази-ФБ» сам по себе, поэтому
+    // советчик не предлагает ему разбиения (функций нет) и не требует
+    // добавления ФБ, но вправе предложить дешёвого посредника (С3).
+    const blocks: Block[] = [
+      { id: 'ndb-src', name: 'Источник', cost: 1 },
+      { id: 'iface', name: 'Интерфейсный ДБ', cost: 10, forceTrusted: true },
+    ];
+    const edges: Edge[] = [{ id: 'e-red', from: 'ndb-src', to: 'iface' }];
+    const goals: Goal[] = [{ id: 't-main', name: 'Цель' }];
+    const functions: SecurityFunction[] = [
+      { id: 'f-1', name: 'Ф-1', cost: 2, implements: [{ goal: 't-main', weight: 'mandatory' }] },
+    ];
+    const project: Project = {
+      architecture: { blocks, edges },
+      security: { goals, functions },
+      // Источник без размещённых критичных функций — НДБ, поток красный.
+      assignments: [],
+      meta: {},
+    };
+    // Инвариант: интерфейсный ДБ forceTrusted при красном входе — ДДБПЦД.
+    expect(computeTrust(project).internal.get('iface')).toBe('ddbpcd');
+    // Разбиение неприменимо: в домене нет функций («квази-ФБ» сам по себе).
+    expect(splitVariants(project, 'iface')).toEqual([]);
+    expect(computeAdvice(project).find((a) => a.kind === 'ddbpcd-split')).toBeUndefined();
+    expect(computeAdvice(project).find((a) => a.kind === 'ddb-regroup')).toBeUndefined();
+    // Посредник (С3): iface-filter (forceTrusted, C_блока 1) принимает красный
+    // поток; iface получает только зелёный вход и возвращается в ДДБ.
+    // Было: iface = ceil(10 × 10) = 100, src = ceil(1 × 0.1) = 1 → C = 101.
+    // Стало: фильтр = ceil(1 × 10) = 10, iface = ceil(10 × 5) = 50,
+    // src = ceil(1 × 0.1) = 1 → C = 61; экономия 40.
+    const filter = computeAdvice(project).find((a) => a.kind === 'filter-domain')!;
+    expect(filter).toBeDefined();
+    expect(filter.blocks).toEqual(['iface']);
+    expect(filter.deltaC).toBe(40);
+    expect(filter.params.mediatorForceTrusted).toBe(1);
+    expect(filter.params.redIncoming).toBe(1);
+    // Кандидат воспроизводится adviceCandidate и пересчёт подтверждает deltaC.
+    const candidate = adviceCandidate(project, filter)!;
+    expect(recalcCosts(candidate.project).systemCost).toBe(61);
+    // Инвариант и в кандидатной модели: iface не «зелёный» при красном входе.
+    expect(computeTrust(candidate.project).internal.get('iface')).toBe('ddb');
+    expect(computeTrust(candidate.project).internal.get('iface-filter')).toBe('ddbpcd');
+  });
+
   it('на домен выдаётся не более трёх лучших вариантов, наборы не повторяются', () => {
     const blocks: Block[] = [
       { id: 'ext-src', name: 'Среда', cost: 0, external: true },

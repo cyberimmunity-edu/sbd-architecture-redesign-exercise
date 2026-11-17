@@ -177,10 +177,18 @@ interface SkibStore {
   removeLifeline: (seqId: string, blockId: string) => void;
   /** Порядок линий жизни (перетаскивание — без истории, П-7). */
   reorderLifelines: (seqId: string, from: number, to: number) => void;
-  /** Новая стрелка ДП (from == to — self); добавляется в конец. */
-  addSeqArrow: (seqId: string, from: string, to: string) => string | null;
-  /** Правка подписи стрелки (до 60 символов, П-5). */
-  updateSeqArrow: (seqId: string, arrowId: string, label: string | undefined) => void;
+  /** Новая стрелка ДП (from == to — self). index — место вставки по вертикали
+   *  (v0.03.01d, «по месту опускания»): зазор между стрелками index-1 и index;
+   *  по умолчанию — в конец. Одна операция истории. */
+  addSeqArrow: (seqId: string, from: string, to: string, index?: number) => string | null;
+  /** Правка стрелки (v0.03.01d): подпись (до 60 символов, П-5) и/или концы
+   *  from/to (номера позиций «2->15» → «1->15»/«2->16»); новый конец обязан
+   *  быть линией жизни своей ДП, self-стрелка допустима. Одна операция истории. */
+  updateSeqArrow: (
+    seqId: string,
+    arrowId: string,
+    patch: { label?: string | undefined; from?: string; to?: string },
+  ) => void;
   /** Удаление стрелки — одна операция истории. */
   deleteSeqArrow: (seqId: string, arrowId: string) => void;
   /** Перенос стрелки по вертикали (без истории); блоки следуют за стрелками (П-6). */
@@ -1151,8 +1159,10 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     });
   },
 
-  /** Новая стрелка (Ф-42): направленность любая; from == to — self; лимит 100. */
-  addSeqArrow: (seqId, from, to) => {
+  /** Новая стрелка (Ф-42): направленность любая; from == to — self; лимит 100.
+   *  v0.03.01d: index — вставка «по месту опускания» (зазор между стрелками
+   *  index-1 и index), некорректный индекс — в конец; одна операция истории. */
+  addSeqArrow: (seqId, from, to, index) => {
     const { project } = get();
     const seq = (project.sequences ?? []).find((s) => s.id === seqId);
     if (!seq) return null;
@@ -1162,24 +1172,45 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     updateSequence(set, get, seqId, (current) => {
       const id = nextId('a-', new Set(current.arrows.map((a) => a.id)));
       created = id;
-      return { ...current, arrows: [...current.arrows, { id, from, to }] };
+      const arrows = [...current.arrows];
+      const at =
+        index === undefined || index < 0 || index > arrows.length
+          ? arrows.length
+          : index;
+      arrows.splice(at, 0, { id, from, to });
+      return { ...current, arrows };
     });
     return created;
   },
 
-  /** Правка подписи стрелки (П-5): до 60 символов; пустая строка убирает подпись. */
-  updateSeqArrow: (seqId, arrowId, label) => {
+  /** Правка стрелки (v0.03.01d): подпись и/или концы. Конец применяется
+   *  только если это линия жизни своей ДП (П-12); self допустим. Подпись
+   *  длиннее 60 символов не применяется. Одна операция истории. */
+  updateSeqArrow: (seqId, arrowId, patch) => {
     updateSequence(set, get, seqId, (seq) => {
+      let changed = false;
       const arrows = seq.arrows.map((a) => {
         if (a.id !== arrowId) return a;
-        const trimmed = label?.trim() ?? '';
-        if (trimmed.length === 0) {
-          const { label: _omit, ...rest } = a;
-          return rest as SeqArrow;
+        let next = a;
+        if (patch.from !== undefined && patch.from !== a.from && seq.lifelines.includes(patch.from)) {
+          next = { ...next, from: patch.from };
         }
-        if (trimmed.length > SEQ_TEXT_LIMIT) return a;
-        return { ...a, label: trimmed };
+        if (patch.to !== undefined && patch.to !== a.to && seq.lifelines.includes(patch.to)) {
+          next = { ...next, to: patch.to };
+        }
+        if (patch.label !== undefined) {
+          const trimmed = patch.label.trim();
+          if (trimmed.length === 0) {
+            const { label: _omit, ...rest } = next;
+            next = rest as SeqArrow;
+          } else if (trimmed.length <= SEQ_TEXT_LIMIT) {
+            next = { ...next, label: trimmed };
+          }
+        }
+        if (next !== a) changed = true;
+        return next;
       });
+      if (!changed) return null; // без изменений — история не пишется
       return { ...seq, arrows };
     });
   },

@@ -20,11 +20,17 @@
  * - перетаскивание заголовка линии жизни по горизонтали → порядок (П-7),
  *   не пишется в историю;
  * - перетаскивание от полосы линии жизни к полосе другой линии жизни →
- *   стрелка; на себя → self-стрелка (Ф-42);
- * - перетаскивание стрелки по вертикали → позиция в порядке, нумерация
- *   пересчитывается сразу (Ф-44);
+ *   стрелка, вставленная в строку, где отпущена кнопка («по месту
+ *   опускания», v0.03.01d); на себя → self-стрелка (Ф-42);
+ * - Alt+перетаскивание середины стрелки по вертикали → произвольная
+ *   позиция в порядке, нумерация пересчитывается сразу (Ф-44, v0.03.01d);
+ *   без Alt стрелка только выбирается;
+ * - Alt+перетаскивание конца стрелки (отступ от линии жизни больше
+ *   полосы жестов) на другую линию жизни → смена направления
+ *   («2->15» → «1->15»/«2->16», v0.03.01d), одна операция истории;
  * - клик по стрелке → выбор (Shift/Ctrl — мультивыбор для блоков, Ф-46);
- *   клик по заголовку блока → выбор блока; Delete — удалить стрелку (Ф-45).
+ *   клик по заголовку блока → выбор блока; Delete — удалить стрелку (Ф-45);
+ *   правка концов доступна и в инспекторе («Откуда»/«Куда»).
  *
  * Опция «Цвета из ДАП» (Ф-59, П-11): линии жизни окрашиваются классом
  * доверия домена, стрелки — цветом домена-источника; цвета производные.
@@ -63,6 +69,10 @@ const ROW_H = 46;
 const PAD_X = 24;
 const PAD_BOTTOM = 32;
 const NEUTRAL_ARROW_COLOR = '#64748B';
+/** Захват конца стрелки (v0.03.01d): от 12 px (внутри — полоса жестов
+ *  линии жизни, всегда создающая стрелку) до 40 px от линии. */
+const END_GRAB_INNER = 12;
+const END_GRAB_OUTER = 40;
 /** На сколько пунктир линии жизни продолжается ниже последней строки
  *  стрелок (Ф-68, v0.02.01b): при любом допустимом масштабе (минимум 0.2)
  *  продолжение покрывает видимую область канвы целиком — линия жизни
@@ -99,7 +109,11 @@ export interface SeqDiagramNodeData extends Record<string, unknown> {
   onSelectBlock: (id: string) => void;
   onReorderLifelines: (from: number, to: number) => void;
   onMoveArrow: (arrowId: string, toIndex: number) => void;
-  onCreateArrow: (from: string, to: string) => void;
+  /** Новая стрелка: rowIndex — вставка «по месту опускания» (v0.03.01d),
+   *  зазор между стрелками rowIndex-1 и rowIndex; без него — в конец. */
+  onCreateArrow: (from: string, to: string, rowIndex?: number) => void;
+  /** Правка конца стрелки перетаскиванием (v0.03.01d): одна операция истории. */
+  onUpdateArrowEnd: (arrowId: string, side: 'from' | 'to', lifelineId: string) => void;
   onClearSelection: () => void;
 }
 
@@ -130,8 +144,11 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
     onReorderLifelines,
     onMoveArrow,
     onCreateArrow,
+    onUpdateArrowEnd,
     onClearSelection,
   } = data;
+
+  const { screenToFlowPosition } = useReactFlow();
 
   const indexOfLifeline = useMemo(() => {
     const map = new Map<string, number>();
@@ -146,9 +163,30 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
   // Состояния жестов.
   const [creatingFrom, setCreatingFrom] = useState<string | null>(null);
   const [hoverLifeline, setHoverLifeline] = useState<string | null>(null);
+  /** Строка вставки при жесте создания стрелки («по месту опускания»). */
+  const [creatingRow, setCreatingRow] = useState<number | null>(null);
+  const creatingRowRef = useRef<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const headerDrag = useRef<{ id: string; startX: number; index: number; pxPerCol: number } | null>(null);
   const arrowDrag = useRef<{ id: string; startY: number; index: number; moved: boolean; pxPerRow: number } | null>(null);
+  /** Жест смены направления (v0.03.01d): стрелка и правимый конец.
+   *  ref — данные жеста для обработчиков; state — только для подсветки
+   *  во время рендера (чтение ref в рендере запрещено react-hooks/refs). */
+  const retarget = useRef<{ id: string; side: 'from' | 'to' } | null>(null);
+  const retargetHoverRef = useRef<string | null>(null);
+  const [retargetActive, setRetargetActive] = useState(false);
+  const [retargetHover, setRetargetHover] = useState<string | null>(null);
+
+  /** Строка вставки по вертикальной координате курсора: ряд, над которым
+   *  находится курсор (floor); за границами — зажим в [0, число стрелок]. */
+  const rowIndexAt = useCallback(
+    (clientY: number): number => {
+      const flowY = screenToFlowPosition({ x: 0, y: clientY }).y;
+      const raw = Math.floor((flowY - HEADER_H) / ROW_H);
+      return Math.max(0, Math.min(arrows.length, raw));
+    },
+    [arrows.length, screenToFlowPosition],
+  );
 
   /** Начало жеста создания стрелки на полосе линии жизни (Ф-42). */
   const bandPointerDown = (event: React.PointerEvent, id: string) => {
@@ -156,18 +194,35 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
     event.stopPropagation();
     setCreatingFrom(id);
     setHoverLifeline(id);
+    creatingRowRef.current = rowIndexAt(event.clientY);
+    setCreatingRow(creatingRowRef.current);
+  };
+
+  /** Движение при жесте создания: индикатор строки вставки. */
+  const bandPointerMove = (event: React.PointerEvent) => {
+    if (!creatingFrom) return;
+    const row = rowIndexAt(event.clientY);
+    creatingRowRef.current = row;
+    setCreatingRow(row);
   };
 
   useEffect(() => {
     if (!creatingFrom) return;
-    const finish = () => {
-      if (creatingFrom && hoverLifeline) onCreateArrow(creatingFrom, hoverLifeline);
+    const finish = (event: PointerEvent) => {
+      if (creatingFrom && hoverLifeline) {
+        // Вставка «по месту опускания» (v0.03.01d): строка, где отпущена
+        // кнопка; без движения курсора — строка нажатия полосы.
+        const row = creatingRowRef.current ?? rowIndexAt(event.clientY);
+        onCreateArrow(creatingFrom, hoverLifeline, row);
+      }
+      creatingRowRef.current = null;
+      setCreatingRow(null);
       setCreatingFrom(null);
       setHoverLifeline(null);
     };
     window.addEventListener('pointerup', finish);
     return () => window.removeEventListener('pointerup', finish);
-  }, [creatingFrom, hoverLifeline, onCreateArrow]);
+  }, [creatingFrom, hoverLifeline, onCreateArrow, rowIndexAt]);
 
   /** Перетаскивание заголовка линии жизни по горизонтали (П-7).
    *  Шаг колонки пересчитывается из текущего масштаба канвы. */
@@ -201,22 +256,61 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
     headerDrag.current = null;
   };
 
-  /** Перетаскивание стрелки по вертикали (Ф-44): вставка перед/после соседней.
-   *  Шаг строки пересчитывается из текущего масштаба канвы. */
-  const arrowPointerDown = (event: React.PointerEvent, id: string, index: number) => {
-    if (event.button !== 0) return;
+  /** Перетаскивание стрелки (Ф-44, v0.03.01d) — только с Alt:
+   *  середина сегмента — перенос по вертикали в произвольную позицию;
+   *  конец сегмента (12…40 px от линии жизни — полоса жестов всегда
+   *  создаёт стрелку) — смена направления на другой линии жизни.
+   *  Без Alt стрелка только выбирается (клик). Зона захвата считается
+   *  в координатах модели: экранные пиксели делятся на масштаб
+   *  (rect.width / ширина сегмента в координатах модели). */
+  const arrowPointerDown = (
+    event: React.PointerEvent,
+    id: string,
+    index: number,
+    ends: { fromLocal: number; toLocal: number; isSelf: boolean; segWidth: number },
+  ) => {
+    if (event.button !== 0 || !event.altKey) return;
     event.stopPropagation();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-    arrowDrag.current = {
-      id,
-      startY: event.clientY,
-      index,
-      moved: false,
-      pxPerRow: rect.height / ROW_H,
-    };
+    const zoom = rect.width / ends.segWidth;
+    const localX = (event.clientX - rect.left) / zoom;
+    const dFrom = Math.abs(localX - ends.fromLocal);
+    const dTo = Math.abs(localX - ends.toLocal);
+    const from = dFrom > END_GRAB_INNER && dFrom <= END_GRAB_OUTER;
+    const to = !ends.isSelf && dTo > END_GRAB_INNER && dTo <= END_GRAB_OUTER;
+    const side: 'from' | 'to' | 'move' =
+      from && (!to || dFrom <= dTo)
+        ? 'from'
+        : to
+          ? 'to'
+          : 'move';
+    if (side === 'move') {
+      arrowDrag.current = {
+        id,
+        startY: event.clientY,
+        index,
+        moved: false,
+        pxPerRow: rect.height / ROW_H,
+      };
+    } else {
+      retarget.current = { id, side };
+      retargetHoverRef.current = null;
+      setRetargetHover(null);
+      setRetargetActive(true);
+    }
   };
   const arrowPointerMove = (event: React.PointerEvent) => {
+    if (retarget.current) {
+      // Смена направления: ближайшая линия жизни к курсору по горизонтали.
+      const flowX = screenToFlowPosition({ x: event.clientX, y: event.clientY }).x;
+      const raw = Math.round((flowX - PAD_X - COLUMN_W / 2) / COLUMN_W);
+      const idx = Math.max(0, Math.min(lifelines.length - 1, raw));
+      const id = lifelines[idx]?.id ?? null;
+      retargetHoverRef.current = id;
+      setRetargetHover(id);
+      return;
+    }
     const drag = arrowDrag.current;
     if (!drag) return;
     const dy = event.clientY - drag.startY;
@@ -232,6 +326,20 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
     }
   };
   const arrowPointerUp = () => {
+    const rt = retarget.current;
+    if (rt) {
+      const targetId = retargetHoverRef.current;
+      const arrow = arrows.find((a) => a.id === rt.id);
+      if (targetId && arrow && arrow[rt.side] !== targetId) {
+        // Правка конца («2->15» → «1->15»/«2->16») — одна операция истории.
+        onUpdateArrowEnd(rt.id, rt.side, targetId);
+      }
+      retarget.current = null;
+      retargetHoverRef.current = null;
+      setRetargetHover(null);
+      setRetargetActive(false);
+      return;
+    }
     arrowDrag.current = null;
     setDragOverIndex(null);
   };
@@ -325,7 +433,9 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
       >
         {lifelines.map((lifeline, index) => {
           const selected = selectedLifeline === lifeline.id;
-          const hovered = creatingFrom !== null && hoverLifeline === lifeline.id;
+          const hovered =
+            (creatingFrom !== null && hoverLifeline === lifeline.id) ||
+            (retargetActive && retargetHover === lifeline.id);
           return (
             <div
               key={`band-${lifeline.id}`}
@@ -344,6 +454,7 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
               }}
               data-testid={`seq-lifeline-band-${lifeline.id}`}
               onPointerDown={(e) => bandPointerDown(e, lifeline.id)}
+              onPointerMove={bandPointerMove}
               onPointerEnter={() => {
                 if (creatingFrom) setHoverLifeline(lifeline.id);
               }}
@@ -478,6 +589,10 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
           // Сегмент строки: область клика/перетаскивания вокруг линии.
           const segLeft = isSelf ? x1 + 6 : Math.min(x1, x2) - 30;
           const segWidth = isSelf ? 92 : Math.abs(x2 - x1) + 60;
+          // Зона захвата конца (v0.03.01d): 12…40 px от линии жизни
+          // (внутри — полоса жестов, всегда создающая стрелку).
+          const fromLocal = x1 - segLeft;
+          const toLocal = x2 - segLeft;
           return (
             <div
               key={arrow.id}
@@ -494,7 +609,12 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
               }}
               data-testid={`seq-arrow-${arrow.id}`}
               data-arrow-number={arrow.number}
-              onPointerDown={(e) => arrowPointerDown(e, arrow.id, index)}
+              data-arrow-from={arrow.from}
+              data-arrow-to={arrow.to}
+              title={ru.seq.arrowAltHint}
+              onPointerDown={(e) =>
+                arrowPointerDown(e, arrow.id, index, { fromLocal, toLocal, isSelf, segWidth })
+              }
               onPointerMove={arrowPointerMove}
               onPointerUp={arrowPointerUp}
               onClick={(e) => {
@@ -565,6 +685,23 @@ function SeqDiagramNode({ data }: NodeProps<SeqFlowNode>) {
           <div
             className="pointer-events-none absolute left-0 w-full"
             style={{ top: dragOverIndex * ROW_H - 1, height: 2, background: '#38BDF8', zIndex: 40 }}
+          />
+        )}
+
+        {/* Индикатор строки вставки при жесте создания стрелки (v0.03.01d,
+            «по месту опускания»): горизонтальная линия в зазоре, куда
+            попадёт новая стрелка при сбросе. */}
+        {creatingFrom !== null && creatingRow !== null && (
+          <div
+            className="pointer-events-none absolute left-0 w-full"
+            style={{
+              top: creatingRow * ROW_H - 1,
+              height: 2,
+              background: '#38BDF8',
+              zIndex: 40,
+              boxShadow: '0 0 6px rgba(56, 189, 248, 0.6)',
+            }}
+            data-testid="seq-insert-row-marker"
           />
         )}
 
@@ -691,6 +828,7 @@ function SeqCanvasInner() {
   const reorderLifelines = useSkibStore((s) => s.reorderLifelines);
   const addSeqArrow = useSkibStore((s) => s.addSeqArrow);
   const moveSeqArrow = useSkibStore((s) => s.moveSeqArrow);
+  const updateSeqArrow = useSkibStore((s) => s.updateSeqArrow);
   const createSequenceFromGoal = useSkibStore((s) => s.createSequenceFromGoal);
   const addGoalDomains = useSkibStore((s) => s.addGoalDomains);
   const activeSequenceId = useViewStore((s) => s.activeSequenceId);
@@ -763,16 +901,20 @@ function SeqCanvasInner() {
       onMoveArrow: (arrowId, toIndex) => {
         if (active) moveSeqArrow(active.id, arrowId, toIndex);
       },
-      onCreateArrow: (from, to) => {
+      onCreateArrow: (from, to, rowIndex) => {
         if (!active) return;
-        const created = addSeqArrow(active.id, from, to);
+        const created = addSeqArrow(active.id, from, to, rowIndex);
         if (!created) {
           toast({ title: ru.seq.limitArrows(100), variant: 'destructive' });
         }
       },
+      onUpdateArrowEnd: (arrowId, side, lifelineId) => {
+        if (!active) return;
+        updateSeqArrow(active.id, arrowId, side === 'from' ? { from: lifelineId } : { to: lifelineId });
+      },
       onClearSelection: () => setSeqSelection(null),
     };
-  }, [active, project.architecture.blocks, seqSelection, seqSelectedArrows, seqColorsFromDap, colors, dropIndex, addSeqArrow, moveSeqArrow, reorderLifelines, setSeqSelection, setSeqSelectedArrows, toast]);
+  }, [active, project.architecture.blocks, seqSelection, seqSelectedArrows, seqColorsFromDap, colors, dropIndex, addSeqArrow, moveSeqArrow, updateSeqArrow, reorderLifelines, setSeqSelection, setSeqSelectedArrows, toast]);
 
   const width = Math.max((active?.lifelines.length ?? 0) * COLUMN_W + PAD_X * 2, 480);
   const height = HEADER_H + (active?.arrows.length ?? 0) * ROW_H + PAD_BOTTOM;

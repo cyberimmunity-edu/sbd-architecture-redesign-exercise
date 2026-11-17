@@ -259,6 +259,39 @@ describe('Принудительный ввод в ДВБ — forceTrusted (v0.0
     expect(trust.internal.get('a')).toBe('ddbpcd');
   });
 
+  it('Интерфейсный ДБ с forceTrusted при красном входе — ДДБПЦД (K = 10): «зелёный» невозможен (v0.03.01d)', () => {
+    // Инвариант уточнённой семантики: forceTrusted вводит ДБ в ДВБ, но класс
+    // (ДДБ или ДДБПЦД) определяется целостностью входных данных — при
+    // низкоцелостных входах домен становится ДДБПЦД, и его стоимость
+    // автоматически удваивается относительно «зелёного» сценария.
+    const project = build({
+      architecture: {
+        blocks: [block('iface', { cost: 3, forceTrusted: true }), block('ndb-src')],
+        edges: [{ id: 'e-src-iface', from: 'ndb-src', to: 'iface' }],
+      },
+      security: {
+        goals: [{ id: 'g1', name: 'Цель' }],
+        functions: [linkedFn('f1')],
+      },
+    });
+    const trust = computeTrust(project);
+    expect(trust.internal.get('iface')).toBe('ddbpcd'); // не «зелёный»
+    const { costs } = recalcCosts(project);
+    expect(costs.get('iface')!.trustCoefficient).toBe(TRUST_COST_COEFFICIENT.ddbpcd);
+    expect(costs.get('iface')!.domainCost).toBe(30); // ceil(3 × 1 × 10)
+    // Тот же домен без красного входа — ДДБ (K = 5), стоимость вдвое ниже.
+    const clean = build({
+      ...project,
+      architecture: {
+        blocks: [block('iface', { cost: 3, forceTrusted: true }), block('ndb-src')],
+        edges: [],
+      },
+    });
+    const { costs: cleanCosts } = recalcCosts(clean);
+    expect(cleanCosts.get('iface')!.trustCoefficient).toBe(TRUST_COST_COEFFICIENT.ddb);
+    expect(cleanCosts.get('iface')!.domainCost).toBe(15); // ceil(3 × 1 × 5)
+  });
+
   it('forceTrusted у внешней системы игнорируется — доверенность только по trusted', () => {
     const project = build({
       architecture: {

@@ -134,10 +134,10 @@ describe('Хранилище ДП: создание, линии жизни, ст
     useSkibStore.getState().addLifeline(seq2, a.id);
     const selfId = useSkibStore.getState().addSeqArrow(seq2, a.id, a.id);
     expect(selfId).not.toBeNull();
-    useSkibStore.getState().updateSeqArrow(seq2, selfId!, 'x'.repeat(70));
+    useSkibStore.getState().updateSeqArrow(seq2, selfId!, { label: 'x'.repeat(70) });
     const stored = useSkibStore.getState().project.sequences!.find((s) => s.id === seq2)!;
     expect(stored.arrows[0].label).toBeUndefined(); // длиннее 60 — не применено
-    useSkibStore.getState().updateSeqArrow(seq2, selfId!, 'короткая подпись');
+    useSkibStore.getState().updateSeqArrow(seq2, selfId!, { label: 'короткая подпись' });
     expect(
       useSkibStore.getState().project.sequences!.find((s) => s.id === seq2)!.arrows[0].label,
     ).toBe('короткая подпись');
@@ -294,7 +294,7 @@ describe('Хранилище ДП: «Добавить недостающие с�
     );
     expect(edgeBefore).toHaveLength(0);
     const arrowId = useSkibStore.getState().addSeqArrow(seqId, ota.id, radio.id)!;
-    useSkibStore.getState().updateSeqArrow(seqId, arrowId, 'реверс с подписью');
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { label: 'реверс с подписью' });
     const result = useSkibStore.getState().addMissingEdgesToDap();
     expect(result.ok).toBe(true);
     expect(result.added).toBe(1);
@@ -568,5 +568,122 @@ describe('Хранилище ДП v0.02.01b: имя создания, очист
     const denied = useSkibStore.getState().addGoalDomains(full, 'g-1');
     expect(denied.ok).toBe(false);
     expect(denied.error).toContain('лимит линий жизни');
+  });
+});
+
+describe('Хранилище ДП v0.03.01d: вставка стрелки по индексу, правка концов', () => {
+  beforeEach(() => {
+    useSkibStore.getState().resetProject();
+    useSkibStore.setState({ past: [], future: [], validation: null, selection: null });
+    useSkibStore.getState().loadState({
+      architecture: {
+        blocks: [
+          { id: 'blk-a', name: '01. Домен А', cost: 1 },
+          { id: 'blk-b', name: '02. Домен Б', cost: 1 },
+          { id: 'blk-c', name: '03. Домен В', cost: 1 },
+          { id: 'ext-x', name: 'Внешняя система', cost: 1, external: true },
+        ],
+        edges: [{ id: 'e-ab', from: 'blk-a', to: 'blk-b' }],
+      },
+      security: {
+        goals: [{ id: 'g-1', name: 'Цель' }],
+        functions: [
+          { id: 'fn-1', name: 'Механизм', cost: 1, implements: [{ goal: 'g-1', weight: 'mandatory' }] },
+        ],
+        assumptions: [],
+      },
+      assignments: [{ function: 'fn-1', block: 'blk-a' }],
+      meta: { source: 'test' },
+      sequences: [],
+    });
+  });
+
+  function seqOf(seqId: string) {
+    return useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!;
+  }
+
+  it('addSeqArrow с индексом: вставка в середину, начало, конец; некорректный индекс — в конец (v0.03.01d)', () => {
+    const seqId = useSkibStore.getState().createSequence()!;
+    for (const id of ['blk-a', 'blk-b', 'blk-c']) {
+      useSkibStore.getState().addLifeline(seqId, id);
+    }
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b'); // 1
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b'); // 2
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b'); // 3
+    // Между 2-й и 3-й: индекс 2.
+    const inserted = useSkibStore.getState().addSeqArrow(seqId, 'blk-c', 'blk-a', 2)!;
+    expect(inserted).toBe('a-4');
+    expect(seqOf(seqId).arrows.map((a) => a.id)).toEqual(['a-1', 'a-2', 'a-4', 'a-3']);
+    // В начало: индекс 0.
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-c', 'blk-b', 0)!;
+    expect(seqOf(seqId).arrows.map((a) => a.id)).toEqual(['a-5', 'a-1', 'a-2', 'a-4', 'a-3']);
+    // Индекс за границами — в конец.
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-c', 'blk-c', 42)!;
+    expect(seqOf(seqId).arrows.at(-1)!.id).toBe('a-6');
+    expect(seqOf(seqId).arrows[seqOf(seqId).arrows.length - 1].from).toBe('blk-c');
+    expect(seqOf(seqId).arrows[seqOf(seqId).arrows.length - 1].to).toBe('blk-c');
+  });
+
+  it('Вставка стрелки — одна операция истории: Ctrl+Z убирает вставленную, Ctrl+Shift+Z возвращает', () => {
+    const seqId = useSkibStore.getState().createSequence()!;
+    for (const id of ['blk-a', 'blk-b']) {
+      useSkibStore.getState().addLifeline(seqId, id);
+    }
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b'); // a-1
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b'); // a-2
+    useSkibStore.getState().addSeqArrow(seqId, 'blk-b', 'blk-a', 1)!; // a-3 в середину
+    expect(seqOf(seqId).arrows.map((a) => a.id)).toEqual(['a-1', 'a-3', 'a-2']);
+    useSkibStore.getState().undo();
+    expect(seqOf(seqId).arrows.map((a) => a.id)).toEqual(['a-1', 'a-2']);
+    useSkibStore.getState().redo();
+    expect(seqOf(seqId).arrows.map((a) => a.id)).toEqual(['a-1', 'a-3', 'a-2']);
+  });
+
+  it('Правка концов: from и to меняются независимо (2->3 → 1->3 и 2->1), self допустим', () => {
+    const seqId = useSkibStore.getState().createSequence()!;
+    for (const id of ['blk-a', 'blk-b', 'blk-c']) {
+      useSkibStore.getState().addLifeline(seqId, id);
+    }
+    const arrowId = useSkibStore.getState().addSeqArrow(seqId, 'blk-b', 'blk-c')!; // «2->3»
+    // «2->3» → «1->3».
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { from: 'blk-a' });
+    expect(seqOf(seqId).arrows[0]).toMatchObject({ from: 'blk-a', to: 'blk-c' });
+    // «1->3» → «1->1» (self).
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { to: 'blk-a' });
+    expect(seqOf(seqId).arrows[0]).toMatchObject({ from: 'blk-a', to: 'blk-a' });
+    // Оба конца одной правкой («1->1» → «3->2»).
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { from: 'blk-c', to: 'blk-b' });
+    expect(seqOf(seqId).arrows[0]).toMatchObject({ from: 'blk-c', to: 'blk-b' });
+    // Подпись и конец — одна операция истории.
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { to: 'blk-a', label: 'валидация' });
+    const edited = seqOf(seqId).arrows[0];
+    expect(edited).toMatchObject({ from: 'blk-c', to: 'blk-a', label: 'валидация' });
+    useSkibStore.getState().undo();
+    const undone = seqOf(seqId).arrows[0];
+    expect(undone).toMatchObject({ from: 'blk-c', to: 'blk-b' });
+    expect(undone.label).toBeUndefined();
+  });
+
+  it('Правка концов отклоняет не-линию жизни; правка без изменений не пишет историю', () => {
+    const seqId = useSkibStore.getState().createSequence()!;
+    for (const id of ['blk-a', 'blk-b']) {
+      useSkibStore.getState().addLifeline(seqId, id);
+    }
+    const arrowId = useSkibStore.getState().addSeqArrow(seqId, 'blk-a', 'blk-b')!;
+    // ext-x не линия жизни этой ДП — конец не меняется.
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { to: 'ext-x' });
+    expect(seqOf(seqId).arrows[0].to).toBe('blk-b');
+    // Существующий конец без изменений и отклонённая подпись — шага истории нет.
+    const pastBefore = useSkibStore.getState().past.length;
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { from: 'blk-a', to: 'blk-b', label: 'x'.repeat(70) });
+    expect(useSkibStore.getState().past.length).toBe(pastBefore);
+    // Пустая подпись убирает подпись.
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { label: 'подпись' });
+    expect(seqOf(seqId).arrows[0].label).toBe('подпись');
+    useSkibStore.getState().updateSeqArrow(seqId, arrowId, { label: '   ' });
+    expect(seqOf(seqId).arrows[0].label).toBeUndefined();
+    // Неизвестная стрелка — без изменений.
+    useSkibStore.getState().updateSeqArrow(seqId, 'a-404', { from: 'blk-b' });
+    expect(seqOf(seqId).arrows).toHaveLength(1);
   });
 });

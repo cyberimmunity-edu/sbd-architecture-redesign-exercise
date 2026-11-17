@@ -11,7 +11,10 @@
  * опция «Цвета из ДАП»; регрессия ДАП; v0.02.01b: горячий фильтр набора
  * доменов (Ф-66), «Очистить ДП» с подтверждением (Ф-64), набрасывание
  * ЦБ на канву (Ф-65); v0.03.01c: T-U-15 — удаление связи ДАП, нужной
- * стрелкам ДП, обнаруживается общим «Проверить» (E-601) без режима ДП.
+ * стрелкам ДП, обнаруживается общим «Проверить» (E-601) без режима ДП;
+ * v0.03.01d: перенос стрелки — Alt-жест; вставка новой стрелки «по месту
+ * опускания» (T-U-16); правка направления стрелки — инспектор
+ * «Откуда»/«Куда» и Alt-жест конца, одна операция истории (T-U-17).
  */
 
 import { readFileSync } from 'node:fs';
@@ -19,6 +22,13 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 const FIXTURES = resolve(__dirname, '../fixtures');
+
+// Увеличенная высота вьюпорта (v0.03.01d): строки стрелок при Alt-жестах и
+// точки опускания новых стрелок не должны попадать под мини-навигатор
+// (область слева внизу канвы, перекрывающая нижнюю часть зоны жестов
+// линий жизни Ф-68). Все жесты считаются от bbox элементов — к высоте
+// вьюпорта не привязаны.
+test.use({ viewport: { width: 1280, height: 960 } });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -36,13 +46,31 @@ async function loadDap22(page: Page) {
   await expect(page.getByTestId('seq-left-panel')).toBeVisible();
 }
 
-/** Жест создания стрелки: от полосы источника к полосе приёмника. */
-async function gestureArrow(page: Page, fromId: string, toId: string) {
+/** Высота строки стрелки на канве ДП (px модели, синхронно с SeqCanvas). */
+const ROW_H = 46;
+/** Высота заголовка линии жизни (px модели). */
+const HEADER_H = 64;
+
+/** Масштаб канвы: заголовок линии жизни — 52 px модели (высота 64 минус поля).
+ *  Зная экранный размер, жесты считаются в долях модели при любом зуме. */
+async function canvasZoom(page: Page, sampleId: string): Promise<number> {
+  const header = (await page.getByTestId(`seq-lifeline-header-${sampleId}`).boundingBox())!;
+  return header.height / (HEADER_H - 12);
+}
+
+/** Жест создания стрелки: от полосы источника к полосе приёмника.
+ *  row — строка вставки «по месту опускания» (v0.03.01d); по умолчанию —
+ *  первая свободная строка под стрелками (старое поведение «в конец»). */
+async function gestureArrow(page: Page, fromId: string, toId: string, row?: number) {
   const from = (await page.getByTestId(`seq-lifeline-band-${fromId}`).boundingBox())!;
   const to = (await page.getByTestId(`seq-lifeline-band-${toId}`).boundingBox())!;
-  await page.mouse.move(from.x + from.width / 2, from.y + 30);
+  const count = await page.locator('[data-testid^="seq-arrow-"]').count();
+  const at = row ?? count;
+  const zoom = await canvasZoom(page, fromId);
+  const y = from.y + zoom * (at * ROW_H + 23);
+  await page.mouse.move(from.x + from.width / 2, y);
   await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + 30, { steps: 10 });
+  await page.mouse.move(to.x + to.width / 2, y, { steps: 10 });
   await page.mouse.up();
   await page.waitForTimeout(300);
 }
@@ -125,7 +153,7 @@ test('T-U-03: удаление ДП с подтверждением (имя и �
   await expect(page.getByTestId('seq-item-seq-1')).toHaveCount(0);
 });
 
-test('T-U-04: стрелки обеих направленностей и self; автонумерация; перенос стрелки', async ({ page }) => {
+test('T-U-04: стрелки обеих направленностей и self; автонумерация; Alt-перенос стрелки', async ({ page }) => {
   await loadDap22(page);
   await page.getByTestId('seq-create').click();
   await dragDomain(page, 'blk-radio', 0.35);
@@ -133,26 +161,24 @@ test('T-U-04: стрелки обеих направленностей и self; 
 
   // Прямая стрелка radio → ota.
   await gestureArrow(page, 'blk-radio', 'blk-ota');
-  // Self-стрелка на ota.
-  const band = (await page.getByTestId('seq-lifeline-band-blk-ota').boundingBox())!;
-  await page.mouse.move(band.x + band.width / 2, band.y + 45);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.waitForTimeout(300);
+  // Self-стрелка на ota (в свободную строку под стрелкой).
+  await gestureArrow(page, 'blk-ota', 'blk-ota');
   // Обратная стрелка ota → radio (справа налево).
   await gestureArrow(page, 'blk-ota', 'blk-radio');
   await expect(page.locator('[data-testid^="seq-arrow-a-"]')).toHaveCount(3);
   await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-number', '1');
   await expect(page.getByTestId('seq-arrow-a-3')).toHaveAttribute('data-arrow-number', '3');
 
-  // Перенос третьей стрелки на первую позицию — нумерация обновляется сразу.
-  // Захват — в середине сегмента (у полос линии жизни начинается их жест).
+  // Alt-перенос третьей стрелки на первую позицию — нумерация обновляется сразу.
+  // Захват — в середине сегмента (у концов начинается жест смены направления).
   const third = (await page.getByTestId('seq-arrow-a-3').boundingBox())!;
   const first = (await page.getByTestId('seq-arrow-a-1').boundingBox())!;
+  await page.keyboard.down('Alt');
   await page.mouse.move(third.x + third.width / 2, third.y + 20);
   await page.mouse.down();
   await page.mouse.move(first.x + first.width / 2, first.y + 4, { steps: 8 });
   await page.mouse.up();
+  await page.keyboard.up('Alt');
   await page.waitForTimeout(400);
   const numbers = await page.locator('[data-testid^="seq-arrow-a-"]').evaluateAll((els) =>
     els.map((el) => el.getAttribute('data-arrow-number')),
@@ -535,4 +561,91 @@ test('T-U-15: удаление связи ДАП, нужной стрелке Д
   await page.waitForTimeout(400);
   await page.getByTestId('check-diagram').click();
   await expect(page.getByTestId('validation-panel')).not.toContainText('E-601');
+});
+
+test('T-U-16: вставка новой стрелки «по месту опускания» между существующими (v0.03.01d)', async ({ page }) => {
+  await loadDap22(page);
+  await page.getByTestId('seq-create').click();
+  await dragDomain(page, 'blk-radio', 0.35);
+  await dragDomain(page, 'blk-ota', 0.6);
+  await dragDomain(page, 'blk-nav', 0.8);
+  // Три стрелки radio → ota в конец (строки 0, 1, 2).
+  await gestureArrow(page, 'blk-radio', 'blk-ota');
+  await gestureArrow(page, 'blk-radio', 'blk-ota');
+  await gestureArrow(page, 'blk-radio', 'blk-ota');
+  await expect(page.locator('[data-testid^="seq-arrow-a-"]')).toHaveCount(3);
+
+  // Жест nav → radio с опусканием в строку 2-й стрелки: индикатор строки
+  // вставки виден во время перетаскивания, стрелка встаёт между 1-й и 2-й.
+  const from = (await page.getByTestId('seq-lifeline-band-blk-nav').boundingBox())!;
+  const to = (await page.getByTestId('seq-lifeline-band-blk-radio').boundingBox())!;
+  const rowOf = (await page.getByTestId('seq-arrow-a-2').boundingBox())!;
+  const y = rowOf.y + rowOf.height / 2;
+  await page.mouse.move(from.x + from.width / 2, from.y + 23);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, y, { steps: 8 });
+  await expect(page.getByTestId('seq-insert-row-marker')).toBeVisible();
+  await page.mouse.up();
+  await page.waitForTimeout(400);
+
+  // Индикатор скрыт; порядок: a-1, [новая a-4], a-2, a-3; нумерация сдвинулась.
+  await expect(page.getByTestId('seq-insert-row-marker')).toHaveCount(0);
+  await expect(page.locator('[data-testid^="seq-arrow-a-"]')).toHaveCount(4);
+  await expect(page.getByTestId('seq-arrow-a-4')).toHaveAttribute('data-arrow-number', '2');
+  await expect(page.getByTestId('seq-arrow-a-4')).toHaveAttribute('data-arrow-from', 'blk-nav');
+  await expect(page.getByTestId('seq-arrow-a-4')).toHaveAttribute('data-arrow-to', 'blk-radio');
+  await expect(page.getByTestId('seq-arrow-a-2')).toHaveAttribute('data-arrow-number', '3');
+  await expect(page.getByTestId('seq-arrow-a-3')).toHaveAttribute('data-arrow-number', '4');
+  // Вставка — одна операция истории: Ctrl+Z убирает вставленную стрелку.
+  await page.getByTestId('undo').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-testid^="seq-arrow-a-"]')).toHaveCount(3);
+  await expect(page.getByTestId('seq-arrow-a-2')).toHaveAttribute('data-arrow-number', '2');
+});
+
+test('T-U-17: правка направления стрелки — инспектор «Откуда»/«Куда» и Alt-жест конца (v0.03.01d)', async ({ page }) => {
+  await loadDap22(page);
+  await page.getByTestId('seq-create').click();
+  await dragDomain(page, 'blk-radio', 0.35);
+  await dragDomain(page, 'blk-ota', 0.6);
+  await dragDomain(page, 'blk-nav', 0.8);
+  // Стрелка «1->2» (radio → ota).
+  await gestureArrow(page, 'blk-radio', 'blk-ota');
+
+  // 1) Инспектор: «Куда» = 11. Навигатор — направление «1->3».
+  await page.getByTestId('seq-arrow-a-1').click();
+  await expect(page.getByTestId('seq-inspector-arrow')).toBeVisible();
+  await expect(page.getByTestId('seq-inspector-arrow')).toContainText('10. Радиосвязь');
+  await page.getByTestId('seq-arrow-to').click();
+  await page.getByTestId('seq-arrow-to-opt-blk-nav').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-to', 'blk-nav');
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-from', 'blk-radio');
+  // Правка — одна операция истории.
+  await page.getByTestId('undo').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-to', 'blk-ota');
+  await page.getByTestId('seq-arrow-a-1').click();
+
+  // 2) Alt-жест конца: захват у конца «откуда» (12…40 px от линии жизни,
+  //    вне полосы жестов) и перенос на линию nav → «2->3».
+  const seg = (await page.getByTestId('seq-arrow-a-1').boundingBox())!;
+  const navBand = (await page.getByTestId('seq-lifeline-band-blk-nav').boundingBox())!;
+  // Стрелка идёт слева направо: начало сегмента = отступ 30 px модели
+  // слева от линии источника; захват на 24 px модели правее конца.
+  const zoom = seg.width / 260; // сегмент «1->3»: |x2-x1| = 200 + 60
+  await page.keyboard.down('Alt');
+  await page.mouse.move(seg.x + zoom * 54, seg.y + seg.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(navBand.x + navBand.width / 2, seg.y + seg.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.keyboard.up('Alt');
+  await page.waitForTimeout(400);
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-from', 'blk-nav');
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-to', 'blk-ota');
+  // Одна операция истории: Ctrl+Z возвращает исходный источник.
+  await page.getByTestId('undo').click();
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-from', 'blk-radio');
+  await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-to', 'blk-ota');
 });

@@ -13,7 +13,8 @@
  *    и повторно не добавляется (П-12).
  * 2. «Инспектор» (П-10): карточка ДП без выбора; линия жизни (полное
  *    название, «внутренний/внешняя», «Убрать из ДП»); стрелка (номер,
- *    направление «A → B», подпись до 60 символов, блок с «Покинуть блок»,
+ *    направление «A → B», правка концов «Откуда»/«Куда» — v0.03.01d,
+ *    одна операция истории; подпись до 60 символов; блок с «Покинуть блок»,
  *    «Удалить стрелку»); группа/цикл (имя, палитра 8 цветов, число
  *    стрелок, «Разгруппировать», «Удалить блок со стрелками»); условный
  *    блок (условие, подписи веток, число стрелок каждой ветки, те же
@@ -44,6 +45,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { CircleCheck, CircleX, LogOut, SearchCheck, Trash2, Unlink } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useSkibStore } from '../../store/projectStore';
 import { useViewStore } from '../../store/viewStore';
 import { seqDndPayload } from './seqDnd';
@@ -263,12 +271,41 @@ function SeqInspector() {
             const arrow = active.arrows[index];
             if (!arrow) return null;
             const block = blockOfArrow(arrow.id);
+            // Правка концов (v0.03.01d, «2->15» → «1->15»/«2->16»): любой конец
+            // меняется на любую линию жизни ДП; self допустим; одна операция истории.
+            const endSelect = (side: 'from' | 'to') => (
+              <Select
+                value={arrow[side]}
+                onValueChange={(value) =>
+                  updateSeqArrow(active.id, arrow.id, side === 'from' ? { from: value } : { to: value })
+                }
+              >
+                <SelectTrigger
+                  className="h-8 text-sm"
+                  data-testid={`seq-arrow-${side}`}
+                  aria-label={side === 'from' ? ru.seq.arrowFrom : ru.seq.arrowTo}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {active.lifelines.map((lifelineId) => (
+                    <SelectItem key={lifelineId} value={lifelineId} data-testid={`seq-arrow-${side}-opt-${lifelineId}`}>
+                      {nameOf(lifelineId)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
             return (
               <div className="flex flex-col gap-2" data-testid="seq-inspector-arrow">
                 <span className="text-xs font-semibold text-muted-foreground">{ru.seq.arrowTitle}</span>
                 <span className="text-xs text-muted-foreground">
                   {ru.seq.arrowNumber}: {index + 1}
                 </span>
+                <span className="text-xs text-muted-foreground">{ru.seq.arrowFrom}</span>
+                {endSelect('from')}
+                <span className="text-xs text-muted-foreground">{ru.seq.arrowTo}</span>
+                {endSelect('to')}
                 <span className="text-sm font-medium">
                   {nameOf(arrow.from)} → {nameOf(arrow.to)}
                 </span>
@@ -283,7 +320,7 @@ function SeqInspector() {
                   defaultValue={arrow.label ?? ''}
                   maxLength={SEQ_TEXT_LIMIT}
                   placeholder={ru.seq.arrowLabel}
-                  onBlur={(e) => updateSeqArrow(active.id, arrow.id, e.target.value)}
+                  onBlur={(e) => updateSeqArrow(active.id, arrow.id, { label: e.target.value })}
                   onKeyDown={enterApplies}
                 />
                 {block && (
