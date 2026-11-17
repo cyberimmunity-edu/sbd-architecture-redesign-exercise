@@ -10,7 +10,8 @@
  * сценарий 9.1 (генерация → отображение → экспорт → импорт → «Проверить ДП»);
  * опция «Цвета из ДАП»; регрессия ДАП; v0.02.01b: горячий фильтр набора
  * доменов (Ф-66), «Очистить ДП» с подтверждением (Ф-64), набрасывание
- * ЦБ на канву (Ф-65).
+ * ЦБ на канву (Ф-65); v0.03.01c: T-U-15 — удаление связи ДАП, нужной
+ * стрелкам ДП, обнаруживается общим «Проверить» (E-601) без режима ДП.
  */
 
 import { readFileSync } from 'node:fs';
@@ -487,4 +488,51 @@ test('T-U-14: вставка линии жизни в зазор между др
   await expect(page.getByTestId('seq-item-seq-1')).toContainText('3 лин./0 стрел.');
   // После сброса индикатор скрыт.
   await expect(page.getByTestId('seq-insert-marker')).toHaveCount(0);
+});
+
+test('T-U-15: удаление связи ДАП, нужной стрелке ДП, ловится кнопкой «Проверить» (E-601, v0.03.01c)', async ({ page }) => {
+  // Регрессия пользовательского сценария: общий чек «Проверить» обязан
+  // включать кросс-проверку ДП↔ДАП — расхождение стрелки ДП со связями
+  // ДАП (E-601) должно обнаруживаться без перехода в режим ДП.
+  await loadDap22(page);
+  // Импорт ДП образца: стрелки опираются на связи ДАП (e-radio-ota и др.).
+  await page.getByTestId('file-sequences').setInputFiles(resolve(FIXTURES, 'vessel/sequences.yaml'));
+  await page.waitForTimeout(600);
+  await page.getByTestId('mode-architecture').click();
+  await page.waitForTimeout(400);
+
+  // До удаления: E-601 нет (только информационные W-008 по доменам вне ДП).
+  await page.getByTestId('check-diagram').click();
+  let panel = page.getByTestId('validation-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).not.toContainText('E-601');
+  await panel.getByRole('button', { name: 'Закрыть' }).click();
+  await expect(panel).toBeHidden();
+
+  // Удаляем связь ДАП blk-radio → blk-ota через инспектор (как в ДАП).
+  // dispatchEvent вместо реального клика: центр bbox длинной стрелки
+  // перекрывается HTML-подписями соседних связей (pointer-events: all),
+  // hit-testing Playwright промахивается — как и в dropCard (v0.02.02).
+  const edge = page.locator('.react-flow__edge[data-id="e-radio-ota"]');
+  await expect(edge).toHaveCount(1);
+  await edge.dispatchEvent('click');
+  await page.waitForTimeout(300);
+  await expect(page.getByTestId('inspector-panel')).toContainText('10. Радиосвязь');
+  await page.getByRole('button', { name: 'Удалить стрелку' }).click();
+  await expect(edge).toHaveCount(0);
+
+  // «Проверить» теперь выявляет разрыв: стрелка ДП без связи ДАП — E-601.
+  await page.getByTestId('check-diagram').click();
+  panel = page.getByTestId('validation-panel');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('E-601');
+  await expect(panel).toContainText('10. Радиосвязь → 06. Подсистема OTA-обновления');
+  await expect(panel).toContainText('Удалённое обновление прошивки');
+  await panel.getByRole('button', { name: 'Закрыть' }).click();
+
+  // Отмена удаления возвращает связь — E-601 снова нет.
+  await page.getByTestId('undo').click();
+  await page.waitForTimeout(400);
+  await page.getByTestId('check-diagram').click();
+  await expect(page.getByTestId('validation-panel')).not.toContainText('E-601');
 });

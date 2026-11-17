@@ -239,8 +239,11 @@ zod 4, js-yaml 5, порты dev/preview 3000/4173 (переопределяют
   `setSelection` + событие `FOCUS_NODE_EVENT` (механизм v0.01.04).
   Автоприменения нет сознательно — решение за студентом.
 - **Аудит трассировки (audit.ts)** — `validateProject(project)` возвращает
-  E-501/E-502/W-006 и W-013 (forceTrusted при красном входе, v0.03.01b);
-  коды в реестре `io/errors.ts`. Кнопка «Проверить»
+  E-501/E-502/W-006, W-013 (forceTrusted при красном входе, v0.03.01b) и
+  кросс-проверку ДП↔ДАП (v0.03.01c): строки `validateSequencesRows` —
+  расхождения связей E-601 (строгое направление П-3, self не проверяется)
+  и W-008 (только при наличии хотя бы одной ДП — без ДП предупреждение по
+  всем доменам было бы шумом); коды в реестре `io/errors.ts`. Кнопка «Проверить»
   в TopBar → `setValidation({ …, context: 'diagram' })`; `ValidationPanel`
   выбирает заголовки по `context`, «файл не применён» не выводится.
 - **Размеры (sizing.ts, viewStore)** — `domainSizeFactors(project, costs,

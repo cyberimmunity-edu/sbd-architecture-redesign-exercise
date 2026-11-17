@@ -1,6 +1,6 @@
 {
   "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.03.01b",
+  "version": "0.03.01c",
   "private": true,
   "bin": {
     "skib": "cli/skib.mjs"

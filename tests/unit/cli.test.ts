@@ -124,6 +124,121 @@ describe('CLI «skib» — команды и коды возврата (v0.03.01
     expect(parsed.content.startsWith('@startuml')).toBe(true);
   });
 
+  it('check: разрыв ДП↔ДАП (стрелка ДП без связи ДАП) — E-601 с fix_hint, код 1 (v0.03.01c)', () => {
+    // state.yaml со встроенными ДП: связь d-src → d-dst удалена, стрелка ДП
+    // осталась — общий чек «Проверить» обязан это поймать (кросс-проверка).
+    const dir = mkdtempSync(join(tmpdir(), 'skib-cli-'));
+    const file = join(dir, 'cross-gap.yaml');
+    const state = [
+      'version: 1',
+      'architecture:',
+      '  blocks:',
+      '    - id: d-src',
+      '      name: "01. Источник"',
+      '      cost: 1',
+      '    - id: d-dst',
+      '      name: "02. Приёмник"',
+      '      cost: 1',
+      '  edges: [] # связь удалена — расхождение ДП↔ДАП',
+      'security:',
+      '  goals:',
+      '    - id: t-1',
+      '      name: Цель',
+      '  functions:',
+      '    - id: f-1',
+      '      name: Функция',
+      '      cost: 1',
+      '      implements:',
+      '        - goal: t-1',
+      '          weight: mandatory',
+      'assignments:',
+      '  - function: f-1',
+      '    block: d-src',
+      'sequences:',
+      '  - id: seq-1',
+      '    name: Сценарий',
+      '    lifelines: [d-src, d-dst]',
+      '    arrows:',
+      '      - id: a-1',
+      '        from: d-src',
+      '        to: d-dst',
+      '    blocks: []',
+    ].join('\n');
+    writeFileSync(file, `${state}\n`, 'utf8');
+    try {
+      // Структурная валидация (validate) не приписывает семантических ошибок.
+      const validateResult = runCli(['validate', file]);
+      expect(validateResult.status).toBe(0);
+      expect(parseJson(validateResult).errors).toEqual([]);
+
+      // Семантический чек ловит разрыв: E-601 с подсказкой, код возврата 1.
+      const result = runCli(['check', file]);
+      expect(result.status).toBe(1);
+      const parsed = parseJson(result);
+      expect(parsed.ok).toBe(false);
+      const e601 = parsed.errors.find((m) => m.code === 'E-601');
+      expect(e601).toBeDefined();
+      expect(e601.message).toContain('01. Источник → 02. Приёмник');
+      expect(e601.hint).toContain('связ');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('check: та же модель со связью ДАП — чек чист, код 0', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skib-cli-'));
+    const file = join(dir, 'cross-clean.yaml');
+    const state = [
+      'version: 1',
+      'architecture:',
+      '  blocks:',
+      '    - id: d-src',
+      '      name: "01. Источник"',
+      '      cost: 1',
+      '    - id: d-dst',
+      '      name: "02. Приёмник"',
+      '      cost: 1',
+      '  edges:',
+      '    - id: e-1',
+      '      from: d-src',
+      '      to: d-dst',
+      'security:',
+      '  goals:',
+      '    - id: t-1',
+      '      name: Цель',
+      '  functions:',
+      '    - id: f-1',
+      '      name: Функция',
+      '      cost: 1',
+      '      implements:',
+      '        - goal: t-1',
+      '          weight: mandatory',
+      'assignments:',
+      '  - function: f-1',
+      '    block: d-src',
+      'sequences:',
+      '  - id: seq-1',
+      '    name: Сценарий',
+      '    lifelines: [d-src, d-dst]',
+      '    arrows:',
+      '      - id: a-1',
+      '        from: d-src',
+      '        to: d-dst',
+      '    blocks: []',
+    ].join('\n');
+    writeFileSync(file, `${state}\n`, 'utf8');
+    try {
+      const result = runCli(['check', file]);
+      expect(result.status).toBe(0);
+      const parsed = parseJson(result);
+      expect(parsed.ok).toBe(true);
+      expect(parsed.errors).toEqual([]);
+      expect(parsed.warnings).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('schema: JSON-схема state.yaml v1 — version const 1', () => {
     const result = runCli(['schema']);
     expect(result.status).toBe(0);
