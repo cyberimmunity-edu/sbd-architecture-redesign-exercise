@@ -19,7 +19,7 @@ import {
   MAX_SEQUENCES,
   SEQ_TEXT_LIMIT,
 } from '../engine/types';
-import { ERR, err, warn } from './errors';
+import { ERR, warn, err, WARN } from './errors';
 import {
   allowedKeys,
   collectUnknownKeys,
@@ -183,6 +183,55 @@ export function parseSequencesInner(
       return;
     }
     const order = rawDiagram.arrows.map((a) => a.id);
+
+    // Автотерапия состава блоков (v0.03.01e, W-014): правка ДП v0.03.01d
+    // («вставка по месту опускания») могла оставить стрелку вне состава
+    // блока, чья рамка на канве её накрывает; такой файл экспортировался
+    // и отвергался импортом (E-605). Рамка блока рисуется от первой до
+    // последней стрелки состава, поэтому состав приводится к виду на
+    // канве: блок получает весь отрезок массива стрелок между своими
+    // крайними стрелками. Терапируются только блоки, чьи зазоры не заняты
+    // другими блоками; иначе — E-605 как прежде.
+    const claimedBy = new Map<string, string>();
+    for (const rawBlock of rawDiagram.blocks) {
+      for (const arrowRef of rawBlock.arrows) {
+        if (!claimedBy.has(arrowRef)) claimedBy.set(arrowRef, rawBlock.id);
+      }
+    }
+    /** Состав блока после терапии (или исходный, если терапия не нужна/невозможна). */
+    const repairedArrows = new Map<string, string[]>();
+    for (const rawBlock of rawDiagram.blocks) {
+      if (new Set(rawBlock.arrows).size !== rawBlock.arrows.length) continue; // дубликаты состава не терапируются
+      const positions = rawBlock.arrows.map((id) => order.indexOf(id));
+      if (positions.some((p) => p < 0)) continue; // ссылку на необъявленную стрелку ловит E-604 ниже
+      const sorted = [...positions].sort((a, b) => a - b);
+      const contiguous =
+        sorted.length > 0 && sorted.every((v, k) => k === 0 || v === sorted[k - 1] + 1);
+      if (contiguous) {
+        repairedArrows.set(rawBlock.id, [...rawBlock.arrows]);
+        continue;
+      }
+      const span = order.slice(sorted[0], sorted[sorted.length - 1] + 1);
+      // Чужой зазор — стрелка, входящая в ДРУГОЙ блок; свободные стрелки
+      // зазора (в claimedBy отсутствуют) включаются в состав блока.
+      const foreign = span.some((id) => {
+        const claimer = claimedBy.get(id);
+        return claimer !== undefined && claimer !== rawBlock.id;
+      });
+      if (foreign) continue; // зазор занят другим блоком — остаётся E-605
+      repairedArrows.set(rawBlock.id, span);
+      const added = span.filter((id) => !rawBlock.arrows.includes(id));
+      if (added.length > 0) {
+        warnings.push(
+          warn(
+            WARN.W014,
+            `блок «${rawBlock.name}» дополнен стрелками, вставленными внутрь его рамки (${added.length}): состав приведён в соответствие виду на канве`,
+            { path: `${path}.blocks` },
+          ),
+        );
+      }
+    }
+
     const occupied = new Map<string, string>();
     const parsedBlocks: Array<{
       id: string;
@@ -216,9 +265,11 @@ export function parseSequencesInner(
         errors.push(err(ERR.E002, `цвет блока «${rawBlock.color}» не является hex #RRGGBB`, { path: `${blockPath}.color` }));
         return;
       }
+      // Состав блока: после терапии (W-014) или исходный.
+      const arrowsOf = repairedArrows.get(rawBlock.id) ?? rawBlock.arrows;
       // Ссылки на стрелки: все объявлены, подряд, без пересечений (E-604, E-605).
       const indexes: number[] = [];
-      for (const [j, arrowRef] of rawBlock.arrows.entries()) {
+      for (const [j, arrowRef] of arrowsOf.entries()) {
         if (!arrowIds.has(arrowRef)) {
           errors.push(err(ERR.E604, `блок «${rawBlock.name}» ссылается на необъявленную стрелку «${arrowRef}»`, { path: `${blockPath}.arrows[${j}]` }));
           return;
@@ -230,18 +281,18 @@ export function parseSequencesInner(
         errors.push(err(ERR.E605, `блок «${rawBlock.name}» составлен не из подряд идущих стрелок`, { path: blockPath }));
         return;
       }
-      for (const arrowId of rawBlock.arrows) {
+      for (const arrowId of arrowsOf) {
         if (occupied.has(arrowId)) {
           errors.push(err(ERR.E605, `стрелка «${arrowId}» входит в блоки «${occupied.get(arrowId)}» и «${rawBlock.name}» одновременно`, { path: blockPath }));
           return;
         }
         occupied.set(arrowId, rawBlock.id);
       }
-      if (rawBlock.kind === 'group' && rawBlock.arrows.length < 2) {
+      if (rawBlock.kind === 'group' && arrowsOf.length < 2) {
         errors.push(err(ERR.E605, `группа «${rawBlock.name}» содержит менее двух стрелок`, { path: blockPath }));
         return;
       }
-      if (rawBlock.arrows.length === 0) {
+      if (arrowsOf.length === 0) {
         errors.push(err(ERR.E605, `блок «${rawBlock.name}» не содержит стрелок`, { path: blockPath }));
         return;
       }
@@ -249,8 +300,8 @@ export function parseSequencesInner(
         rawBlock.kind === 'cond' &&
         rawBlock.elseFrom !== undefined &&
         (!arrowIds.has(rawBlock.elseFrom) ||
-          !rawBlock.arrows.includes(rawBlock.elseFrom) ||
-          rawBlock.arrows.indexOf(rawBlock.elseFrom) === 0)
+          !arrowsOf.includes(rawBlock.elseFrom) ||
+          arrowsOf.indexOf(rawBlock.elseFrom) === 0)
       ) {
         errors.push(err(ERR.E605, `блок «${rawBlock.name}» имеет некорректную границу ветки «иначе»`, { path: blockPath }));
         return;
@@ -267,7 +318,7 @@ export function parseSequencesInner(
         kind: rawBlock.kind,
         name: rawBlock.name,
         ...(rawBlock.color !== undefined ? { color: rawBlock.color } : {}),
-        arrows: [...rawBlock.arrows],
+        arrows: [...arrowsOf],
         ...(rawBlock.thenLabel !== undefined ? { thenLabel: rawBlock.thenLabel } : {}),
         ...(rawBlock.elseLabel !== undefined ? { elseLabel: rawBlock.elseLabel } : {}),
         ...(rawBlock.elseFrom !== undefined ? { elseFrom: rawBlock.elseFrom } : {}),

@@ -289,3 +289,54 @@ describe('Кросс-проверка ДП ↔ ДАП в «Проверить» 
     expect(codes).toEqual(['E-501', 'E-601', 'W-006']);
   });
 });
+
+describe('Проверка диаграммы — структура блоков ДП (E-605, v0.03.01e)', () => {
+  it('разрыв состава блока и пересечение блоков видны в общем чеке «Проверить»', () => {
+    const project = makeProject({
+      goals: [],
+      functions: [],
+      blocks: [
+        { id: 'd-a', name: '01. Один', cost: 1 },
+        { id: 'd-b', name: '02. Два', cost: 1 },
+        { id: 'd-c', name: '03. Три', cost: 1 },
+      ],
+      edges: [
+        { id: 'e-1', from: 'd-a', to: 'd-b' },
+        { id: 'e-2', from: 'd-b', to: 'd-c' },
+        { id: 'e-3', from: 'd-c', to: 'd-a' },
+      ],
+      sequences: [
+        {
+          id: 'seq-1',
+          name: 'Структура',
+          lifelines: ['d-a', 'd-b', 'd-c'],
+          arrows: [
+            { id: 'a-1', from: 'd-a', to: 'd-b' },
+            { id: 'a-2', from: 'd-b', to: 'd-c' },
+            { id: 'a-3', from: 'd-c', to: 'd-a' },
+          ],
+          blocks: [
+            // Разрыв: a-2 внутри рамки a-1…a-3, но не в составе (баг 0.03.01d).
+            { id: 'g-1', kind: 'loop', name: 'разрыв', color: '#1E88E5', arrows: ['a-1', 'a-3'] },
+          ],
+        },
+      ],
+    });
+    const e605 = validateProject(project).filter((m) => m.code === 'E-605');
+    expect(e605).toHaveLength(1);
+    expect(e605[0].message).toContain('разрыв');
+
+    // Пересечение блоков — второй случай E-605.
+    project.sequences![0].blocks = [
+      { id: 'g-1', kind: 'loop', name: 'первый', color: '#1E88E5', arrows: ['a-1', 'a-2'] },
+      { id: 'g-2', kind: 'loop', name: 'второй', color: '#43A047', arrows: ['a-2', 'a-3'] },
+    ];
+    expect(validateProject(project).filter((m) => m.code === 'E-605')).toHaveLength(1);
+
+    // Корректное состояние — E-605 нет.
+    project.sequences![0].blocks = [
+      { id: 'g-1', kind: 'loop', name: 'целиком', color: '#1E88E5', arrows: ['a-1', 'a-2'] },
+    ];
+    expect(validateProject(project).filter((m) => m.code === 'E-605')).toEqual([]);
+  });
+});

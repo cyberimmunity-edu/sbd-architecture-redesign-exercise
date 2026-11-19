@@ -186,7 +186,10 @@ export interface SeqValidationRow {
 
 /**
  * Проверка всех ДП проекта (Ф-49, Ф-51): расхождения связей E-601
- * (с учётом строгого направления, П-3; self-стрелки не проверяются) и
+ * (с учётом строгого направления, П-3; self-стрелки не проверяются),
+ * структура блоков E-605 (v0.03.01e: паритет с проверкой импорта —
+ * подряд идущие стрелки без пересечений, П-13/П-14; разрыв состава,
+ * возникший правкой ДП, виден кнопкой «Проверить» до экспорта) и
  * неиспользуемые домены W-008 (информационно, П-12). Структурированные
  * строки для таблицы результатов 6.2.
  */
@@ -212,6 +215,29 @@ export function validateSequencesRows(project: Project): SeqValidationRow[] {
           message: `Стрелка ${ref} в ДП «${diagram.name}» не соответствует связям ДАП`,
         });
       }
+    }
+    // E-605 (v0.03.01e): состав блока — подряд идущие стрелки массива,
+    // блоки не пересекаются (П-13, П-14); проверка дублирует импорт,
+    // чтобы невалидное состояние было видно до экспорта.
+    const order = diagram.arrows.map((a) => a.id);
+    const occupied = new Set<string>();
+    for (const block of diagram.blocks) {
+      const positions = block.arrows.map((id) => order.indexOf(id));
+      const known = positions.every((p) => p >= 0);
+      const sorted = [...positions].sort((a, b) => a - b);
+      const contiguous =
+        known &&
+        sorted.length > 0 &&
+        sorted.every((v, k) => k === 0 || v === sorted[k - 1] + 1);
+      const disjoint = block.arrows.every((id) => !occupied.has(id));
+      if (!contiguous || !disjoint) {
+        rows.push({
+          code: 'E-605',
+          diagram: diagram.name,
+          message: `Блок «${block.name}» в ДП «${diagram.name}» должен составляться из подряд идущих стрелок без пересечений с другими блоками`,
+        });
+      }
+      for (const id of block.arrows) occupied.add(id);
     }
   }
   for (const block of project.architecture.blocks) {
@@ -274,6 +300,43 @@ export function isConsecutive(diagram: SequenceDiagram, arrowIds: string[]): boo
     if (sorted[i] !== sorted[i - 1] + 1) return false;
   }
   return indexes.length === sorted.length;
+}
+
+/**
+ * Включение новой стрелки в блок при вставке «по месту опускания»
+ * (v0.03.01e, исправление round-trip экспорт→импорт): если зазор,
+ * куда попала стрелка, находится внутри рамки блока (соседние стрелки
+ * зазора принадлежат одному блоку), стрелка входит в его состав —
+ * данные приводятся к виду на канве, инвариант П-13 «подряд идущие
+ * стрелки» сохраняется. У условного блока вставка перед границей else
+ * пополняет ветку «то», после — ветку «иначе»; граница elseFrom не
+ * меняется. Возвращает новый список блоков или null, если зазор вне
+ * рамок блоков (вставка между блоками или снаружи).
+ *
+ * @param blocks   блоки ДП до вставки
+ * @param arrows   массив стрелок ПОСЛЕ вставки (новая стрелка уже в нём)
+ * @param insertedIndex  индекс вставленной стрелки в arrows
+ * @param newId    идентификатор вставленной стрелки
+ */
+export function joinBlockAtInsert(
+  blocks: SeqBlock[],
+  arrows: SeqArrow[],
+  insertedIndex: number,
+  newId: string,
+): SeqBlock[] | null {
+  const prev = insertedIndex > 0 ? arrows[insertedIndex - 1] : undefined;
+  const next =
+    insertedIndex + 1 < arrows.length ? arrows[insertedIndex + 1] : undefined;
+  if (!prev || !next || prev.id === newId || next.id === newId) return null;
+  const owner = blocks.find(
+    (b) => b.arrows.includes(prev.id) && b.arrows.includes(next.id),
+  );
+  if (!owner) return null;
+  // Состав блока зеркалит порядок массива стрелок: новая стрелка встаёт
+  // в список сразу после prev (у cond — в ветку от положения prev).
+  const list = [...owner.arrows];
+  list.splice(list.indexOf(prev.id) + 1, 0, newId);
+  return blocks.map((b) => (b.id === owner.id ? { ...b, arrows: list } : b));
 }
 
 /** Первый свободный цвет палитры для новой группы/цикла (П-13). */

@@ -109,11 +109,16 @@ export function validateProject(project: Project): ImportMessage[] {
   // Кросс-проверка ДП ↔ ДАП (v0.03.01c): те же правила, что у кнопки
   // «Проверить ДП» режима ДП (6.1). Расхождения связей E-601 — строгий
   // учёт направления (П-3), self-стрелки соответствия не требуют.
+  // E-605 (v0.03.01e): структура блоков ДП (подряд идущие стрелки, без
+  // пересечений — П-13/П-14) включена в общий чек: разрыв состава,
+  // породивший в 0.03.01d файлы, отвергаемые импортом, виден до экспорта.
   // W-008 (домен вне ДП) включается только при наличии хотя бы одной ДП:
   // без ДП предупреждение по каждому домену — шум, а не диагностикой.
   for (const row of validateSequencesRows(project)) {
     if (row.code === ERR.E601) {
       messages.push(err(ERR.E601, row.message));
+    } else if (row.code === ERR.E605) {
+      messages.push(err(ERR.E605, row.message));
     } else if (row.code === WARN.W008 && (project.sequences?.length ?? 0) > 0) {
       messages.push(warn(WARN.W008, row.message));
     }

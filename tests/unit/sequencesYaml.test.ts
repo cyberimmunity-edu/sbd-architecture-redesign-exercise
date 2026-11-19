@@ -121,7 +121,7 @@ sequences:
     expect(parseSequencesYaml(badRef, blocks).errors.map((e) => e.code)).toContain('E-604');
   });
 
-  it('E-605: блок не из подряд идущих стрелок, пересечение, неверная граница else', () => {
+  it('W-014: разрыв состава со свободным зазором терапируется — блок получает весь отрезок', () => {
     const base = `version: 1
 sequences:
   - id: seq-1
@@ -134,14 +134,40 @@ sequences:
       - { id: a-4, from: blk-radio, to: blk-nav }
     blocks:
 `;
+    // Файл из бага v0.03.01d: стрелка a-2 вставлена внутрь рамки блока
+    // (a-1…a-3), но не вошла в состав; импорт приводит состав к виду на канве.
     const nonConsecutive = `${base}      - id: g-1\n        kind: loop\n        name: разрыв\n        color: '#1E88E5'\n        arrows: [a-1, a-3]\n`;
-    expect(parseSequencesYaml(nonConsecutive, blocks).errors.map((e) => e.code)).toContain('E-605');
+    const result = parseSequencesYaml(nonConsecutive, blocks);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.map((w) => w.code)).toContain('W-014');
+    expect(result.model![0].blocks[0].arrows).toEqual(['a-1', 'a-2', 'a-3']);
+  });
+
+  it('E-605: зазор занят другим блоком, пересечение, неверная граница else, дубликат состава', () => {
+    const base = `version: 1
+sequences:
+  - id: seq-1
+    name: Блоки
+    lifelines: [blk-radio, blk-ota, blk-nav]
+    arrows:
+      - { id: a-1, from: blk-radio, to: blk-ota }
+      - { id: a-2, from: blk-ota, to: blk-nav }
+      - { id: a-3, from: blk-nav, to: blk-radio }
+      - { id: a-4, from: blk-radio, to: blk-nav }
+    blocks:
+`;
+    // Зазор a-2 занят другим блоком — терапия невозможна.
+    const foreignGap = `${base}      - id: g-1\n        kind: loop\n        name: разрыв\n        color: '#1E88E5'\n        arrows: [a-1, a-3]\n      - id: g-2\n        kind: loop\n        name: зазор\n        color: '#43A047'\n        arrows: [a-2]\n`;
+    expect(parseSequencesYaml(foreignGap, blocks).errors.map((e) => e.code)).toContain('E-605');
 
     const overlap = `${base}      - id: g-1\n        kind: loop\n        name: первый\n        color: '#1E88E5'\n        arrows: [a-1, a-2]\n      - id: g-2\n        kind: loop\n        name: второй\n        color: '#43A047'\n        arrows: [a-2, a-3]\n`;
     expect(parseSequencesYaml(overlap, blocks).errors.map((e) => e.code)).toContain('E-605');
 
     const badElse = `${base}      - id: g-1\n        kind: cond\n        name: условие\n        thenLabel: то\n        elseLabel: иначе\n        elseFrom: a-1\n        arrows: [a-1, a-2]\n`;
     expect(parseSequencesYaml(badElse, blocks).errors.map((e) => e.code)).toContain('E-605');
+
+    const duplicate = `${base}      - id: g-1\n        kind: loop\n        name: дубль\n        color: '#1E88E5'\n        arrows: [a-1, a-1, a-2]\n`;
+    expect(parseSequencesYaml(duplicate, blocks).errors.map((e) => e.code)).toContain('E-605');
   });
 
   it('W-001: неизвестные поля игнорируются с предупреждением', () => {
@@ -214,3 +240,44 @@ sequences:
   });
 });
 
+
+describe('Регрессия round-trip экспорт→импорт (v0.03.01e, файлы пользователя)', () => {
+  // Файлы из баг-отчёта: правка ДП в 0.03.01d («вставка по месту опускания»)
+  // оставила стрелки a-20/a-21 внутри рамки условного блока g-2 ДП
+  // «Выполнение миссии и критичных команд», но вне его состава; экспорт
+  // проходил (валидация приложения не проверяла E-605), импорт отвергал файл.
+  const state = () => readFileSync(resolve(FIXTURES, 'seq-regression/state.yaml'), 'utf8');
+  const sequences = () => readFileSync(resolve(FIXTURES, 'seq-regression/sequences.yaml'), 'utf8');
+
+  it('state.yaml пользователя импортируется без ошибок; разрыв терапируется с W-014', () => {
+    const result = parseStateYaml(state());
+    expect(result.errors).toEqual([]);
+    const w014 = result.warnings.filter((w) => w.code === 'W-014');
+    expect(w014).toHaveLength(1);
+    expect(w014[0].message).toContain('дополнен стрелками');
+    const seq2 = result.model!.sequences!.find((s) => s.id === 'seq-2')!;
+    const g2 = seq2.blocks.find((b) => b.id === 'g-2')!;
+    // Терапия: состав = весь отрезок рамки; стрелки a-20/a-21 внутри него.
+    expect(g2.arrows).toEqual([
+      'a-9', 'a-10', 'a-11', 'a-12', 'a-13', 'a-14', 'a-20', 'a-15', 'a-16', 'a-21', 'a-17', 'a-18',
+    ]);
+    // Граница ветки «иначе» сохраняется.
+    expect(g2.elseFrom).toBe('a-13');
+  });
+
+  it('sequences.yaml пользователя импортируется без ошибок (match-режим, справочник domains игнорируется)', () => {
+    const project = parseStateYaml(state()).model!;
+    const result = parseSequencesYaml(sequences(), project.architecture.blocks);
+    expect(result.errors).toEqual([]);
+    expect(result.model).toHaveLength(3);
+    expect(result.warnings.map((w) => w.code)).toContain('W-014');
+  });
+
+  it('после терапии экспорт→импорт чистый: ошибок и предупреждений нет', () => {
+    const repaired = parseStateYaml(state()).model!;
+    const again = parseStateYaml(serializeStateYaml(repaired));
+    expect(again.errors).toEqual([]);
+    expect(again.warnings).toEqual([]);
+    expect(again.model!.sequences).toEqual(repaired.sequences);
+  });
+});

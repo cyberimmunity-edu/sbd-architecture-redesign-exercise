@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { parseSeqPlantUml, serializeSeqPuml } from '@/io/seqPlantuml';
+import { parseSeqPlantUml, parseSeqPlantUmlAll, serializeSeqPuml, serializeSeqPumlAll } from '@/io/seqPlantuml';
 import { parseSequencesYaml } from '@/io/sequencesYaml';
 import { parseStateYaml } from '@/io/stateFile';
 import { renumberArchitecture } from '@/engine/sequence';
@@ -336,5 +336,148 @@ describe('Сериализация PlantUML ДП и круговая прове�
     expect(reparsed.errors).toEqual([]);
     expect(reparsed.model!.blocks[0].elseFrom).toBeUndefined();
     expect(reparsed.model!.blocks[0].arrows).toEqual(['a-1', 'a-2']);
+  });
+});
+
+describe('Многодиаграммный PlantUML и title (v0.03.01e)', () => {
+  const blocks = dapBlocks();
+
+  const BASE_TWO = `version: 1
+sequences:
+  - id: seq-1
+    name: Первая ДП
+    lifelines: [blk-radio, blk-ota, blk-nav]
+    arrows:
+      - { id: a-1, from: blk-radio, to: blk-ota }
+      - { id: a-2, from: blk-ota, to: blk-nav }
+      - { id: a-3, from: blk-nav, to: blk-radio }
+      - { id: a-4, from: blk-nav, to: blk-nav }
+    blocks:
+      - id: g-1
+        kind: loop
+        name: цикл приёма
+        color: '#1E88E5'
+        arrows: [a-1, a-2]
+      - id: g-2
+        kind: cond
+        name: проверка пройдена
+        thenLabel: продолжаем
+        elseLabel: откат
+        elseFrom: a-4
+        arrows: [a-3, a-4]
+  - id: seq-2
+    name: Вторая ДП
+    lifelines: [blk-radio, blk-nav]
+    arrows:
+      - { id: a-1, from: blk-radio, to: blk-nav, label: отчёт }
+    blocks: []
+`;
+
+  it('title диаграммы — имя ДП при импорте; экспорт пишет title, round-trip восстанавливает имя', () => {
+    const text = [
+      '@startuml',
+      'title Удалённое обновление прошивки',
+      'autonumber',
+      'participant "10. Радиосвязь" as r',
+      'r -> r : приём',
+      '@enduml',
+    ].join('\n');
+    const result = parseSeqPlantUml(text, blocks);
+    expect(result.errors).toEqual([]);
+    expect(result.model!.name).toBe('Удалённое обновление прошивки');
+
+    const diagram = {
+      id: 'seq-1',
+      name: 'Имя из экспорта',
+      lifelines: result.model!.lifelines,
+      arrows: result.model!.arrows,
+      blocks: [],
+    };
+    const exported = serializeSeqPuml(diagram, blocks);
+    expect(exported).toContain('title Имя из экспорта');
+    const reparsed = parseSeqPlantUml(exported, blocks);
+    expect(reparsed.model!.name).toBe('Имя из экспорта');
+  });
+
+  it('файл из нескольких @startuml…@enduml разбирается целиком в порядке следования', () => {
+    const text = [
+      '@startuml',
+      'title Первая',
+      'participant "10. Радиосвязь" as r',
+      'r -> r : одна',
+      '@enduml',
+      '',
+      'комментарий вне диаграмм игнорируется',
+      '',
+      '@startuml',
+      'title Вторая',
+      'participant "10. Радиосвязь" as r',
+      'participant "01. Навигация GPS/INS" as g',
+      'r -> g : две',
+      '@enduml',
+    ].join('\n');
+    const result = parseSeqPlantUmlAll(text, blocks);
+    expect(result.errors).toEqual([]);
+    expect(result.model).toHaveLength(2);
+    expect(result.model![0].name).toBe('Первая');
+    expect(result.model![0].arrows).toHaveLength(1);
+    expect(result.model![1].name).toBe('Вторая');
+    expect(result.model![1].arrows).toHaveLength(1);
+  });
+
+  it('ошибка в одной из диаграмм отбраковывает весь файл; номер строки — по всему файлу', () => {
+    const text = [
+      '@startuml',
+      'participant "10. Радиосвязь" as r',
+      'r -> r : одна',
+      '@enduml',
+      '',
+      '@startuml',
+      'participant "10. Радиосвязь" as r',
+      'r -> r : подпись больше 60 символов — ошибка длины подписи стрелки ДП здесь',
+      '@enduml',
+    ].join('\n');
+    const result = parseSeqPlantUmlAll(text, blocks);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.model).toBeUndefined();
+    // Подпись длиннее 60 символов — E-002 на строке 8 файла (2-я строка 2-й диаграммы).
+    const e002 = result.errors.find((e) => e.code === 'E-002');
+    expect(e002).toBeDefined();
+    expect(e002!.line).toBe(8);
+  });
+
+  it('незакрытая вторая диаграмма — E-608; файл без @startuml — привычный разбор', () => {
+    const unclosed = [
+      '@startuml',
+      'participant "10. Радиосвязь" as r',
+      'r -> r : одна',
+      '@enduml',
+      '',
+      '@startuml',
+      'participant "10. Радиосвязь" as r',
+    ].join('\n');
+    expect(parseSeqPlantUmlAll(unclosed, blocks).errors.map((e) => e.code)).toContain('E-608');
+
+    const noChunks = parseSeqPlantUmlAll('participant "10. Радиосвязь" as r\n', blocks);
+    expect(noChunks.errors.map((e) => e.code)).toContain('E-608');
+  });
+
+  it('круговая проверка: экспорт всех ДП → импорт возвращает все ДП с именами и составом', () => {
+    const project = parseStateYaml(
+      readFileSync(resolve(FIXTURES, 'vessel-full/state.yaml'), 'utf8'),
+    ).model!;
+    const allBlocks = renumberArchitecture(project.architecture).blocks;
+    const first = parseSequencesYaml(BASE_TWO, allBlocks).model!;
+    const exported = serializeSeqPumlAll(first, allBlocks);
+    expect(exported.match(/@startuml/g)).toHaveLength(2);
+    const reparsed = parseSeqPlantUmlAll(exported, allBlocks);
+    expect(reparsed.errors).toEqual([]);
+    expect(reparsed.model).toHaveLength(2);
+    expect(reparsed.model![0].name).toBe(first[0].name);
+    expect(reparsed.model![0].arrows).toEqual(first[0].arrows);
+    expect(reparsed.model![0].blocks).toEqual(first[0].blocks);
+    expect(reparsed.model![1].name).toBe(first[1].name);
+    expect(reparsed.model![1].arrows).toEqual(first[1].arrows);
+    expect(reparsed.model![1].blocks).toEqual(first[1].blocks);
   });
 });

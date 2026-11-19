@@ -54,6 +54,7 @@ import {
   defaultLoopName,
   firstFreeColor,
   isConsecutive,
+  joinBlockAtInsert,
   normalizeName,
   renumberArchitecture,
   uniqueSequenceName,
@@ -218,6 +219,10 @@ interface SkibStore {
   replaceSequences: (sequences: SequenceDiagram[]) => void;
   /** Добавление одной ДП (импорт PlantUML, одна операция истории). */
   addSequenceFromPuml: (diagram: SequenceDiagram) => string | null;
+  /** Добавление нескольких ДП (импорт многодиаграммного PlantUML,
+   *  v0.03.01e) — одна операция истории; имена уникализируются; null —
+   *  превышение лимита ДП. Возвращает id добавленных. */
+  addSequencesFromPuml: (diagrams: SequenceDiagram[]) => string[] | null;
   /** «Добавить недостающие связи в ДАП» (Ф-50, П-4): глобально, атомарно, один шаг истории. */
   addMissingEdgesToDap: () => { ok: boolean; added?: number; error?: string };
 }
@@ -1161,7 +1166,10 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
 
   /** Новая стрелка (Ф-42): направленность любая; from == to — self; лимит 100.
    *  v0.03.01d: index — вставка «по месту опускания» (зазор между стрелками
-   *  index-1 и index), некорректный индекс — в конец; одна операция истории. */
+   *  index-1 и index), некорректный индекс — в конец; одна операция истории.
+   *  v0.03.01e: стрелка, опущенная в зазор внутри рамки блока, входит в его
+   *  состав (П-13) — без этого экспорт давал файл, отвергаемый импортом
+   *  (E-605 «не из подряд идущих стрелок»). */
   addSeqArrow: (seqId, from, to, index) => {
     const { project } = get();
     const seq = (project.sequences ?? []).find((s) => s.id === seqId);
@@ -1178,7 +1186,9 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
           ? arrows.length
           : index;
       arrows.splice(at, 0, { id, from, to });
-      return { ...current, arrows };
+      // Зазор внутри рамки блока — стрелка входит в состав блока (joinBlockAtInsert).
+      const blocks = joinBlockAtInsert(current.blocks, arrows, at, id) ?? current.blocks;
+      return { ...current, arrows, blocks };
     });
     return created;
   },
@@ -1476,6 +1486,41 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     });
     scheduleSave(get().project);
     return id;
+  },
+
+  /** Добавление нескольких ДП из многодиаграммного PlantUML (v0.03.01e,
+   *  7.2) — одна операция истории: Ctrl+Z отменяет все ДП сразу; имена
+   *  уникализируются; лимит ДП проверяется до применения — при нехватке
+   *  операция отклоняется целиком. */
+  addSequencesFromPuml: (diagrams) => {
+    const { project, past } = get();
+    const sequences = project.sequences ?? [];
+    if (diagrams.length === 0) return [];
+    if (sequences.length + diagrams.length > MAX_SEQUENCES) return null;
+    if (
+      diagrams.some(
+        (d) => d.lifelines.length > MAX_LIFELINES || d.arrows.length > MAX_SEQ_ARROWS,
+      )
+    ) {
+      return null;
+    }
+    const ids = new Set(sequences.map((s) => s.id));
+    const added: SequenceDiagram[] = [];
+    let names = sequences;
+    for (const diagram of diagrams) {
+      const id = nextId('seq-', ids);
+      ids.add(id);
+      const name = uniqueSequenceName(names, diagram.name || 'Новая ДП');
+      names = [...names, { ...diagram, id, name }];
+      added.push({ ...diagram, id, name });
+    }
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: { ...project, sequences: [...sequences, ...added] },
+    });
+    scheduleSave(get().project);
+    return added.map((d) => d.id);
   },
 
   /** «Добавить недостающие связи в ДАП» (Ф-50, П-4): все расхождения E-601

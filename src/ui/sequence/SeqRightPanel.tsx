@@ -551,7 +551,7 @@ function SeqValidation() {
         <div className="p-2">
           {rows === null && (
             <p className="px-1 py-3 text-xs text-muted-foreground">
-              Нажмите «Проверить ДП»: расхождения связей (E-601) и неиспользуемые домены (W-008)
+              Нажмите «Проверить ДП»: расхождения связей (E-601), структура блоков (E-605) и неиспользуемые домены (W-008)
             </p>
           )}
           {rows !== null && rows.length === 0 && (

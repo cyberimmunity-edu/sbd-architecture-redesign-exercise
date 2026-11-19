@@ -10,8 +10,10 @@
  * создаётся ДП с именем ЦБ и линиями жизни её критичных доменов, иначе
  * критичные домены добавляются в текущую ДП (можно набросить несколько
  * ЦБ, Ф-65); блок импорта/экспорта: «Импорт YAML» (sequences.yaml — все
- * ДП), «Импорт PlantUML» (одна ДП), «Экспорт YAML» (все ДП), «Экспорт
- * PlantUML» (выбранная ДП). Ширина панели регулируется разделителем.
+ * ДП), «Импорт PlantUML» (одна или несколько ДП из файла), «Экспорт YAML»
+ * (все ДП), «Экспорт PlantUML» (выбранная ДП), «Экспорт PlantUML (все ДП)»
+ * (v0.03.01e: все ДП одним файлом, как склеенные диаграммы в puml).
+ * Ширина панели регулируется разделителем.
  */
 
 import { useRef, useState } from 'react';
@@ -46,9 +48,11 @@ export interface SeqLeftPanelProps {
   onImportPuml: (file: File) => void;
   onExportYaml: () => void;
   onExportPuml: () => void;
+  /** Экспорт всех ДП одним файлом sequences.puml (v0.03.01e). */
+  onExportPumlAll: () => void;
 }
 
-export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExportPuml }: SeqLeftPanelProps) {
+export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExportPuml, onExportPumlAll }: SeqLeftPanelProps) {
   const project = useSkibStore((s) => s.project);
   const createSequence = useSkibStore((s) => s.createSequence);
   const deleteSequence = useSkibStore((s) => s.deleteSequence);
@@ -229,6 +233,16 @@ export function SeqLeftPanel({ onImportYaml, onImportPuml, onExportYaml, onExpor
             onClick={onExportPuml}
           >
             <FileDown className="mr-1 h-3.5 w-3.5" /> {ru.seq.exportPuml}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-auto min-h-7 justify-start whitespace-normal! px-2 py-1 text-left text-xs leading-snug wrap-anywhere"
+            data-testid="seq-export-puml-all"
+            title={ru.seq.exportPumlAllTitle}
+            onClick={onExportPumlAll}
+          >
+            <FileDown className="mr-1 h-3.5 w-3.5" /> {ru.seq.exportPumlAll}
           </Button>
         </div>
         <input

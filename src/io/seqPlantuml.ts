@@ -30,6 +30,8 @@ export interface SeqPumlModel {
   lifelines: string[];
   arrows: SeqArrow[];
   blocks: SeqBlock[];
+  /** Имя ДП из директивы title (v0.03.01e); без title — undefined. */
+  name?: string;
 }
 
 export interface SeqPumlResult {
@@ -95,6 +97,7 @@ export function parseSeqPlantUml(text: string, blocks: Block[]): SeqPumlResult {
   let endSeen = false;
   let arrowCounter = 0;
   let skipBlock: 'note' | 'box' | null = null;
+  let diagramName: string | undefined;
 
   const aliasOf = (key: string): string | null => byKey.get(key)?.domainId ?? null;
 
@@ -189,6 +192,17 @@ export function parseSeqPlantUml(text: string, blocks: Block[]): SeqPumlResult {
       const frame = openFrames.pop()!;
       if (frame.type === 'block') {
         finalizeBlock(frame, seqBlocks, errors, lineNo);
+      }
+      continue;
+    }
+
+    // Заголовок диаграммы — имя ДП при импорте (v0.03.01e; раньше
+    // игнорировался молча). Пустой и слишком длинный — игнорируется.
+    const titleMatch = /^title\s+(.+)$/.exec(line);
+    if (titleMatch) {
+      const candidate = titleMatch[1].trim();
+      if (candidate.length > 0 && candidate.length <= SEQ_TEXT_LIMIT) {
+        diagramName = candidate;
       }
       continue;
     }
@@ -367,6 +381,7 @@ export function parseSeqPlantUml(text: string, blocks: Block[]): SeqPumlResult {
       lifelines: participants.map((p) => p.domainId!).filter((id) => id !== null),
       arrows,
       blocks: seqBlocks,
+      ...(diagramName !== undefined ? { name: diagramName } : {}),
     },
   };
 }
@@ -425,7 +440,12 @@ function finalizeBlock(
  */
 export function serializeSeqPuml(diagram: SequenceDiagram, blocks: Block[]): string {
   const blockById = new Map(blocks.map((b) => [b.id, b]));
-  const lines: string[] = ['@startuml', 'autonumber'];
+  const lines: string[] = [
+    '@startuml',
+    // Имя ДП в title — восстанавливается при импорте (v0.03.01e).
+    `title ${diagram.name}`,
+    'autonumber',
+  ];
   for (const lifeline of diagram.lifelines) {
     const block = blockById.get(lifeline);
     const name = block?.name ?? lifeline;
@@ -466,4 +486,99 @@ export function serializeSeqPuml(diagram: SequenceDiagram, blocks: Block[]): str
   }
   lines.push('@enduml');
   return lines.join('\n') + '\n';
+}
+
+/**
+ * Экспорт всех ДП проекта в один файл PlantUML (v0.03.01e): несколько
+ * диаграмм @startuml…@enduml подряд — как в puml-файлах со склеенными
+ * диаграммами. Каждая диаграмма снабжается title — именем ДП, чтобы
+ * импорт (parseSeqPlantUmlAll) восстановил имена. Разделитель — пустая
+ * строка: строки вне тел диаграмм парсер игнорирует.
+ */
+export function serializeSeqPumlAll(sequences: SequenceDiagram[], blocks: Block[]): string {
+  return sequences
+    .map((diagram) => serializeSeqPuml(diagram, blocks))
+    .join('\n');
+}
+
+/** Результат разбора многодиаграммного PlantUML. */
+export interface SeqPumlAllResult {
+  errors: ImportMessage[];
+  warnings: ImportMessage[];
+  /** Модели всех диаграмм файла в порядке следования. */
+  model?: SeqPumlModel[];
+}
+
+/**
+ * Разбор текста PlantUML с несколькими диаграммами (v0.03.01e): файл
+ * может склеивать несколько пар @startuml…@enduml; каждая диаграмма
+ * разбирается по подмножеству 7.2 независимо, ошибки содержат номера
+ * строк всего файла. Строки вне тел диаграмм игнорируются; отсутствие
+ * @startuml — обычный разбор (E-608). Диаграммы с ошибками отбрасывают
+ * весь файл: частичный импорт дал бы непредсказуемый состав ДП.
+ */
+export function parseSeqPlantUmlAll(text: string, blocks: Block[]): SeqPumlAllResult {
+  const lines = text.split(/\r?\n/);
+  /** Диаграммы файла: текст пары @startuml…@enduml и позиция @startuml (0-базная). */
+  const chunks: Array<{ startLine: number; body: string }> = [];
+  let current: string[] | null = null;
+  let currentStart = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line === '@startuml') {
+      if (current !== null) {
+        // Новый @startuml без закрытия предыдущего: незавершённая диаграмма
+        // разберётся как незакрытая (E-608).
+        chunks.push({ startLine: currentStart, body: current.join('\n') });
+      }
+      current = [line];
+      currentStart = i;
+      continue;
+    }
+    if (line === '@enduml' && current !== null) {
+      current.push(line);
+      chunks.push({ startLine: currentStart, body: current.join('\n') });
+      current = null;
+      continue;
+    }
+    if (current !== null) current.push(lines[i]);
+  }
+  if (current !== null) chunks.push({ startLine: currentStart, body: current.join('\n') });
+  if (chunks.length === 0) {
+    // Ни одной @startuml: обычный разбор даёт привычное сообщение E-608.
+    const single = parseSeqPlantUml(text, blocks);
+    return {
+      errors: single.errors,
+      warnings: single.warnings,
+      ...(single.model ? { model: [single.model] } : {}),
+    };
+  }
+  const errors: ImportMessage[] = [];
+  const warnings: ImportMessage[] = [];
+  const models: SeqPumlModel[] = [];
+  for (const chunk of chunks) {
+    const result = parseSeqPlantUml(chunk.body, blocks);
+    // Номера строк сообщений переводятся в координаты всего файла.
+    for (const message of result.errors) {
+      errors.push({
+        ...message,
+        ...(message.line !== undefined ? { line: message.line + chunk.startLine } : {}),
+      });
+    }
+    for (const message of result.warnings) {
+      warnings.push({
+        ...message,
+        ...(message.line !== undefined ? { line: message.line + chunk.startLine } : {}),
+      });
+    }
+    if (result.model) models.push(result.model);
+  }
+  if (errors.length > 0) return { errors, warnings };
+  if (models.length === 0) {
+    return {
+      errors: [err(ERR.E602, 'в файле не найдено ни одной диаграммы с участниками')],
+      warnings,
+    };
+  }
+  return { errors, warnings, model: models };
 }

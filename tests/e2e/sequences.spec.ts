@@ -322,11 +322,35 @@ test('T-U-07: импорт/экспорт sequences.yaml и PlantUML — кру�
   expect(pumlText).toContain('if (подлинность прошивки подтверждена) then (нормальное обновление)');
   expect(pumlText).toContain('else (нарушение подлинности)');
 
-  // Обратный импорт PlantUML добавляет третью ДП.
+  // Обратный импорт PlantUML добавляет третью ДП; имя берётся из title
+  // экспорта (v0.03.01e): «Удалённое обновление прошивки».
   await page.getByTestId('file-seq-puml').setInputFiles((await pumlFile.path())!);
   await page.waitForTimeout(600);
-  await expect(page.getByTestId('seq-left-panel')).toContainText('Импортированная ДП');
-  await expect(page.getByTestId('seq-left-panel')).toContainText('13 стрел.');
+  await expect(page.getByTestId('seq-item-seq-3')).toContainText('Удалённое обновление прошивки');
+  await expect(page.getByTestId('seq-item-seq-3')).toContainText('13 стрел.');
+});
+
+test('T-U-07b: экспорт всех ДП одним файлом PlantUML → обратный импорт обеих (v0.03.01e)', async ({ page }) => {
+  await loadDap22(page);
+  await page.getByTestId('file-sequences').setInputFiles(resolve(FIXTURES, 'vessel/sequences.yaml'));
+  await page.waitForTimeout(600);
+  // Экспорт всех ДП одним файлом sequences.puml (склеенные диаграммы).
+  const allDownload = page.waitForEvent('download');
+  await page.getByTestId('seq-export-puml-all').click();
+  const allFile = await allDownload;
+  expect(allFile.suggestedFilename()).toBe('sequences.puml');
+  const allText = readFileSync((await allFile.path())!, 'utf8');
+  expect(allText.match(/@startuml/g)).toHaveLength(2);
+  expect(allText).toContain('title Удалённое обновление прошивки');
+  expect(allText).toContain('title Выполнение новой миссии');
+  // Обратный импорт многодиаграммного файла добавляет обе ДП одной операцией;
+  // имена уникализируются, так как исходные уже заняты.
+  await page.getByTestId('file-seq-puml').setInputFiles((await allFile.path())!);
+  await page.waitForTimeout(600);
+  await expect(page.getByTestId('seq-item-seq-3')).toContainText('Удалённое обновление прошивки 2');
+  await expect(page.getByTestId('seq-item-seq-3')).toContainText('13 стрел.');
+  await expect(page.getByTestId('seq-item-seq-4')).toContainText('Выполнение новой миссии 2');
+  await expect(page.getByTestId('seq-item-seq-4')).toContainText('21 стрел.');
 });
 
 test('T-U-08: сквозной сценарий 9.1 — «Проверить ДП» без расхождений на ДАП сквозного сценария', async ({ page }) => {

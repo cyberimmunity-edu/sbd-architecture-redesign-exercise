@@ -469,12 +469,17 @@ export const ru = {
     importYaml: 'Импорт YAML',
     importYamlTitle: 'sequences.yaml — все ДП проекта (замена)',
     importPuml: 'Импорт PlantUML',
-    importPumlTitle: 'одна ДП из файла .puml',
+    importPumlTitle: 'одна или несколько ДП из файла .puml (многодиаграммный файл — v0.03.01e)',
     exportYaml: 'Экспорт YAML',
     exportYamlTitle: 'sequences.yaml — все ДП проекта',
     exportPuml: 'Экспорт PlantUML',
     exportPumlTitle: 'выбранная ДП в <имя>.puml',
+    exportPumlAll: 'Экспорт PlantUML (все ДП)',
+    exportPumlAllTitle: 'все ДП проекта одним файлом sequences.puml (склеенные диаграммы)',
     noSequenceSelected: 'ДП не выбрана',
+    pumlImported: (n: number) =>
+      n === 1 ? 'Импортирована 1 ДП' : `Импортировано ДП: ${n}`,
+    pumlImportNothing: 'В файле нет ни одной диаграммы с участниками',
     emptyList: 'Список пуст: нажмите «Создать» или импортируйте файл',
     domainsTitle: 'Набор доменов',
     domainsHint:

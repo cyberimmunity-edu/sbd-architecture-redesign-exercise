@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useSkibStore } from '../store/projectStore';
-import { MAX_FILE_SIZE } from '../engine/types';
+import { MAX_FILE_SIZE, MAX_SEQUENCES } from '../engine/types';
 import type { Architecture, Project, SecuritySpec, SequenceDiagram } from '../engine/types';
 import { frameBounds } from '../engine/trust';
 import { validateProject } from '../engine/audit';
@@ -46,8 +46,9 @@ import {
   serializeStateYaml,
   parseSequencesYaml,
   serializeSequencesYaml,
-  parseSeqPlantUml,
+  parseSeqPlantUmlAll,
   serializeSeqPuml,
+  serializeSeqPumlAll,
 } from '../io';
 import { DEMO_ARCHITECTURE_YAML as ROBOT_ARCH, DEMO_SECURITY_YAML as ROBOT_SECURITY } from '../samples/robot/content';
 import {
@@ -107,6 +108,7 @@ export function ToolApp() {
   const setValidation = useSkibStore((s) => s.setValidation);
   const replaceSequences = useSkibStore((s) => s.replaceSequences);
   const addSequenceFromPuml = useSkibStore((s) => s.addSequenceFromPuml);
+  const addSequencesFromPuml = useSkibStore((s) => s.addSequencesFromPuml);
   const mode = useViewStore((s) => s.mode);
   const setMode = useViewStore((s) => s.setMode);
   const seqColorsFromDap = useViewStore((s) => s.seqColorsFromDap);
@@ -385,28 +387,46 @@ export function ToolApp() {
     [project.architecture.blocks, readText, replaceSequences, setActiveSequence, setValidation],
   );
 
-  /** «Импорт PlantUML»: одна ДП добавляется к проекту (одна операция истории). */
+  /** «Импорт PlantUML»: одна или несколько ДП из файла (v0.03.01e —
+   *  многодиаграммный файл добавляется целиком, одна операция истории);
+   *  имя ДП берётся из title, иначе «Импортированная ДП». */
   const handleImportSeqPuml = useCallback(
     async (file: File) => {
       const text = await readText(file);
       if (text === null) return;
-      const result = parseSeqPlantUml(text, project.architecture.blocks);
+      const result = parseSeqPlantUmlAll(text, project.architecture.blocks);
       if (result.errors.length > 0) {
         setValidation({ errors: result.errors, warnings: result.warnings, file: file.name });
         return;
       }
-      const model = result.model!;
-      const created = addSequenceFromPuml({
+      const models = result.model!;
+      const baseName = ru.seq.importedPumlName;
+      const diagrams = models.map((m) => ({
         id: '',
-        name: ru.seq.importedPumlName,
-        lifelines: model.lifelines,
-        arrows: model.arrows,
-        blocks: model.blocks,
-      });
-      if (created) setActiveSequence(created);
+        name: m.name ?? baseName,
+        lifelines: m.lifelines,
+        arrows: m.arrows,
+        blocks: m.blocks,
+      }));
+      if (diagrams.length === 1) {
+        const created = addSequenceFromPuml(diagrams[0]);
+        if (!created) {
+          toast({ title: ru.seq.limitSequences(MAX_SEQUENCES), variant: 'destructive' });
+          return;
+        }
+        setActiveSequence(created);
+      } else {
+        const created = addSequencesFromPuml(diagrams);
+        if (created === null) {
+          toast({ title: ru.seq.limitSequences(MAX_SEQUENCES), variant: 'destructive' });
+          return;
+        }
+        if (created.length > 0) setActiveSequence(created[created.length - 1]);
+        toast({ title: ru.seq.pumlImported(created.length) });
+      }
       setValidation({ errors: [], warnings: result.warnings, file: file.name });
     },
-    [addSequenceFromPuml, project.architecture.blocks, readText, setActiveSequence, setValidation],
+    [addSequenceFromPuml, addSequencesFromPuml, project.architecture.blocks, readText, setActiveSequence, setValidation, toast],
   );
 
   /** «Экспорт YAML»: все ДП проекта в sequences.yaml (Ф-52). */
@@ -417,7 +437,8 @@ export function ToolApp() {
     );
   }, [download, project.architecture.blocks, project.sequences]);
 
-  /** «Экспорт PlantUML»: выбранная ДП в <имя ДП>.puml (Ф-53). */
+  /** «Экспорт PlantUML»: выбранная ДП в <имя ДП>.puml (Ф-53); имя ДП
+   *  пишется в title и восстанавливается при импорте (v0.03.01e). */
   const handleExportSeqPuml = useCallback(() => {
     const sequences = project.sequences ?? [];
     const active = sequences.find((s) => s.id === activeSequenceId) ?? sequences[0];
@@ -427,6 +448,18 @@ export function ToolApp() {
     }
     download(`${active.name}.puml`, serializeSeqPuml(active, project.architecture.blocks));
   }, [activeSequenceId, download, project.architecture.blocks, project.sequences, toast]);
+
+  /** «Экспорт PlantUML (все ДП)» (v0.03.01e): все ДП проекта одним
+   *  файлом sequences.puml — несколько склеенных диаграмм
+   *  @startuml…@enduml; импортируется обратно целиком. */
+  const handleExportSeqPumlAll = useCallback(() => {
+    const sequences = project.sequences ?? [];
+    if (sequences.length === 0) {
+      toast({ title: ru.seq.noSequenceSelected });
+      return;
+    }
+    download('sequences.puml', serializeSeqPumlAll(sequences, project.architecture.blocks));
+  }, [download, project.architecture.blocks, project.sequences, toast]);
 
   const handleReset = useCallback(() => {
     if (isEmpty) {
@@ -542,6 +575,7 @@ export function ToolApp() {
                 onImportPuml={handleImportSeqPuml}
                 onExportYaml={handleExportSequencesYaml}
                 onExportPuml={handleExportSeqPuml}
+                onExportPumlAll={handleExportSeqPumlAll}
               />
             </AutoHidePanel>
           </ResizablePanel>

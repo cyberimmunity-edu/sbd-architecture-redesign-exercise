@@ -61,7 +61,7 @@
 | Команда | Назначение | Ключевые поля вывода |
 |---|---|---|
 | `validate <файл>` | структура и ссылки state.yaml | `errors[].{code,message,path,hint}`, `summary.systemCost` |
-| `check <файл>` | семантика «Проверить»: трассировка цель→функция→домен, кросс-проверка ДП↔ДАП, W-013 | `errors` (E-501/E-502/E-601), `warnings` (W-006, W-008, W-013) |
+| `check <файл>` | семантика «Проверить»: трассировка цель→функция→домен, кросс-проверка ДП↔ДАП, структура блоков ДП (v0.03.01e), W-013 | `errors` (E-501/E-502/E-601/E-605), `warnings` (W-006, W-008, W-013) |
 | `metrics <файл>` | снимок метрик | `metrics.{systemCost, dvb, composition, goals, sequences, groups, advice}` |
 | `advice <файл>` | советы с оценкой экономии | `advice[].{kind, blocks, functions, deltaC, params}` |
 | `export <файл>` `--format state\|plantuml [--out путь]` | канонический экспорт | `content` или `out` |

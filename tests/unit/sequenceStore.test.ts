@@ -687,3 +687,117 @@ describe('Хранилище ДП v0.03.01d: вставка стрелки по 
     expect(seqOf(seqId).arrows).toHaveLength(1);
   });
 });
+
+describe('Хранилище ДП: вставка стрелки в рамку блока (v0.03.01e, joinBlockAtInsert)', () => {
+  beforeEach(() => {
+    useSkibStore.getState().resetProject();
+    useSkibStore.setState({ past: [], future: [], validation: null, selection: null });
+    setupVessel();
+  });
+
+  function seqWithArrows(n: number) {
+    const seqId = useSkibStore.getState().createSequence()!;
+    const blocks = useSkibStore.getState().project.architecture.blocks;
+    useSkibStore.getState().addLifeline(seqId, blocks[0].id);
+    useSkibStore.getState().addLifeline(seqId, blocks[1].id);
+    for (let i = 0; i < n; i++) {
+      useSkibStore.getState().addSeqArrow(seqId, blocks[0].id, blocks[1].id);
+    }
+    const arrows = useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!.arrows;
+    const from = blocks[0].id;
+    const to = blocks[1].id;
+    return { seqId, arrows: arrows.map((a) => a.id), from, to };
+  }
+
+  const seq = (seqId: string) =>
+    useSkibStore.getState().project.sequences!.find((s) => s.id === seqId)!;
+
+  it('вставка в зазор внутри группы — стрелка входит в состав блока (П-13)', () => {
+    const { seqId, arrows, from, to } = seqWithArrows(3);
+    useSkibStore.getState().createSeqBlock(seqId, 'group', [arrows[0], arrows[1], arrows[2]]);
+    // Зазор между стрелками 2 и 3 — внутри рамки группы.
+    const created = useSkibStore.getState().addSeqArrow(seqId, from, to, 2)!;
+    const block = seq(seqId).blocks[0];
+    expect(block.arrows).toEqual([arrows[0], arrows[1], created, arrows[2]]);
+  });
+
+  it('вставка снаружи рамки (до первой и после последней стрелки) — состав блока не меняется', () => {
+    const { seqId, arrows, from, to } = seqWithArrows(3);
+    useSkibStore.getState().createSeqBlock(seqId, 'group', [arrows[0], arrows[1], arrows[2]]);
+    const before = useSkibStore.getState().addSeqArrow(seqId, from, to, 0)!;
+    const after = useSkibStore.getState().addSeqArrow(seqId, from, to, 5)!;
+    const block = seq(seqId).blocks[0];
+    expect(block.arrows).toEqual([arrows[0], arrows[1], arrows[2]]);
+    expect(block.arrows).not.toContain(before);
+    expect(block.arrows).not.toContain(after);
+  });
+
+  it('вставка в условный блок: перед границей else — ветка «то», после — ветка «иначе»', () => {
+    const { seqId, arrows, from, to } = seqWithArrows(4);
+    useSkibStore.getState().createSeqBlock(seqId, 'cond', [arrows[0], arrows[1], arrows[2], arrows[3]], {
+      name: 'условие',
+      thenLabel: 'то',
+      elseLabel: 'иначе',
+      elseIndex: 2, // elseFrom = стрелка 3
+    });
+    // Зазор между стрелками 2 и 3 (граница else) — пополнение ветки «то».
+    const inThen = useSkibStore.getState().addSeqArrow(seqId, from, to, 2)!;
+    let block = seq(seqId).blocks[0];
+    expect(block.arrows).toEqual([arrows[0], arrows[1], inThen, arrows[2], arrows[3]]);
+    expect(block.elseFrom).toBe(arrows[2]);
+    // Откат и вставка между стрелками 3 и 4 — пополнение ветки «иначе».
+    useSkibStore.getState().undo();
+    const inElse = useSkibStore.getState().addSeqArrow(seqId, from, to, 3)!;
+    block = seq(seqId).blocks[0];
+    expect(block.arrows).toEqual([arrows[0], arrows[1], arrows[2], inElse, arrows[3]]);
+    expect(block.elseFrom).toBe(arrows[2]);
+  });
+
+  it('Ctrl+Z отменяет и стрелку, и включение в блок (одна операция истории)', () => {
+    const { seqId, arrows, from, to } = seqWithArrows(2);
+    useSkibStore.getState().createSeqBlock(seqId, 'group', [arrows[0], arrows[1]]);
+    const pastBefore = useSkibStore.getState().past.length;
+    useSkibStore.getState().addSeqArrow(seqId, from, to, 1)!;
+    expect(useSkibStore.getState().past.length).toBe(pastBefore + 1);
+    useSkibStore.getState().undo();
+    const restored = seq(seqId);
+    expect(restored.arrows).toHaveLength(2);
+    expect(restored.blocks[0].arrows).toEqual([arrows[0], arrows[1]]);
+  });
+});
+
+describe('Хранилище ДП: добавление нескольких ДП из PlantUML (v0.03.01e)', () => {
+  beforeEach(() => {
+    useSkibStore.getState().resetProject();
+    useSkibStore.setState({ past: [], future: [], validation: null, selection: null });
+    setupVessel();
+  });
+
+  const raw = (name: string) => ({
+    id: '',
+    name,
+    lifelines: ['blk-radio'],
+    arrows: [{ id: 'a-1', from: 'blk-radio', to: 'blk-radio' }],
+    blocks: [],
+  });
+
+  it('несколько ДП добавляются одной операцией истории; имена уникализируются', () => {
+    const ids = useSkibStore.getState().addSequencesFromPuml([raw('Импорт'), raw('Импорт')])!;
+    expect(ids).toHaveLength(2);
+    const names = useSkibStore.getState().project.sequences!.map((s) => s.name);
+    expect(names).toEqual(['Импорт', 'Импорт 2']);
+    const pastBefore = useSkibStore.getState().past.length;
+    useSkibStore.getState().addSequencesFromPuml([raw('Ещё')])!;
+    expect(useSkibStore.getState().past.length).toBe(pastBefore + 1);
+    useSkibStore.getState().undo();
+    expect(useSkibStore.getState().project.sequences).toHaveLength(2);
+  });
+
+  it('превышение лимита ДП отклоняется целиком', () => {
+    while (useSkibStore.getState().createSequence() !== null) {
+      /* заполняем до лимита */
+    }
+    expect(useSkibStore.getState().addSequencesFromPuml([raw('Сверх лимита')])).toBeNull();
+    expect(useSkibStore.getState().project.sequences).toHaveLength(MAX_SEQUENCES);
+  });
+});
