@@ -267,5 +267,7 @@ export function emptyProject(): Project {
 }
 
 /** Версия инструмента — отображается в интерфейсе и документации.
- *  Синхронизируется с package.json (раздел 10 ТЗ v0.02.01). */
-export const APP_VERSION = '0.03.01d';
+ *  Синхронизируется с package.json, TAG Makefile и ARG APP_VERSION Dockerfile
+ *  (раздел 10 ТЗ v0.02.01); согласованность закреплена тестом
+ *  tests/unit/version.test.ts — при выпуске версии меняется везде сразу. */
+export const APP_VERSION = '0.03.01e';

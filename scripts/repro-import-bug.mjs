@@ -1,7 +1,8 @@
 /**
- * Воспроизведение бага «экспорт → импорт не работает» (v0.03.01d).
- * Разбирает приложенные файлы пользователя реальными парсерами io и
- * печатает ошибки/предупреждения. Запуск: node scripts/repro-import-bug.mjs
+ * Диагностика round-trip «экспорт → импорт» ДП (v0.03.01e).
+ * Разбирает регрессионные фикстуры (файлы из баг-отчёта v0.03.01d)
+ * реальными парсерами io и печатает ошибки/предупреждения.
+ * Запуск: node scripts/repro-import-bug.mjs
  */
 import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
@@ -12,8 +13,8 @@ const { parseStateYaml } = await import('../src/io/stateFile.ts');
 const { parseSequencesYaml } = await import('../src/io/sequencesYaml.ts');
 const { dump, load } = await import('js-yaml');
 
-const stateText = readFileSync(new URL('../upload/state (5).yaml', import.meta.url), 'utf8');
-const seqText = readFileSync(new URL('../upload/sequences (1).yaml', import.meta.url), 'utf8');
+const stateText = readFileSync(new URL('../tests/fixtures/seq-regression/state.yaml', import.meta.url), 'utf8');
+const seqText = readFileSync(new URL('../tests/fixtures/seq-regression/sequences.yaml', import.meta.url), 'utf8');
 
 console.log('=== 1. Импорт state (5).yaml ===');
 const state = parseStateYaml(stateText);
