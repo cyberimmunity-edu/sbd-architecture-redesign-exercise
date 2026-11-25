@@ -134,7 +134,7 @@ import { CanvasControls } from './CanvasControls';
 import { RoutingEdge, type RoutingEdgeData } from './RoutingEdge';
 import { ru } from '../i18n/ru';
 import { HIGHLIGHT_COLOR, TRUST_COLORS } from './status';
-import { canvasBackgroundColor, canvasGridColor, edgeLabelColor, useSkibTheme } from './theme';
+import { canvasBackgroundColor, canvasGridColor, edgeLabelColor, minimapBackgroundColor, minimapMaskColor, useSkibTheme } from './theme';
 
 /** Данные рамки периметра целевой системы. */
 export interface PerimeterNodeData extends Record<string, unknown> {
@@ -1648,9 +1648,9 @@ function CanvasInner() {
           style={{
             width: 184,
             height: 132,
-            backgroundColor: theme === 'dark' ? '#1C1C21' : '#FFFFFF',
+            backgroundColor: minimapBackgroundColor(theme),
           }}
-          maskColor={theme === 'dark' ? 'rgba(24, 24, 27, 0.72)' : 'rgba(250, 250, 250, 0.72)'}
+          maskColor={minimapMaskColor(theme)}
           nodeColor={(node) => {
             if (node.id === '__perimeter') return 'transparent';
             if (node.type === 'lgframe') {

@@ -56,7 +56,7 @@ import { TRUST_COLORS } from '../status';
 import { CanvasControls } from '../CanvasControls';
 import { SeqToolbar } from './SeqToolbar';
 import { seqDndPayload } from './seqDnd';
-import { canvasBackgroundColor, useSkibTheme } from '../theme';
+import { canvasBackgroundColor, canvasGridColor, minimapBackgroundColor, minimapMaskColor, useSkibTheme } from '../theme';
 import { ru } from '../../i18n/ru';
 
 /** Ширина колонки линии жизни, px. */
@@ -1053,7 +1053,10 @@ function SeqCanvasInner() {
     [active, addGoalDomains, addLifeline, computeInsertIndex, createSequenceFromGoal, project.architecture.blocks, project.security.goals, sequences, setActiveSequence, toast],
   );
 
-  const backgroundColor = canvasBackgroundColor(useSkibTheme()[0]);
+  // Тема канвы (v0.03.01g): фон, точки сетки и мини-навигатор следуют теме —
+  // как в ДАП; до этого навигатор ДП оставался со светлым дефолтом React Flow.
+  const [theme] = useSkibTheme();
+  const backgroundColor = canvasBackgroundColor(theme);
 
   return (
     <div className="relative h-full w-full" data-testid="seq-canvas" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
@@ -1072,13 +1075,19 @@ function SeqCanvasInner() {
         style={{ background: backgroundColor }}
         onPaneClick={() => setSeqSelection(null)}
       >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1.5} color={canvasGridColor(theme)} />
         <SeqToolbar />
         <MiniMap
           position="bottom-left"
           pannable
           zoomable
           aria-label={ru.canvas.minimap}
+          style={{
+            width: 184,
+            height: 132,
+            backgroundColor: minimapBackgroundColor(theme),
+          }}
+          maskColor={minimapMaskColor(theme)}
           nodeColor={() => '#71717A'}
           nodeComponent={SeqMiniMapNode}
           className="hidden md:block"

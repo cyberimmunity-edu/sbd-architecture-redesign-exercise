@@ -14,7 +14,9 @@
  * стрелкам ДП, обнаруживается общим «Проверить» (E-601) без режима ДП;
  * v0.03.01d: перенос стрелки — Alt-жест; вставка новой стрелки «по месту
  * опускания» (T-U-16); правка направления стрелки — инспектор
- * «Откуда»/«Куда» и Alt-жест конца, одна операция истории (T-U-17).
+ * «Откуда»/«Куда» и Alt-жест конца, одна операция истории (T-U-17);
+ * v0.03.01g: мини-навигатор ДП следует теме оформления (фон и маска
+ * по теме, паритет с навигатором ДАП).
  */
 
 import { readFileSync } from 'node:fs';
@@ -672,4 +674,34 @@ test('T-U-17: правка направления стрелки — инспе�
   await page.waitForTimeout(300);
   await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-from', 'blk-radio');
   await expect(page.getByTestId('seq-arrow-a-1')).toHaveAttribute('data-arrow-to', 'blk-ota');
+});
+
+test('v0.03.01g: мини-навигатор ДП следует теме оформления — как навигатор ДАП', async ({ page }) => {
+  // До 0.03.01g навигатор ДП не задавал фон и маску и оставался со светлым
+  // дефолтом React Flow rgb(240, 240, 240) при тёмной теме — не совпадал
+  // с навигатором ДАП. Теперь оба используют общую палитру из theme.ts.
+  await loadDap22(page);
+  const minimapBg = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('.react-flow__minimap');
+      return el === null ? null : getComputedStyle(el).backgroundColor;
+    });
+  await expect(page.locator('.react-flow__minimap')).toBeVisible();
+
+  // Тема по умолчанию — тёмная: фон навигатора ДП тёмный #1C1C21.
+  expect(await minimapBg()).toBe('rgb(28, 28, 33)');
+
+  // Светлая тема: навигатор ДП белеет вместе с канвой.
+  await page.getByTestId('theme-toggle').click();
+  await expect
+    .poll(async () => minimapBg(), { timeout: 3000 })
+    .toBe('rgb(255, 255, 255)');
+
+  // Паритет с ДАП: навигатор ДАП в светлой теме тоже белый,
+  // и оба снова темнеют при возврате тёмной темы.
+  await page.getByTestId('mode-architecture').click();
+  await expect(page.locator('.react-flow__minimap')).toBeVisible();
+  await expect.poll(async () => minimapBg(), { timeout: 3000 }).toBe('rgb(255, 255, 255)');
+  await page.getByTestId('theme-toggle').click();
+  await expect.poll(async () => minimapBg(), { timeout: 3000 }).toBe('rgb(28, 28, 33)');
 });

@@ -75,3 +75,15 @@ export function canvasBackgroundColor(theme: Theme): string {
 export function edgeLabelColor(theme: Theme): string {
   return theme === 'dark' ? '#A1A1AA' : '#475569';
 }
+
+/** Цвет фона мини-навигатора по теме (v0.03.01g).
+ *  Общий для ДАП и ДП: до 0.03.01g навигатор ДП не задавал фон и оставался
+ *  со светлым дефолтом React Flow rgb(240, 240, 240) при тёмной теме. */
+export function minimapBackgroundColor(theme: Theme): string {
+  return theme === 'dark' ? '#1C1C21' : '#FFFFFF';
+}
+
+/** Цвет маски мини-навигатора (вне видимой области) по теме (v0.03.01g). */
+export function minimapMaskColor(theme: Theme): string {
+  return theme === 'dark' ? 'rgba(24, 24, 27, 0.72)' : 'rgba(250, 250, 250, 0.72)';
+}
