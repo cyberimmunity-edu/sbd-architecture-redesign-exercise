@@ -852,7 +852,10 @@ function SeqCanvasInner() {
     () =>
       seqColorsFromDap
         ? computeSeqColors(project)
-        : { lifelines: new Map<string, 'red' | 'yellow' | 'green'>(), arrows: new Map<string, 'red' | 'green'>() },
+        : {
+            lifelines: new Map<string, 'red' | 'yellow' | 'green'>(),
+            arrows: new Map<string, Map<string, 'red' | 'green'>>(),
+          },
     [project, seqColorsFromDap],
   );
 
@@ -878,7 +881,12 @@ function SeqCanvasInner() {
       selectedBlock: seqSelection?.kind === 'block' ? seqSelection.id : null,
       multiArrows: seqSelectedArrows,
       colorsLifelines: Object.fromEntries(colors.lifelines) as Record<string, 'red' | 'yellow' | 'green'>,
-      colorsArrows: Object.fromEntries(colors.arrows) as Record<string, 'red' | 'green'>,
+      // Цвета стрелок — по карте активной ДП: id стрелок уникальны только
+      // внутри ДП, общая карта затирала их между ДП (v0.03.01f).
+      colorsArrows: Object.fromEntries(colors.arrows.get(active?.id ?? '') ?? []) as Record<
+        string,
+        'red' | 'green'
+      >,
       colorsFromDap: seqColorsFromDap,
       dropIndex,
       onSelectLifeline: (id) => setSeqSelection({ kind: 'lifeline', id }),

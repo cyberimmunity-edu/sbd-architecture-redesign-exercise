@@ -447,10 +447,15 @@ export function seqIdValid(id: string): boolean {
 /* ------------------------------------------------------------------ */
 
 export interface SeqColorScheme {
-  /** Цвет заливки линии жизни по классу доверия домена. */
+  /** Цвет заливки линии жизни по классу доверия домена (id доменов уникальны
+   *  во всём проекте — общая карта безопасна). */
   lifelines: Map<string, 'red' | 'yellow' | 'green'>;
-  /** Цвет стрелки по домену-источнику: из красных — красные, из жёлтых и зелёных — зелёные. */
-  arrows: Map<string, 'red' | 'green'>;
+  /** Цвет стрелки по домену-источнику: из красных — красные, из жёлтых и
+   *  зелёных — зелёные. Отдельная карта на каждую ДП (v0.03.01f): id стрелок
+   *  (a-1, a-2…) уникальны только внутри своей ДП — общая карта затирала
+   *  цвета одноимённых стрелок из других ДП, и из красных доменов выходили
+   *  зелёные стрелки. */
+  arrows: Map<string, Map<string, 'red' | 'green'>>;
 }
 
 /**
@@ -461,7 +466,7 @@ export interface SeqColorScheme {
 export function computeSeqColors(project: Project): SeqColorScheme {
   const trust = computeTrust(project);
   const lifelines = new Map<string, 'red' | 'yellow' | 'green'>();
-  const arrows = new Map<string, 'red' | 'green'>();
+  const arrows = new Map<string, Map<string, 'red' | 'green'>>();
   const sourceIsGreen = (blockId: string): boolean => {
     const internal = trust.internal.get(blockId);
     if (internal === 'ddb' || internal === 'ddbpcd') return true;
@@ -478,9 +483,13 @@ export function computeSeqColors(project: Project): SeqColorScheme {
         lifelines.set(lifeline, cls === 'ndb' ? 'red' : cls === 'ddbpcd' ? 'yellow' : 'green');
       }
     }
+    // Цвета стрелок — в карту своей ДП: общая карта смешивала бы одноимённые
+    // a-1, a-2… разных ДП (последняя ДП в файле побеждала, v0.03.01f).
+    const diagramArrows = new Map<string, 'red' | 'green'>();
     for (const arrow of diagram.arrows) {
-      arrows.set(arrow.id, sourceIsGreen(arrow.from) ? 'green' : 'red');
+      diagramArrows.set(arrow.id, sourceIsGreen(arrow.from) ? 'green' : 'red');
     }
+    arrows.set(diagram.id, diagramArrows);
   }
   return { lifelines, arrows };
 }

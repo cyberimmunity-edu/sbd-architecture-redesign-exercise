@@ -1,0 +1,1181 @@
+version: 1
+architecture:
+  blocks:
+    - id: blk-comm
+      name: 01. Связь
+      cost: 6
+      group: lg-iface
+      position:
+        x: 0
+        'y': 520
+    - id: blk-req-pub
+      name: 02. Публикация требований
+      cost: 1
+      group: lg-iface
+      position:
+        x: 0
+        'y': 150
+    - id: blk-intake
+      name: 03. Приём заявок
+      cost: 2
+      group: lg-iface
+      position:
+        x: 420
+        'y': 520
+    - id: blk-payment
+      name: 04. Контроль оплаты
+      cost: 1
+      group: lg-check
+      position:
+        x: 880
+        'y': 250
+    - id: blk-notice
+      name: 05. Проверка уведомлений о нарушениях
+      cost: 1
+      group: lg-check
+      position:
+        x: 880
+        'y': 620
+    - id: blk-decision
+      name: 06. Принятие решений
+      cost: 7
+      group: lg-decide
+      position:
+        x: 1340
+        'y': 380
+    - id: blk-registry
+      name: 07. Реестр допусков
+      cost: 1
+      group: lg-decide
+      position:
+        x: 1340
+        'y': 780
+    - id: blk-esign
+      name: 08. Электронная подпись
+      cost: 1
+      group: lg-key
+      position:
+        x: 1760
+        'y': 780
+    - id: blk-journal
+      name: 09. Журналирование
+      cost: 1
+      position:
+        x: 420
+        'y': 950
+    - id: blk-store
+      name: 10. Хранилище материалов заявок
+      cost: 2
+      group: lg-tests
+      position:
+        x: 2240
+        'y': 100
+    - id: blk-test-mgmt
+      name: 11. Управление испытаниями
+      cost: 7
+      group: lg-tests
+      position:
+        x: 2240
+        'y': 470
+    - id: blk-result-gate
+      name: 12. Приём результатов функциональных испытаний
+      cost: 1
+      group: lg-tests
+      position:
+        x: 2240
+        'y': 850
+    - id: blk-sec-tests
+      name: 13. Испытания безопасности
+      cost: 4
+      group: lg-exec
+      position:
+        x: 2680
+        'y': 300
+    - id: blk-func-tests
+      name: 14. Функциональные испытания
+      cost: 2
+      group: lg-exec
+      position:
+        x: 2680
+        'y': 850
+    - id: ext-dev
+      name: DEV
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 0
+    - id: ext-op
+      name: OP
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 190
+    - id: ext-bnk
+      name: BNK
+      cost: 0
+      external: true
+      trusted: true
+      position:
+        x: -560
+        'y': 380
+    - id: ext-police
+      name: uas_police
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 570
+    - id: ext-orvd
+      name: ОрВД
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 760
+    - id: ext-ins
+      name: INS
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 950
+    - id: ext-agg
+      name: AGG
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 1140
+    - id: ext-soc
+      name: SOC
+      cost: 0
+      external: true
+      position:
+        x: -560
+        'y': 1330
+  edges:
+    - id: e-dev-comm
+      from: ext-dev
+      to: blk-comm
+      label: 'запросы требований, заявки, пакеты прошивок'
+    - id: e-comm-dev
+      from: blk-comm
+      to: ext-dev
+      label: 'требования, решения, сертификаты'
+    - id: e-op-comm
+      from: ext-op
+      to: blk-comm
+      label: заявки на регистрацию БАС
+    - id: e-comm-op
+      from: blk-comm
+      to: ext-op
+      label: решения о регистрации и отзыве
+    - id: e-bnk-comm
+      from: ext-bnk
+      to: blk-comm
+      label: подписанные подтверждения оплаты
+    - id: e-police-comm
+      from: ext-police
+      to: blk-comm
+      label: запросы сведений о допусках
+    - id: e-comm-police
+      from: blk-comm
+      to: ext-police
+      label: сведения о допусках
+    - id: e-orvd-comm
+      from: ext-orvd
+      to: blk-comm
+      label: запросы сведений о допусках
+    - id: e-comm-orvd
+      from: blk-comm
+      to: ext-orvd
+      label: сведения о допусках
+    - id: e-ins-comm
+      from: ext-ins
+      to: blk-comm
+      label: запросы сведений о допусках
+    - id: e-comm-ins
+      from: blk-comm
+      to: ext-ins
+      label: сведения о допусках
+    - id: e-agg-comm
+      from: ext-agg
+      to: blk-comm
+      label: запросы сведений о допусках
+    - id: e-comm-agg
+      from: blk-comm
+      to: ext-agg
+      label: сведения о допусках
+    - id: e-soc-comm
+      from: ext-soc
+      to: blk-comm
+      label: уведомления о нарушениях ЦБ
+    - id: e-comm-soc
+      from: blk-comm
+      to: ext-soc
+      label: события журнала
+    - id: e-comm-req-pub
+      from: blk-comm
+      to: blk-req-pub
+      label: запрос требований
+    - id: e-req-pub-comm
+      from: blk-req-pub
+      to: blk-comm
+      label: 'требования, правила, ПМИ'
+    - id: e-comm-intake
+      from: blk-comm
+      to: blk-intake
+      label: 'заявки, запросы, уведомления'
+    - id: e-intake-comm
+      from: blk-intake
+      to: blk-comm
+      label: ответы и уведомления
+    - id: e-intake-payment
+      from: blk-intake
+      to: blk-payment
+      label: заявка и подтверждение оплаты
+    - id: e-payment-intake
+      from: blk-payment
+      to: blk-intake
+      label: 'отказ: заявка не оплачена'
+    - id: e-payment-decision
+      from: blk-payment
+      to: blk-decision
+      label: оплаченная заявка
+    - id: e-payment-store
+      from: blk-payment
+      to: blk-store
+      label: зашифрованные материалы заявки
+    - id: e-intake-notice
+      from: blk-intake
+      to: blk-notice
+      label: уведомление о нарушении ЦБ
+    - id: e-notice-intake
+      from: blk-notice
+      to: blk-intake
+      label: 'отказ: уведомление не подтверждено'
+    - id: e-notice-decision
+      from: blk-notice
+      to: blk-decision
+      label: подтверждённое нарушение
+    - id: e-intake-registry
+      from: blk-intake
+      to: blk-registry
+      label: запрос сведений о допусках
+    - id: e-registry-intake
+      from: blk-registry
+      to: blk-intake
+      label: подписанные сведения о допусках
+    - id: e-decision-intake
+      from: blk-decision
+      to: blk-intake
+      label: 'решения, сертификаты, уведомления'
+    - id: e-decision-esign
+      from: blk-decision
+      to: blk-esign
+      label: данные на подпись
+    - id: e-esign-decision
+      from: blk-esign
+      to: blk-decision
+      label: подпись
+    - id: e-registry-esign
+      from: blk-registry
+      to: blk-esign
+      label: сведения на подпись
+    - id: e-esign-registry
+      from: blk-esign
+      to: blk-registry
+      label: подписанные сведения
+    - id: e-decision-registry
+      from: blk-decision
+      to: blk-registry
+      label: запросы и изменения статусов
+    - id: e-registry-decision
+      from: blk-registry
+      to: blk-decision
+      label: сведения о действующих допусках
+    - id: e-decision-journal
+      from: blk-decision
+      to: blk-journal
+      label: решения о допусках
+    - id: e-decision-test-mgmt
+      from: blk-decision
+      to: blk-test-mgmt
+      label: задание на испытания по ПМИ
+    - id: e-test-mgmt-decision
+      from: blk-test-mgmt
+      to: blk-decision
+      label: итоговый отчёт испытаний
+    - id: e-test-mgmt-journal
+      from: blk-test-mgmt
+      to: blk-journal
+      label: события испытаний
+    - id: e-journal-comm
+      from: blk-journal
+      to: blk-comm
+      label: журнал событий
+    - id: e-test-mgmt-store
+      from: blk-test-mgmt
+      to: blk-store
+      label: запрос материалов заявки
+    - id: e-store-test-mgmt
+      from: blk-store
+      to: blk-test-mgmt
+      label: материалы для испытаний безопасности
+    - id: e-test-mgmt-sec-tests
+      from: blk-test-mgmt
+      to: blk-sec-tests
+      label: прошивка и проверка безопасности
+    - id: e-sec-tests-test-mgmt
+      from: blk-sec-tests
+      to: blk-test-mgmt
+      label: результат проверки безопасности
+    - id: e-test-mgmt-func-tests
+      from: blk-test-mgmt
+      to: blk-func-tests
+      label: образ прошивки и функциональные тесты
+    - id: e-func-tests-result-gate
+      from: blk-func-tests
+      to: blk-result-gate
+      label: результаты функциональных тестов
+    - id: e-result-gate-test-mgmt
+      from: blk-result-gate
+      to: blk-test-mgmt
+      label: проверенные результаты
+  groups:
+    - id: lg-iface
+      name: Интерфейсный контур
+      color: '#1E88E5'
+    - id: lg-check
+      name: Контроль входящих обращений
+      color: '#3F51B5'
+    - id: lg-decide
+      name: Решения и реестр допусков
+      color: '#8E24AA'
+    - id: lg-key
+      name: Ключевой контур
+      color: '#D81B60'
+      parent: lg-decide
+    - id: lg-tests
+      name: Испытательный контур
+      color: '#00897B'
+    - id: lg-exec
+      name: Исполнители испытаний
+      color: '#6D4C41'
+      parent: lg-tests
+security:
+  assumptions:
+    - id: asm-bnk
+      text: >-
+        Аутентичный банк (BNK) является благонадёжным: подписанные им подтверждения оплаты достоверны, а ключ проверки
+        его подписи заранее известен REG
+    - id: asm-pmi
+      text: >-
+        Требования и ПМИ разработаны благонадёжными и компетентными специалистами: прошивка, прошедшая все обязательные
+        проверки ПМИ, удовлетворяет требованиям
+  goals:
+    - id: g-cert-issue
+      name: Выдача сертификатов после проверок
+      description: >-
+        При любых обстоятельствах сертификаты безопасности выдаются только после успешной проверки всех требований к
+        заявке
+      unconditional: true
+    - id: g-key-access
+      name: Защита ключа подписи REG
+      description: При любых обстоятельствах только авторизованные пользователи имеют доступ к закрытому ключу подписи REG
+      unconditional: true
+    - id: g-registry-actual
+      name: Актуальность сведений о допусках
+      description: 'Сведения о допусках, которые выдаёт REG, соответствуют состоянию реестра на момент запроса'
+    - id: g-conf-materials
+      name: Конфиденциальность материалов заявок
+      description: При любых обстоятельствах только авторизованные пользователи имеют доступ к конфиденциальным материалам заявок
+      unconditional: true
+    - id: g-pmi-checks
+      name: Полнота испытаний по ПМИ
+      description: При любых обстоятельствах выполняются все обязательные согласно ПМИ проверки
+      unconditional: true
+    - id: g-prepaid
+      name: Предоплата заявок
+      description: При любых обстоятельствах обрабатываются только предварительно оплаченные заявки на допуски
+      unconditional: true
+    - id: g-status-authz
+      name: Авторизованное изменение статусов допусков
+      description: При любых обстоятельствах статусы допусков изменяются только по авторизованным решениям REG
+      unconditional: true
+  functions:
+    - id: fn-payment-auth
+      name: Контроль подлинности подтверждения оплаты
+      cost: 2
+      implements:
+        - goal: g-prepaid
+          weight: mandatory
+    - id: fn-notice-auth
+      name: Контроль подлинности уведомлений о нарушениях
+      cost: 2
+      implements:
+        - goal: g-status-authz
+          weight: mandatory
+    - id: fn-cert-authz
+      name: Авторизация решений о допусках
+      cost: 3
+      implements:
+        - goal: g-cert-issue
+          weight: mandatory
+        - goal: g-status-authz
+          weight: mandatory
+    - id: fn-pmi-control
+      name: Контроль полноты проверок по ПМИ
+      cost: 4
+      implements:
+        - goal: g-pmi-checks
+          weight: mandatory
+        - goal: g-cert-issue
+          weight: mandatory
+    - id: fn-sec-tests
+      name: Проверка прошивки на соответствие требованиям безопасности
+      cost: 4
+      implements:
+        - goal: g-pmi-checks
+          weight: mandatory
+    - id: fn-result-integrity
+      name: Контроль целостности результатов испытаний
+      cost: 2
+      implements:
+        - goal: g-pmi-checks
+          weight: optional
+        - goal: g-cert-issue
+          weight: optional
+    - id: fn-sign
+      name: Цифровая подпись исходящих данных
+      cost: 2
+      implements:
+        - goal: g-registry-actual
+          weight: mandatory
+        - goal: g-cert-issue
+          weight: optional
+    - id: fn-key-access
+      name: Контроль доступа к ключу подписи
+      cost: 3
+      implements:
+        - goal: g-key-access
+          weight: mandatory
+    - id: fn-registry
+      name: Контроль целостности реестра допусков
+      cost: 3
+      implements:
+        - goal: g-registry-actual
+          weight: mandatory
+        - goal: g-status-authz
+          weight: optional
+    - id: fn-conf-access
+      name: Контроль доступа к материалам заявок
+      cost: 3
+      implements:
+        - goal: g-conf-materials
+          weight: mandatory
+assignments:
+  - function: fn-payment-auth
+    block: blk-payment
+  - function: fn-notice-auth
+    block: blk-notice
+  - function: fn-cert-authz
+    block: blk-decision
+  - function: fn-registry
+    block: blk-registry
+  - function: fn-sign
+    block: blk-esign
+  - function: fn-key-access
+    block: blk-esign
+  - function: fn-conf-access
+    block: blk-store
+  - function: fn-pmi-control
+    block: blk-test-mgmt
+  - function: fn-result-integrity
+    block: blk-result-gate
+  - function: fn-sec-tests
+    block: blk-sec-tests
+sequences:
+  - id: seq-1
+    name: 'Подача заявки и предоплата (ЦБ 6, 4)'
+    lifelines:
+      - ext-dev
+      - ext-bnk
+      - blk-comm
+      - blk-req-pub
+      - blk-intake
+      - blk-payment
+      - blk-store
+      - blk-decision
+    arrows:
+      - id: a-1
+        from: ext-dev
+        to: blk-comm
+        label: 'запрос требований, правил и ПМИ'
+      - id: a-2
+        from: blk-comm
+        to: blk-req-pub
+        label: запрос требований
+      - id: a-3
+        from: blk-req-pub
+        to: blk-comm
+        label: 'требования, правила, ПМИ'
+      - id: a-4
+        from: blk-comm
+        to: ext-dev
+        label: 'требования, правила, ПМИ'
+      - id: a-5
+        from: ext-dev
+        to: ext-dev
+        label: 'подготовка пакета, шифрование материалов для REG'
+      - id: a-6
+        from: ext-dev
+        to: blk-comm
+        label: заявка на сертификацию прошивки
+      - id: a-7
+        from: blk-comm
+        to: blk-intake
+        label: заявка
+      - id: a-8
+        from: blk-intake
+        to: blk-comm
+        label: счёт на оплату
+      - id: a-9
+        from: blk-comm
+        to: ext-dev
+        label: счёт на оплату
+      - id: a-10
+        from: ext-bnk
+        to: blk-comm
+        label: подписанное подтверждение оплаты
+      - id: a-11
+        from: blk-comm
+        to: blk-intake
+        label: подтверждение оплаты
+      - id: a-12
+        from: blk-intake
+        to: blk-payment
+        label: заявка и подтверждение оплаты
+      - id: a-13
+        from: blk-payment
+        to: blk-payment
+        label: проверка подписи BNK и суммы платежа
+      - id: a-14
+        from: blk-payment
+        to: blk-store
+        label: зашифрованные материалы заявки
+      - id: a-15
+        from: blk-store
+        to: blk-store
+        label: расшифровка; доступ только доверенным доменам
+      - id: a-16
+        from: blk-payment
+        to: blk-decision
+        label: оплаченная заявка
+      - id: a-17
+        from: blk-decision
+        to: blk-decision
+        label: 'регистрация заявки, запуск сертификации'
+      - id: a-18
+        from: blk-payment
+        to: blk-intake
+        label: 'отказ: заявка не оплачена'
+      - id: a-19
+        from: blk-intake
+        to: blk-comm
+        label: отказ
+      - id: a-20
+        from: blk-comm
+        to: ext-dev
+        label: отказ в рассмотрении заявки
+    blocks:
+      - id: g-1
+        kind: group
+        name: Получение требований
+        color: '#1E88E5'
+        arrows:
+          - a-1
+          - a-2
+          - a-3
+          - a-4
+      - id: g-2
+        kind: group
+        name: Подача заявки и оплата
+        color: '#3F51B5'
+        arrows:
+          - a-5
+          - a-6
+          - a-7
+          - a-8
+          - a-9
+          - a-10
+          - a-11
+          - a-12
+          - a-13
+      - id: g-3
+        kind: cond
+        name: оплата подтверждена
+        arrows:
+          - a-14
+          - a-15
+          - a-16
+          - a-17
+          - a-18
+          - a-19
+          - a-20
+        thenLabel: заявка принята в работу
+        elseLabel: заявка не оплачена
+        elseFrom: a-18
+  - id: seq-2
+    name: 'Сертификация прошивки (ЦБ 1, 2, 4, 5)'
+    lifelines:
+      - ext-dev
+      - blk-comm
+      - blk-intake
+      - blk-decision
+      - blk-registry
+      - blk-esign
+      - blk-journal
+      - blk-store
+      - blk-test-mgmt
+      - blk-sec-tests
+      - blk-func-tests
+      - blk-result-gate
+    arrows:
+      - id: a-1
+        from: blk-decision
+        to: blk-test-mgmt
+        label: задание на испытания по ПМИ
+      - id: a-2
+        from: blk-test-mgmt
+        to: blk-test-mgmt
+        label: план обязательных проверок по ПМИ
+      - id: a-3
+        from: blk-test-mgmt
+        to: blk-store
+        label: запрос материалов заявки
+      - id: a-4
+        from: blk-store
+        to: blk-store
+        label: 'контроль доступа: запрос доверенного домена'
+      - id: a-5
+        from: blk-store
+        to: blk-test-mgmt
+        label: материалы для испытаний безопасности
+      - id: a-6
+        from: blk-test-mgmt
+        to: blk-sec-tests
+        label: прошивка и проверка безопасности
+      - id: a-7
+        from: blk-sec-tests
+        to: blk-sec-tests
+        label: выполнение проверки в изолированной среде
+      - id: a-8
+        from: blk-sec-tests
+        to: blk-test-mgmt
+        label: результат проверки безопасности
+      - id: a-9
+        from: blk-test-mgmt
+        to: blk-func-tests
+        label: образ прошивки и функциональные тесты
+      - id: a-10
+        from: blk-func-tests
+        to: blk-result-gate
+        label: результаты функциональных тестов
+      - id: a-11
+        from: blk-result-gate
+        to: blk-result-gate
+        label: контроль целостности и полноты результатов
+      - id: a-12
+        from: blk-result-gate
+        to: blk-test-mgmt
+        label: проверенные результаты
+      - id: a-13
+        from: blk-test-mgmt
+        to: blk-test-mgmt
+        label: 'контроль полноты: выполнены все проверки ПМИ'
+      - id: a-14
+        from: blk-test-mgmt
+        to: blk-journal
+        label: события испытаний
+      - id: a-15
+        from: blk-test-mgmt
+        to: blk-decision
+        label: итоговый отчёт испытаний
+      - id: a-16
+        from: blk-decision
+        to: blk-esign
+        label: сертификат прошивки на подпись
+      - id: a-17
+        from: blk-esign
+        to: blk-esign
+        label: 'проверка инициатора, подпись ключом REG'
+      - id: a-18
+        from: blk-esign
+        to: blk-decision
+        label: подписанный сертификат
+      - id: a-19
+        from: blk-decision
+        to: blk-registry
+        label: 'новый допуск: сертификат прошивки'
+      - id: a-20
+        from: blk-decision
+        to: blk-journal
+        label: решение о выдаче сертификата
+      - id: a-21
+        from: blk-decision
+        to: blk-intake
+        label: сертификат прошивки
+      - id: a-22
+        from: blk-intake
+        to: blk-comm
+        label: сертификат прошивки
+      - id: a-23
+        from: blk-comm
+        to: ext-dev
+        label: сертификат прошивки
+      - id: a-24
+        from: blk-decision
+        to: blk-journal
+        label: отказ с перечнем несоответствий
+      - id: a-25
+        from: blk-decision
+        to: blk-intake
+        label: отказ в сертификации
+      - id: a-26
+        from: blk-intake
+        to: blk-comm
+        label: отказ в сертификации
+      - id: a-27
+        from: blk-comm
+        to: ext-dev
+        label: отказ в сертификации
+    blocks:
+      - id: g-1
+        kind: group
+        name: Доступ к материалам заявки (ЦБ 4)
+        color: '#00897B'
+        arrows:
+          - a-3
+          - a-4
+          - a-5
+      - id: g-2
+        kind: loop
+        name: для каждой обязательной проверки безопасности
+        color: '#1E88E5'
+        arrows:
+          - a-6
+          - a-7
+          - a-8
+      - id: g-3
+        kind: group
+        name: 'Функциональные испытания: недоверенный исполнитель'
+        color: '#6D4C41'
+        arrows:
+          - a-9
+          - a-10
+          - a-11
+          - a-12
+      - id: g-4
+        kind: cond
+        name: все требования выполнены
+        arrows:
+          - a-16
+          - a-17
+          - a-18
+          - a-19
+          - a-20
+          - a-21
+          - a-22
+          - a-23
+          - a-24
+          - a-25
+          - a-26
+          - a-27
+        thenLabel: сертификат выдаётся
+        elseLabel: отказ в сертификации
+        elseFrom: a-24
+  - id: seq-3
+    name: 'Выдача сведений о допусках (ЦБ 3, 2)'
+    lifelines:
+      - ext-police
+      - ext-orvd
+      - ext-ins
+      - ext-agg
+      - blk-comm
+      - blk-intake
+      - blk-registry
+      - blk-esign
+    arrows:
+      - id: a-1
+        from: ext-police
+        to: blk-comm
+        label: 'запрос: статус допуска БАС'
+      - id: a-2
+        from: ext-orvd
+        to: blk-comm
+        label: 'запрос: статус допуска БАС'
+      - id: a-3
+        from: ext-ins
+        to: blk-comm
+        label: 'запрос: статус допуска БАС'
+      - id: a-4
+        from: ext-agg
+        to: blk-comm
+        label: 'запрос: статус допуска БАС'
+      - id: a-5
+        from: blk-comm
+        to: blk-intake
+        label: запрос сведений
+      - id: a-6
+        from: blk-intake
+        to: blk-registry
+        label: запрос сведений о допусках
+      - id: a-7
+        from: blk-registry
+        to: blk-registry
+        label: чтение состояния реестра на момент запроса
+      - id: a-8
+        from: blk-registry
+        to: blk-esign
+        label: сведения с меткой времени
+      - id: a-9
+        from: blk-esign
+        to: blk-esign
+        label: 'проверка инициатора, подпись ключом REG'
+      - id: a-10
+        from: blk-esign
+        to: blk-registry
+        label: подписанные сведения
+      - id: a-11
+        from: blk-registry
+        to: blk-intake
+        label: подписанные сведения о допусках
+      - id: a-12
+        from: blk-intake
+        to: blk-comm
+        label: подписанные сведения
+      - id: a-13
+        from: blk-comm
+        to: ext-police
+        label: подписанные сведения о допуске
+      - id: a-14
+        from: blk-comm
+        to: ext-orvd
+        label: подписанные сведения о допуске
+      - id: a-15
+        from: blk-comm
+        to: ext-ins
+        label: подписанные сведения о допуске
+      - id: a-16
+        from: blk-comm
+        to: ext-agg
+        label: подписанные сведения о допуске
+    blocks:
+      - id: g-1
+        kind: group
+        name: Запросы участников (любой из)
+        color: '#607D8B'
+        arrows:
+          - a-1
+          - a-2
+          - a-3
+          - a-4
+      - id: g-2
+        kind: group
+        name: Ответ формирует только доверенный реестр
+        color: '#8E24AA'
+        arrows:
+          - a-7
+          - a-8
+          - a-9
+          - a-10
+      - id: g-3
+        kind: group
+        name: Ответы участникам
+        color: '#607D8B'
+        arrows:
+          - a-13
+          - a-14
+          - a-15
+          - a-16
+  - id: seq-4
+    name: 'Каскадный отзыв допусков (ЦБ 7, 3)'
+    lifelines:
+      - ext-soc
+      - blk-comm
+      - blk-intake
+      - blk-notice
+      - blk-decision
+      - blk-registry
+      - blk-esign
+      - blk-journal
+      - ext-dev
+      - ext-op
+      - ext-orvd
+      - ext-ins
+      - ext-police
+    arrows:
+      - id: a-1
+        from: ext-soc
+        to: blk-comm
+        label: уведомление о нарушении ЦБ (подпись SOC)
+      - id: a-2
+        from: blk-comm
+        to: blk-intake
+        label: уведомление о нарушении
+      - id: a-3
+        from: blk-intake
+        to: blk-notice
+        label: уведомление о нарушении ЦБ
+      - id: a-4
+        from: blk-notice
+        to: blk-notice
+        label: проверка подписи и полномочий SOC
+      - id: a-5
+        from: blk-notice
+        to: blk-decision
+        label: подтверждённое нарушение
+      - id: a-6
+        from: blk-decision
+        to: blk-decision
+        label: решение об отзыве лицензии DEV
+      - id: a-7
+        from: blk-decision
+        to: blk-registry
+        label: отзыв лицензии DEV
+      - id: a-8
+        from: blk-registry
+        to: blk-decision
+        label: перечень зависимых допусков
+      - id: a-9
+        from: blk-notice
+        to: blk-intake
+        label: 'отказ: уведомление не подтверждено'
+      - id: a-10
+        from: blk-intake
+        to: blk-comm
+        label: отказ
+      - id: a-11
+        from: blk-comm
+        to: ext-soc
+        label: уведомление отклонено
+      - id: a-12
+        from: blk-decision
+        to: blk-registry
+        label: приостановить зависимый допуск
+      - id: a-13
+        from: blk-registry
+        to: blk-registry
+        label: 'смена статуса: приостановлен'
+      - id: a-14
+        from: blk-decision
+        to: blk-journal
+        label: решение о каскадном отзыве
+      - id: a-15
+        from: blk-decision
+        to: blk-esign
+        label: список отозванных допусков
+      - id: a-16
+        from: blk-esign
+        to: blk-esign
+        label: 'проверка инициатора, подпись ключом REG'
+      - id: a-17
+        from: blk-esign
+        to: blk-decision
+        label: подписанный список отзыва
+      - id: a-18
+        from: blk-decision
+        to: blk-intake
+        label: уведомления об отзыве
+      - id: a-19
+        from: blk-intake
+        to: blk-comm
+        label: уведомления об отзыве
+      - id: a-20
+        from: blk-comm
+        to: ext-dev
+        label: отзыв лицензии и зависимых допусков
+      - id: a-21
+        from: blk-comm
+        to: ext-op
+        label: приостановка допусков БАС
+      - id: a-22
+        from: blk-comm
+        to: ext-orvd
+        label: список отозванных допусков
+      - id: a-23
+        from: blk-comm
+        to: ext-ins
+        label: список отозванных допусков
+      - id: a-24
+        from: blk-comm
+        to: ext-police
+        label: список отозванных допусков
+      - id: a-25
+        from: blk-journal
+        to: blk-comm
+        label: журнал событий
+      - id: a-26
+        from: blk-comm
+        to: ext-soc
+        label: 'подтверждение: отзыв выполнен'
+    blocks:
+      - id: g-1
+        kind: cond
+        name: уведомление подлинно
+        arrows:
+          - a-5
+          - a-6
+          - a-7
+          - a-8
+          - a-9
+          - a-10
+          - a-11
+        thenLabel: отзыв лицензии DEV
+        elseLabel: 'отклонено, сценарий завершён'
+        elseFrom: a-9
+      - id: g-2
+        kind: loop
+        name: 'для каждого допуска: прошивки, типы, экземпляры'
+        color: '#8E24AA'
+        arrows:
+          - a-12
+          - a-13
+      - id: g-3
+        kind: group
+        name: Оповещение участников
+        color: '#00897B'
+        arrows:
+          - a-20
+          - a-21
+          - a-22
+          - a-23
+          - a-24
+      - id: g-4
+        kind: group
+        name: Отчёт в SOC
+        color: '#607D8B'
+        arrows:
+          - a-25
+          - a-26
+  - id: seq-5
+    name: 'Регистрация экземпляра БАС (ЦБ 6, 2)'
+    lifelines:
+      - ext-op
+      - ext-bnk
+      - blk-comm
+      - blk-intake
+      - blk-payment
+      - blk-decision
+      - blk-registry
+      - blk-esign
+      - blk-journal
+    arrows:
+      - id: a-1
+        from: ext-op
+        to: blk-comm
+        label: заявка на регистрацию БАС
+      - id: a-2
+        from: blk-comm
+        to: blk-intake
+        label: заявка на регистрацию
+      - id: a-3
+        from: ext-bnk
+        to: blk-comm
+        label: подписанное подтверждение оплаты
+      - id: a-4
+        from: blk-comm
+        to: blk-intake
+        label: подтверждение оплаты
+      - id: a-5
+        from: blk-intake
+        to: blk-payment
+        label: заявка и подтверждение оплаты
+      - id: a-6
+        from: blk-payment
+        to: blk-payment
+        label: проверка подписи BNK и суммы платежа
+      - id: a-7
+        from: blk-payment
+        to: blk-decision
+        label: оплаченная заявка
+      - id: a-8
+        from: blk-decision
+        to: blk-registry
+        label: 'запрос: сертификаты типа и прошивки'
+      - id: a-9
+        from: blk-registry
+        to: blk-decision
+        label: действующие допуски
+      - id: a-10
+        from: blk-decision
+        to: blk-esign
+        label: свидетельство о регистрации на подпись
+      - id: a-11
+        from: blk-esign
+        to: blk-esign
+        label: 'проверка инициатора, подпись ключом REG'
+      - id: a-12
+        from: blk-esign
+        to: blk-decision
+        label: подписанное свидетельство
+      - id: a-13
+        from: blk-decision
+        to: blk-registry
+        label: регистрация экземпляра БАС
+      - id: a-14
+        from: blk-decision
+        to: blk-journal
+        label: решение о регистрации
+      - id: a-15
+        from: blk-decision
+        to: blk-intake
+        label: свидетельство о регистрации
+      - id: a-16
+        from: blk-intake
+        to: blk-comm
+        label: свидетельство о регистрации
+      - id: a-17
+        from: blk-comm
+        to: ext-op
+        label: свидетельство о регистрации
+      - id: a-18
+        from: blk-payment
+        to: blk-intake
+        label: 'отказ: заявка не оплачена'
+      - id: a-19
+        from: blk-intake
+        to: blk-comm
+        label: отказ
+      - id: a-20
+        from: blk-comm
+        to: ext-op
+        label: отказ в рассмотрении заявки
+    blocks:
+      - id: g-1
+        kind: cond
+        name: оплата подтверждена
+        arrows:
+          - a-7
+          - a-8
+          - a-9
+          - a-10
+          - a-11
+          - a-12
+          - a-13
+          - a-14
+          - a-15
+          - a-16
+          - a-17
+          - a-18
+          - a-19
+          - a-20
+        thenLabel: регистрация
+        elseLabel: заявка не оплачена
+        elseFrom: a-18
+meta:
+  savedAt: '2026-11-16T10:00:00Z'
+  source: 'REG: шаг 2 — оптимизированная архитектура политики (to-be)'

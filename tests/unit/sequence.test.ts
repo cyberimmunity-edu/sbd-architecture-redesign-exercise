@@ -283,13 +283,86 @@ describe('Окраска из ДАП (Ф-59, П-11, T-S-13)', () => {
     expect(colors.lifelines.get('ext-un')).toBe('red');
     expect(colors.lifelines.get('ext-tr')).toBe('green');
     // Стрелки по источнику: из красных — красные, из жёлтых и зелёных — зелёные (self тоже).
-    expect(colors.arrows.get('a-1')).toBe('red');
-    expect(colors.arrows.get('a-2')).toBe('green');
-    expect(colors.arrows.get('a-3')).toBe('red');
-    expect(colors.arrows.get('a-4')).toBe('green');
+    // Карта цветов стрелок — отдельная на каждую ДП (v0.03.01f).
+    const seqArrows = colors.arrows.get('seq-1');
+    expect(seqArrows?.get('a-1')).toBe('red');
+    expect(seqArrows?.get('a-2')).toBe('green');
+    expect(seqArrows?.get('a-3')).toBe('red');
+    expect(seqArrows?.get('a-4')).toBe('green');
     // Цвета производные: модель не изменена.
     expect(project.sequences![0].blocks[0].color).toBe('#F9A825');
     expect(project.sequences![0].arrows[0]).not.toHaveProperty('color');
+  });
+
+  it('Регрессия v0.03.01f: одноимённые стрелки разных ДП не затирают цвета друг друга', () => {
+    // В обеих ДП есть стрелка a-1: в seq-1 — из НДБ «perc» (красный источник),
+    // в seq-2 — из forceTrusted «plan» (зелёный). Раньше общая карта по id
+    // стрелки отдавала последней ДП цвет для всех ДП сразу: из красного
+    // домена рисовались зелёные стрелки.
+    const project = emptyProject();
+    project.architecture = {
+      blocks: [
+        { id: 'perc', name: '01. Сенсор', cost: 1 },
+        { id: 'plan', name: '02. Планировщик', cost: 1, forceTrusted: true },
+        { id: 'ext-un', name: 'Сенсор среды', cost: 0, external: true },
+      ],
+      edges: [
+        { id: 'e-1', from: 'perc', to: 'plan' },
+        { id: 'e-2', from: 'ext-un', to: 'perc' },
+      ],
+    };
+    const mk = (id: string, from: string, to: string): SequenceDiagram => ({
+      id,
+      name: `Тест ${id}`,
+      lifelines: ['perc', 'plan', 'ext-un'],
+      arrows: [{ id: 'a-1', from, to }],
+      blocks: [],
+    });
+    project.sequences = [mk('seq-1', 'perc', 'plan'), mk('seq-2', 'plan', 'perc')];
+    const colors = computeSeqColors(project);
+    // Один и тот же id «a-1» — разные цвета в разных ДП, по источнику своей ДП.
+    expect(colors.arrows.get('seq-1')?.get('a-1')).toBe('red');
+    expect(colors.arrows.get('seq-2')?.get('a-1')).toBe('green');
+    // Линии жизни — общая карта по уникальным id доменов, коллизий нет.
+    expect(colors.lifelines.get('perc')).toBe('red');
+    expect(colors.lifelines.get('plan')).toBe('yellow'); // forceTrusted + красный вход
+  });
+
+  it('Регрессия на файле пользователя (state_reg_00.yaml): в seq-1 стрелки из красных доменов красные', () => {
+    // Баг-отчёт v0.03.01f: пять ДП с одинаковой нумерацией a-1, a-2…;
+    // общая карта цветов отдавала ДП №5 цвета для всех ДП — в seq-1
+    // стрелки a-6/a-7/a-8/a-9/a-11/a-12 от красных DEV/Связь/Приём заявок
+    // рисовались зелёными (цветами одноимённых стрелок других ДП).
+    const project = parseStateYaml(
+      readFileSync(resolve(__dirname, '../fixtures/seq-colors/state_reg_00.yaml'), 'utf8'),
+    ).model!;
+    expect(project.sequences).toHaveLength(5);
+    const colors = computeSeqColors(project);
+
+    // Доверие в этой модели: Связь/Публикация/Приём заявок/Журнал/Функц. испытания — НДБ;
+    // Контроль оплаты, Решения, Реестр, Подпись, Хранилище и др. — в ДВБ.
+    const seq1 = colors.arrows.get('seq-1')!;
+    expect(seq1.get('a-6')).toBe('red'); // ext-dev → Связь: DEV — красная внешняя
+    expect(seq1.get('a-7')).toBe('red'); // Связь → Приём заявок: оба НДБ
+    expect(seq1.get('a-8')).toBe('red'); // Приём заявок → Связь
+    expect(seq1.get('a-9')).toBe('red'); // Связь → DEV
+    expect(seq1.get('a-11')).toBe('red'); // Связь → Приём заявок
+    expect(seq1.get('a-12')).toBe('red'); // Приём заявок → Контроль оплаты (ДДБПЦД)
+    expect(seq1.get('a-10')).toBe('green'); // BNK — доверенная внешняя
+    expect(seq1.get('a-13')).toBe('green'); // Контроль оплаты (ДВБ) → self
+    expect(seq1.get('a-14')).toBe('green'); // Контроль оплаты → Хранилище (ДВБ)
+
+    // В seq-2 стрелка a-4 (self Хранилища, ДВБ) — зелёная, хотя в seq-1
+    // одноимённая a-4 красная: карты ДП независимы.
+    expect(colors.arrows.get('seq-1')?.get('a-4')).toBe('red');
+    expect(colors.arrows.get('seq-2')?.get('a-4')).toBe('green');
+
+    // Линии жизни: внешние без trusted — красные, BNK (trusted) — зелёная;
+    // Контроль оплаты — ДДБПЦД (жёлтый: красный вход от НДБ «Приём заявок»).
+    expect(colors.lifelines.get('ext-dev')).toBe('red');
+    expect(colors.lifelines.get('ext-bnk')).toBe('green');
+    expect(colors.lifelines.get('blk-comm')).toBe('red');
+    expect(colors.lifelines.get('blk-payment')).toBe('yellow');
   });
 });
 
