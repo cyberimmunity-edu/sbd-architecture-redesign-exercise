@@ -2,7 +2,9 @@
  * Тесты автоматической раскладки — v0.01.03 (слои, детерминизм, устойчивость
  * к циклам), v0.01.07: минимизация пересечений проходами барицентров,
  * выравнивание вертикалей по связям (метод Брандеса–Кёпфа), внешние системы
- * по сторонам рамки (источники слева, приёмники справа) и нормировка границ.
+ * по сторонам рамки (источники слева, приёмники справа) и нормировка границ;
+ * v0.03.01i: серпантинная упаковка слоёв в полосы — ширина длинной ленты
+ * становится сопоставима с высотой, нечётные полосы зеркальны.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -184,5 +186,108 @@ describe('Автоматическая раскладка (v0.01.03)', () => {
     // Обе внешние — без внутренних соседей: стек, домен a не сдвинут.
     expect(result.get('a')!.x).toBe(80);
     expect(result.get('ext-2')!.y).toBeGreaterThan(result.get('ext-1')!.y);
+  });
+});
+
+describe('Серпантинная упаковка слоёв в полосы (v0.03.01i)', () => {
+  /** Цепочка из n доменов a0 → a1 → … — лента из n слоёв по одному домену. */
+  function chain(n: number): { blocks: Block[]; edges: Edge[] } {
+    return {
+      blocks: Array.from({ length: n }, (_, i) => block(`a${i}`)),
+      edges: Array.from({ length: n - 1 }, (_, i) => ({
+        id: `e${i}`,
+        from: `a${i}`,
+        to: `a${i + 1}`,
+      })),
+    };
+  }
+
+  function bbox(positions: Map<string, { x: number; y: number }>): { w: number; h: number } {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const p of positions.values()) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+    return { w: maxX - minX, h: maxY - minY };
+  }
+
+  it('длинная лента заворачивается: ширина сопоставима с высотой', () => {
+    const { blocks, edges } = chain(9);
+    const result = computeAutoLayout(arch(blocks, edges));
+    expect(result.size).toBe(9);
+    const { w, h } = bbox(result);
+    // Без упаковки лента 9 слоёв тянулась на ~3200×170 (пропорция ~19);
+    // после заворота в полосы пропорция близка к целевой.
+    expect(w / h).toBeGreaterThan(0.8);
+    expect(w / h).toBeLessThan(2.2);
+    // Полосы сложены по вертикали: вторая полоса ниже первой.
+    expect(result.get('a3')!.y).toBeGreaterThan(result.get('a0')!.y);
+    expect(result.get('a6')!.y).toBeGreaterThan(result.get('a3')!.y);
+  });
+
+  it('полосы идут змейкой: нечётная полоса зеркальна, стык — у края', () => {
+    const { blocks, edges } = chain(9);
+    const result = computeAutoLayout(arch(blocks, edges));
+    // Полоса 0: слои идут слева направо.
+    expect(result.get('a0')!.x).toBeLessThan(result.get('a1')!.x);
+    expect(result.get('a1')!.x).toBeLessThan(result.get('a2')!.x);
+    // Полоса 1 зеркальна: слои идут справа налево.
+    expect(result.get('a3')!.x).toBeGreaterThan(result.get('a4')!.x);
+    expect(result.get('a4')!.x).toBeGreaterThan(result.get('a5')!.x);
+    // Связь-стык a2 → a3 короткая: оба у правого края (поворот змейки).
+    expect(result.get('a3')!.x).toBe(result.get('a2')!.x);
+    // Полоса 2 снова слева направо.
+    expect(result.get('a6')!.x).toBeLessThan(result.get('a7')!.x);
+    // Домены разных полос не совпадают по позиции.
+    expect(result.get('a5')!.y).toBeLessThan(result.get('a6')!.y);
+  });
+
+  it('упаковка детерминирована и не зависит от порядка блоков', () => {
+    const { blocks, edges } = chain(9);
+    const first = computeAutoLayout(arch(blocks, edges));
+    const second = computeAutoLayout(arch([...blocks].reverse(), edges));
+    expect([...first.entries()]).toEqual([...second.entries()]);
+  });
+
+  it('лента из четырёх слоёв заворачивается, из трёх — нет', () => {
+    const c4 = chain(4);
+    const four = computeAutoLayout(arch(c4.blocks, c4.edges));
+    // 4 слоя — упаковка уже включается: полоса 2 ниже полосы 1.
+    expect(four.get('a2')!.y).toBeGreaterThan(four.get('a0')!.y);
+    const c3 = chain(3);
+    const three = computeAutoLayout(arch(c3.blocks, c3.edges));
+    // 3 слоя — прежнее поведение: одна лента, домены в одну строку.
+    expect(three.get('a0')!.y).toBe(three.get('a1')!.y);
+    expect(three.get('a1')!.y).toBe(three.get('a2')!.y);
+  });
+
+  it('внешние системы при упаковке: источник слева, приёмник справа, выравнивание сохранено', () => {
+    const { blocks, edges } = chain(9);
+    blocks.push(block('src', true), block('sink', true));
+    edges.push(
+      { id: 'es', from: 'src', to: 'a0' },
+      { id: 'ek', from: 'a8', to: 'sink' },
+    );
+    const result = computeAutoLayout(arch(blocks, edges));
+    const internalX = [...result.entries()]
+      .filter(([id]) => id.startsWith('a'))
+      .map(([, p]) => p.x);
+    const leftInternal = Math.min(...internalX);
+    const rightInternal = Math.max(...internalX) + NODE_ESTIMATED_WIDTH;
+    expect(result.get('src')!.x + NODE_ESTIMATED_WIDTH).toBeLessThan(leftInternal);
+    expect(result.get('sink')!.x).toBeGreaterThan(rightInternal);
+    // Источник выровнен по вертикали первого домена ленты.
+    expect(result.get('src')!.y + NODE_ESTIMATED_HEIGHT / 2).toBeCloseTo(
+      result.get('a0')!.y + NODE_ESTIMATED_HEIGHT / 2,
+      0,
+    );
+    // Диаграмма не выходит из области раскладки.
+    const minX = Math.min(...[...result.values()].map((p) => p.x));
+    expect(minX).toBeGreaterThanOrEqual(80);
   });
 });

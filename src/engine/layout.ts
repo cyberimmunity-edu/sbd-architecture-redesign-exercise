@@ -12,18 +12,27 @@
  * 2. Порядок в слое минимизирует пересечения стрелок: серия проходов
  *    барицентров вниз и вверх (как median/barycenter в dot); после каждого
  *    прохода считается число пересечений и сохраняется лучший порядок.
- * 3. Вертикальные координаты — не жёсткой решёткой, а выравниванием
+ * 3. Поперечные координаты — не жёсткой решёткой, а выравниванием
  *    по связям (упрощённый метод Брандеса–Кёпфа из dot): четыре варианта
  *    однократного выравнивания (к предшественникам / к преемникам, каждый
- *    с верхней/нижней медианой), итоговая вертикаль узла — медиана
+ *    с верхней/нижней медианой), итоговая координата — медиана
  *    вариантов, затем разрешение наложений. Стрелки между соседними слоями
  *    выходят короткими и по возможности параллельными, ромбы — симметричными.
- * 4. Внешние системы ставятся по обе стороны рамки периметра:
+ * 4. Серпантинная упаковка слоёв в полосы (v0.03.01i): слои образуют ленту
+ *    слева направо; когда лента вытягивается в длину (много слоёв, мало
+ *    доменов в слое) и диаграмма теряет читаемость, лента заворачивается
+ *    в несколько горизонтальных полос — полосы складываются по вертикали,
+ *    нечётные рисуются зеркально («змейкой», как разворот строки текста),
+ *    поэтому связи на стыке полос остаются короткими. Число слоёв в полосе
+ *    выбирается перебором — так, чтобы итоговая пропорция (ширина к высоте,
+ *    с учётом боков под внешние системы) была ближе всего к целевой.
+ *    Ленты из трёх и менее слоёв не заворачиваются — поведение прежнее.
+ * 5. Внешние системы ставятся по обе стороны рамки периметра:
  *    преимущественно источники (стрелки в систему) — слева, преимущественно
  *    приёмники — справа; при равенстве доверенная внешняя система слева,
  *    недоверенная справа. По вертикали внешняя система тянется к средней
  *    вертикали связанных с ней доменов, совпадающие позиции раздвигаются.
- * 5. Габариты узлов берутся из sizes (измеренные размеры узлов канвы);
+ * 6. Габариты узлов берутся из sizes (измеренные размеры узлов канвы);
  *    без них — оценка 300×170 (NODE_ESTIMATED_*).
  *
  * Функция чистая: архитектура не изменяется, возвращается новый словарь
@@ -39,6 +48,14 @@ import { FRAME_PADDING, NODE_ESTIMATED_HEIGHT, NODE_ESTIMATED_WIDTH } from './tr
 const COLUMN_GAP = 120;
 /** Зазор между доменами одного слоя по вертикали, px. */
 const ROW_GAP = 64;
+/** Зазор между полосами слоёв по вертикали (v0.03.01i), px. */
+const BAND_GAP = 120;
+/** Целевое отношение ширины диаграммы к высоте при упаковке полос
+ *  (v0.03.01i): слегка альбомное — под типовой экран. */
+const TARGET_ASPECT = 1.6;
+/** Минимальное число слоёв, при котором лента может заворачиваться
+ *  в полосы (v0.03.01i); короткие ленты не заворачиваются. */
+const MIN_LAYERS_FOR_BANDS = 4;
 /** Координата левого верхнего угла области раскладки, px. */
 const ORIGIN = 80;
 /** Отступ внешних систем от рамки периметра, px (с каждой стороны). */
@@ -229,19 +246,12 @@ export function computeAutoLayout(
   for (const [layer, ids] of bestColumns) columns.set(layer, ids);
   setRows();
 
-  // 3. Координаты (v0.01.07, упрощённый метод Брандеса–Кёпфа): четыре
-  //    варианта однократного выравнивания — к предшественникам слева направо
-  //    и к преемникам справа налево, каждый с верхней/нижней медианой —
-  //    без обратной связи; итоговая вертикаль узла — медиана четырёх
-  //    вариантов (как в dot), затем разрешение наложений с сохранением
+  // 3. Поперечные координаты (v0.01.07, упрощённый метод Брандеса–Кёпфа):
+  //    четыре варианта однократного выравнивания — к предшественникам слева
+  //    направо и к преемникам справа налево, каждый с верхней/нижней медианой —
+  //    без обратной связи; итоговая поперечная координата узла — медиана
+  //    четырёх вариантов (как в dot), затем разрешение наложений с сохранением
   //    порядка колонки. Ромб ложится симметрично, цепочка — в одну строку.
-  let x = ORIGIN;
-  const columnX = new Map<number, number>();
-  for (const layer of layers) {
-    const width = Math.max(...(columns.get(layer) ?? []).map((id) => sizeOf(id).width), 1);
-    columnX.set(layer, x);
-    x += width + COLUMN_GAP;
-  }
   const variantYs = new Map<string, number[]>();
   const medianCenter = (centers: number[], pick: 'upper' | 'lower'): number => {
     const sorted = [...centers].sort((a, b) => a - b);
@@ -292,13 +302,14 @@ export function computeAutoLayout(
   buildVariant('preds', 'upper');
   buildVariant('succs', 'lower');
   buildVariant('succs', 'upper');
+  const crossOf = new Map<string, number>();
   for (const layer of layers) {
     for (const id of columns.get(layer) ?? []) {
       const values = [...(variantYs.get(id) ?? [ORIGIN])].sort((a, b) => a - b);
       const mid = values.length % 2 === 1
         ? values[(values.length - 1) / 2]
         : (values[values.length / 2 - 1] + values[values.length / 2]) / 2;
-      positions.set(id, { x: columnX.get(layer) ?? ORIGIN, y: mid });
+      crossOf.set(id, mid);
     }
   }
   // Финальное разрешение наложений: медианы сохраняют порядок колонок
@@ -308,10 +319,138 @@ export function computeAutoLayout(
     let prevBottom = -Infinity;
     for (const id of columns.get(layer) ?? []) {
       const height = sizeOf(id).height;
-      const current = positions.get(id)!;
-      const y = Math.max(current.y, prevBottom + ROW_GAP);
-      positions.set(id, { x: current.x, y });
-      prevBottom = y + height;
+      const cross = Math.max(crossOf.get(id) ?? ORIGIN, prevBottom + ROW_GAP);
+      crossOf.set(id, cross);
+      prevBottom = cross + height;
+    }
+  }
+
+  // Нормировка поперечных координат: верх области раскладки — ORIGIN
+  // (медианы могли увести верхний край выше области).
+  let minCross = Infinity;
+  for (const cross of crossOf.values()) minCross = Math.min(minCross, cross);
+  if (Number.isFinite(minCross) && minCross !== ORIGIN) {
+    const shift = ORIGIN - minCross;
+    for (const [id, cross] of crossOf) crossOf.set(id, cross + shift);
+  }
+
+  // Стороны внешних систем не зависят от позиций (только потоки стрелок
+  // и доверие) — нужны заранее для оценки пропорций при упаковке полос.
+  const outDegree = new Map<string, number>();
+  const inDegree = new Map<string, number>();
+  for (const edge of architecture.edges) {
+    // Исходящие из внешней системы (источники) и входящие в неё (приёмники).
+    if (externalIds.has(edge.from) && internalIds.has(edge.to)) {
+      outDegree.set(edge.from, (outDegree.get(edge.from) ?? 0) + 1);
+    }
+    if (externalIds.has(edge.to) && internalIds.has(edge.from)) {
+      inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
+    }
+  }
+  const leftGroup: string[] = [];
+  const rightGroup: string[] = [];
+  for (const block of [...externals].sort((a, b) => a.id.localeCompare(b.id))) {
+    const out = outDegree.get(block.id) ?? 0;
+    const inc = inDegree.get(block.id) ?? 0;
+    const toLeft = out > inc || (out === inc && (block.trusted ?? false));
+    (toLeft ? leftGroup : rightGroup).push(block.id);
+  }
+  const externalMaxWidth =
+    externals.length > 0 ? Math.max(...externals.map((b) => sizeOf(b.id).width)) : 0;
+  // Боковой запас под внешние системы (каждая занятая сторона рамки).
+  const sideExtent =
+    (leftGroup.length > 0 ? EXTERNAL_GAP + FRAME_PADDING + externalMaxWidth : 0) +
+    (rightGroup.length > 0 ? EXTERNAL_GAP + FRAME_PADDING + externalMaxWidth : 0);
+
+  // 3б. Серпантинная упаковка слоёв в полосы (v0.03.01i): слои образуют
+  //    ленту слева направо; длинная лента (много слоёв, мало доменов
+  //    в слое) заворачивается в несколько горизонтальных полос — ширина
+  //    диаграммы становится сопоставима с высотой. Нечётные полосы
+  //    рисуются зеркально («змейкой»), чтобы связи на стыке полос были
+  //    короткими. Число слоёв в полосе — перебором: пропорция ближе всего
+  //    к целевой; при равенстве побеждает меньше полос (меньше стыков).
+  const columnWidth = new Map<number, number>();
+  for (const layer of layers) {
+    columnWidth.set(layer, Math.max(...(columns.get(layer) ?? []).map((id) => sizeOf(id).width), 1));
+  }
+  const layerBottom = (layer: number): number => {
+    let bottom = ORIGIN;
+    for (const id of columns.get(layer) ?? []) {
+      bottom = Math.max(bottom, (crossOf.get(id) ?? ORIGIN) + sizeOf(id).height);
+    }
+    return bottom;
+  };
+  // Габариты диаграммы при заданном числе слоёв в полосе.
+  const bandBounds = (size: number): { width: number; height: number } => {
+    const count = Math.ceil(layers.length / size);
+    let width = 0;
+    let height = 0;
+    for (let b = 0; b < count; b += 1) {
+      const bandLayers = layers.slice(b * size, (b + 1) * size);
+      let w = 0;
+      let bottom = ORIGIN;
+      for (const layer of bandLayers) {
+        w += (columnWidth.get(layer) ?? 0) + COLUMN_GAP;
+        bottom = Math.max(bottom, layerBottom(layer));
+      }
+      width = Math.max(width, w - COLUMN_GAP);
+      height += bottom - ORIGIN + (b + 1 < count ? BAND_GAP : 0);
+    }
+    return { width, height };
+  };
+  let bandSize = layers.length; // одна лента — прежнее поведение
+  if (layers.length >= MIN_LAYERS_FOR_BANDS) {
+    const deviation = (size: number): number => {
+      const { width, height } = bandBounds(size);
+      const ratio = (width + sideExtent) / Math.max(height, 1);
+      return Math.abs(Math.log(ratio) - Math.log(TARGET_ASPECT));
+    };
+    let best = deviation(bandSize);
+    for (let candidate = bandSize - 1; candidate >= 1; candidate -= 1) {
+      const candidateDeviation = deviation(candidate);
+      if (candidateDeviation < best - 1e-9) {
+        best = candidateDeviation;
+        bandSize = candidate;
+      }
+    }
+  }
+  const bandCount = Math.ceil(layers.length / bandSize);
+  // Смещения полос по поперечной оси, высоты и ширины полос.
+  const bandOffset: number[] = [];
+  const bandHeight: number[] = [];
+  const bandWidth: number[] = [];
+  let crossOffset = 0;
+  for (let b = 0; b < bandCount; b += 1) {
+    const bandLayers = layers.slice(b * bandSize, (b + 1) * bandSize);
+    let bottom = ORIGIN;
+    let w = 0;
+    for (const layer of bandLayers) {
+      bottom = Math.max(bottom, layerBottom(layer));
+      w += (columnWidth.get(layer) ?? 0) + COLUMN_GAP;
+    }
+    bandOffset.push(crossOffset);
+    bandHeight.push(bottom - ORIGIN);
+    bandWidth.push(w - COLUMN_GAP);
+    crossOffset += bottom - ORIGIN + BAND_GAP;
+  }
+  for (let b = 0; b < bandCount; b += 1) {
+    const bandLayers = layers.slice(b * bandSize, (b + 1) * bandSize);
+    const mirrored = b % 2 === 1;
+    const top = ORIGIN + bandOffset[b];
+    let localX = 0;
+    for (const layer of bandLayers) {
+      const width = columnWidth.get(layer) ?? 0;
+      const layerX = ORIGIN + (mirrored ? bandWidth[b] - localX - width : localX);
+      for (const id of columns.get(layer) ?? []) {
+        const raw = crossOf.get(id) ?? ORIGIN;
+        // Зеркалирование внутри полосы: ly' = h − ly − height, где ly —
+        // локальная поперечная координата от верха полосы.
+        const cross = mirrored
+          ? top + bandHeight[b] + ORIGIN - raw - sizeOf(id).height
+          : raw + bandOffset[b];
+        positions.set(id, { x: layerX, y: cross });
+      }
+      localX += width + COLUMN_GAP;
     }
   }
 
@@ -328,17 +467,6 @@ export function computeAutoLayout(
     if (internalIds.has(edge.from) && externalIds.has(edge.to)) push(edge.to, edge.from);
     if (internalIds.has(edge.to) && externalIds.has(edge.from)) push(edge.from, edge.to);
   }
-  const outDegree = new Map<string, number>();
-  const inDegree = new Map<string, number>();
-  for (const edge of architecture.edges) {
-    // Исходящие из внешней системы (источники) и входящие в неё (приёмники).
-    if (externalIds.has(edge.from) && internalIds.has(edge.to)) {
-      outDegree.set(edge.from, (outDegree.get(edge.from) ?? 0) + 1);
-    }
-    if (externalIds.has(edge.to) && internalIds.has(edge.from)) {
-      inDegree.set(edge.to, (inDegree.get(edge.to) ?? 0) + 1);
-    }
-  }
   const desiredY = (id: string): number => {
     const neighbors = neighborsOfExternal.get(id) ?? [];
     const height = sizeOf(id).height;
@@ -350,14 +478,6 @@ export function computeAutoLayout(
     }
     return Math.max(ORIGIN, sum / neighbors.length - height / 2);
   };
-  const leftGroup: string[] = [];
-  const rightGroup: string[] = [];
-  for (const block of [...externals].sort((a, b) => a.id.localeCompare(b.id))) {
-    const out = outDegree.get(block.id) ?? 0;
-    const inc = inDegree.get(block.id) ?? 0;
-    const toLeft = out > inc || (out === inc && (block.trusted ?? false));
-    (toLeft ? leftGroup : rightGroup).push(block.id);
-  }
   const placeExternals = (ids: string[], sideX: number): void => {
     ids.sort((a, b) => desiredY(a) - desiredY(b) || a.localeCompare(b));
     let lastBottom = -Infinity;
