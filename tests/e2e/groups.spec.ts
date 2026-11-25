@@ -4,7 +4,9 @@
  * через тулбар «Правка»; включение/исключение ДБ перетаскиванием;
  * свёртывание (скрытие членов, перенос связей на рамку); раскрытие при
  * подсветке из таблицы ДВБ (Ф-76); удаление ЛГ (ДБ остаются) и отмена;
- * палитра цветов без красного/жёлтого/зелёного; сохранение в localStorage.
+ * палитра цветов без красного/жёлтого/зелёного; сохранение в localStorage;
+ * v0.03.01h: вложенная ЛГ из контекстного меню рамки (Ф-71), кнопки
+ * канвы «Свернуть ЛГ»/«Развернуть ЛГ» с вложенными ЛГ и гашением без ЛГ.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -233,4 +235,74 @@ test('v0.02.03b: ЛГ перемещается целиком плашкой; Д
   expect(mid2.x).toBeCloseTo(mid.x, 0);
   expect(mid2.y).toBeCloseTo(mid.y, 0);
   expect((await nodePos('blk-perc'))!.x).toBeCloseTo(mid.x, 0);
+});
+
+test('v0.03.01h: вложенная ЛГ создаётся из контекстного меню рамки (Ф-71, П-71)', async ({ page }) => {
+  // План + привод уже в lg-1; выбираем их и создаём ЛГ внутри lg-1.
+  await selectPair(page, 'blk-plan', 'blk-drive');
+  await page.getByTestId('lg-chip-lg-1').click({ button: 'right' });
+  await expect(page.getByTestId('canvas-context-menu')).toBeVisible();
+  await page.getByTestId('lg-ctx-create-nested').click();
+  await expect(page.getByTestId('lg-name-input')).toBeVisible();
+  await page.getByTestId('lg-name-input').fill('Исполнительный контур');
+  await page.getByTestId('lg-apply').click();
+  // Вложенная рамка с двумя членами появилась внутри lg-1:
+  // 4 ДБ + 2 внешние + периметр + lg-1 + lg-2.
+  await expect(page.locator('[data-lg-id="lg-2"]')).toHaveCount(1);
+  await expect(page.getByTestId('lg-chip-lg-2')).toContainText('Исполнительный контур');
+  await expect(page.getByTestId('lg-chip-lg-2')).toContainText('(2)');
+  await expect(page.locator('.react-flow__node')).toHaveCount(9);
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+  // Один шаг истории: Ctrl+Z удаляет вложенную ЛГ, члены остаются в lg-1.
+  await page.getByTestId('undo').click();
+  await expect(page.locator('[data-lg-id="lg-2"]')).toHaveCount(0);
+  await expect(page.getByTestId('lg-chip-lg-1')).toContainText('(2)');
+});
+
+test('v0.03.01h: кнопки канвы «Свернуть ЛГ»/«Развернуть ЛГ» накрывают вложенные ЛГ (Ф-72)', async ({
+  page,
+}) => {
+  // Вложенная ЛГ: lg-2 (план + привод) внутри lg-1.
+  await selectPair(page, 'blk-plan', 'blk-drive');
+  await page.getByTestId('lg-chip-lg-1').click({ button: 'right' });
+  await page.getByTestId('lg-ctx-create-nested').click();
+  await page.getByTestId('lg-apply').click();
+  await expect(page.locator('[data-lg-id="lg-2"]')).toHaveCount(1);
+
+  // «Свернуть ЛГ» на канве: сворачиваются все ЛГ сразу, включая вложенную.
+  await page.getByTestId('lg-collapse-all-canvas').click();
+  await expect(page.locator('[data-lg-id="lg-1"][data-lg-collapsed="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(0);
+  await expect(page.locator('[data-block-id="blk-drive"]')).toHaveCount(0);
+  // Несгруппированные домены остаются; внутренняя связь ЛГ скрыта (6 → 5).
+  await expect(page.locator('[data-block-id="blk-perc"]')).toHaveCount(1);
+  await expect(page.locator('.react-flow__edge')).toHaveCount(5);
+
+  // «Развернуть ЛГ» возвращает всё: и вложенную рамку, и членов.
+  await page.getByTestId('lg-expand-all-canvas').click();
+  await expect(page.locator('[data-lg-id="lg-1"][data-lg-collapsed="false"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="blk-drive"]')).toHaveCount(1);
+  await expect(page.locator('.react-flow__edge')).toHaveCount(6);
+
+  // Пара кнопок — две операции истории: Ctrl+Z возвращает свёрнутость.
+  await page.getByTestId('undo').click();
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(0);
+  await page.getByTestId('redo').click();
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+});
+
+test('v0.03.01h: без ЛГ кнопки канвы «Свернуть ЛГ»/«Развернуть ЛГ» погашены (Ф-72)', async ({
+  page,
+}) => {
+  // Демо робота содержит lg-1 — кнопки активны.
+  await expect(page.getByTestId('lg-collapse-all-canvas')).toBeEnabled();
+  await expect(page.getByTestId('lg-expand-all-canvas')).toBeEnabled();
+
+  // Удаление единственной ЛГ: кнопки гаснут, пока ЛГ нет.
+  await page.getByTestId('lg-chip-lg-1').click({ button: 'right' });
+  await page.getByTestId('lg-ctx-delete').click();
+  await expect(page.locator('[data-lg-id="lg-1"]')).toHaveCount(0);
+  await expect(page.getByTestId('lg-collapse-all-canvas')).toBeDisabled();
+  await expect(page.getByTestId('lg-expand-all-canvas')).toBeDisabled();
 });

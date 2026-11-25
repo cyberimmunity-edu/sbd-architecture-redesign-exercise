@@ -109,7 +109,7 @@ describe('Операции ЛГ (v0.02.03)', () => {
     expect((project().architecture.groups ?? []).find((g) => g.id === id)?.name).toBe('Новая ЛГ');
   });
 
-  it('свёртывание/развёртывание — операция истории; «все» — один шаг', () => {
+  it('свёртывание/развёртывание — операция истории; «все» — один шаг, включая вложенные', () => {
     const store = useSkibStore.getState();
     const id = store.createGroup({ memberIds: ['dom-a', 'dom-b'] });
     useSkibStore.setState({ past: [], future: [] });
@@ -119,9 +119,13 @@ describe('Операции ЛГ (v0.02.03)', () => {
     expect((project().architecture.groups ?? []).find((g) => g.id === id)?.collapsed).toBe(false);
 
     useSkibStore.getState().createGroup({ name: 'Вторая', memberIds: ['dom-c'] });
+    // Вложенная ЛГ: «свернуть/развернуть все» накрывает и её (v0.03.01h).
+    const nested = useSkibStore.getState().createGroup({ name: 'Вложенная', parentId: id! });
+    expect(nested).not.toBeNull();
     useSkibStore.setState({ past: [], future: [] });
     useSkibStore.getState().setAllGroupsCollapsed(true);
     expect((project().architecture.groups ?? []).every((g) => g.collapsed)).toBe(true);
+    expect((project().architecture.groups ?? []).find((g) => g.id === nested)?.parentId).toBe(id);
     expect(useSkibStore.getState().past).toHaveLength(1);
     useSkibStore.getState().setAllGroupsCollapsed(false);
     expect((project().architecture.groups ?? []).every((g) => !g.collapsed)).toBe(true);

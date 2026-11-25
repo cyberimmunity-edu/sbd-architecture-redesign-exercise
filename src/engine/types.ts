@@ -270,4 +270,4 @@ export function emptyProject(): Project {
  *  Синхронизируется с package.json, TAG Makefile и ARG APP_VERSION Dockerfile
  *  (раздел 10 ТЗ v0.02.01); согласованность закреплена тестом
  *  tests/unit/version.test.ts — при выпуске версии меняется везде сразу. */
-export const APP_VERSION = '0.03.01g';
+export const APP_VERSION = '0.03.01h';

@@ -86,7 +86,7 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import { Button } from '@/components/ui/button';
-import { Crosshair, Network, Scaling, Waypoints } from 'lucide-react';
+import { ChevronsDownUp, ChevronsUpDown, Crosshair, Network, Scaling, Waypoints } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useSkibStore } from '../store/projectStore';
 import { FOCUS_NODE_EVENT, FOCUS_RECT_EVENT, useViewStore } from '../store/viewStore';
@@ -383,6 +383,11 @@ function CanvasInner() {
   const toggleShowEdges = useViewStore((s) => s.toggleShowEdges);
   const toggleFocusInternal = useViewStore((s) => s.toggleFocusInternal);
   const expandAllPorts = useViewStore((s) => s.expandAllPorts);
+  // Кнопки ЛГ на канве (v0.03.01h): «Свернуть ЛГ»/«Развернуть ЛГ» (Ф-72)
+  // рядом с «Раскладка» — дублируют пункты меню «ЛГ» тулбара; действие
+  // накрывает и вложенные ЛГ (setAllGroupsCollapsed идёт по всем группам).
+  const lgGroupCount = useSkibStore((s) => (s.project.architecture.groups ?? []).length);
+  const setAllGroupsCollapsed = useSkibStore((s) => s.setAllGroupsCollapsed);
   // Автоматические размеры доменов (v0.01.08): off → cost → block.
   const sizeMode = useViewStore((s) => s.sizeMode);
   const cycleSizeMode = useViewStore((s) => s.cycleSizeMode);
@@ -1713,6 +1718,32 @@ function CanvasInner() {
           >
             <Network className="mr-1 h-3.5 w-3.5" aria-hidden />
             {ru.canvas.labelLayout}
+          </Button>
+          {/* Свернуть/развернуть все ЛГ на канве (v0.03.01h, Ф-72):
+              одна операция истории, накрывает вложенные ЛГ. */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 bg-popover/95 shadow-sm"
+            data-testid="lg-collapse-all-canvas"
+            disabled={lgGroupCount === 0}
+            title={ru.canvas.lgCollapseAllTitle}
+            onClick={() => setAllGroupsCollapsed(true)}
+          >
+            <ChevronsDownUp className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {ru.canvas.labelLgCollapse}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 bg-popover/95 shadow-sm"
+            data-testid="lg-expand-all-canvas"
+            disabled={lgGroupCount === 0}
+            title={ru.canvas.lgExpandAllTitle}
+            onClick={() => setAllGroupsCollapsed(false)}
+          >
+            <ChevronsUpDown className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {ru.canvas.labelLgExpand}
           </Button>
           <Button
             size="sm"
