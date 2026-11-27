@@ -1,5 +1,5 @@
 /**
- * Автоматическая раскладка доменов безопасности — v0.01.07.
+ * Автоматическая раскладка доменов безопасности — v0.01.07, ЛГ — v0.03.01k.
  *
  * Принцип приблиён к Graphviz (dot): слоёная раскладка слева направо
  * с минимизацией пересечений и выравниванием доменов по связям.
@@ -27,12 +27,22 @@
  *    выбирается перебором — так, чтобы итоговая пропорция (ширина к высоте,
  *    с учётом боков под внешние системы) была ближе всего к целевой.
  *    Ленты из трёх и менее слоёв не заворачиваются — поведение прежнее.
- * 5. Внешние системы ставятся по обе стороны рамки периметра:
+ * 5. Логические группы учитываются геометрией (v0.03.01k):
+ *    а) ЛГ-смежность — в каждой колонке члены одной ЛГ (поддерево её
+ *    верхней группы) стоят подряд, не перемешиваясь с чужими доменами;
+ *    б) уплотнение — члены одного юнита в колонке ставятся вплотную
+ *    (зазор ROW_GAP), медианы соседних колонок не растягивают рамку ЛГ —
+ *    площадь рамки минимальна при данной структуре потоков;
+ *    в) разрешение наложений — охватывающие прямоугольники ЛГ (рамки
+ *    считаются развёрнутыми) разводятся сдвигом поддерева вниз, если
+ *    пересекают рамку другой ЛГ или чужой ДБ; полная вложенность (рамки
+ *    предков и потомков, члены своего поддерева) наложением не считается.
+ * 6. Внешние системы ставятся по обе стороны рамки периметра:
  *    преимущественно источники (стрелки в систему) — слева, преимущественно
  *    приёмники — справа; при равенстве доверенная внешняя система слева,
  *    недоверенная справа. По вертикали внешняя система тянется к средней
  *    вертикали связанных с ней доменов, совпадающие позиции раздвигаются.
- * 6. Габариты узлов берутся из sizes (измеренные размеры узлов канвы);
+ * 7. Габариты узлов берутся из sizes (измеренные размеры узлов канвы);
  *    без них — оценка 300×170 (NODE_ESTIMATED_*).
  *
  * Функция чистая: архитектура не изменяется, возвращается новый словарь
@@ -43,13 +53,25 @@
 
 import type { Architecture } from './types';
 import { FRAME_PADDING, NODE_ESTIMATED_HEIGHT, NODE_ESTIMATED_WIDTH } from './trust';
+import {
+  computeGroupGeometry,
+  computeGroupVisibility,
+  groupAncestors,
+  groupSubtree,
+  subtreeBlockIds,
+  type LgRect,
+} from './groups';
 
 /** Зазор между колонками слоёв, px. */
 const COLUMN_GAP = 120;
 /** Зазор между доменами одного слоя по вертикали, px. */
-const ROW_GAP = 64;
+export const ROW_GAP = 64;
 /** Зазор между полосами слоёв по вертикали (v0.03.01i), px. */
 const BAND_GAP = 120;
+/** Зазор между рамками разных ЛГ и чужими ДБ при раскладке (v0.03.01k), px. */
+const LG_LAYOUT_GAP = 24;
+/** Предохранительный предел проходов разрешения наложений ЛГ (v0.03.01k). */
+const LG_RESOLVE_PASSES = 12;
 /** Целевое отношение ширины диаграммы к высоте при упаковке полос
  *  (v0.03.01i): слегка альбомное — под типовой экран. */
 const TARGET_ASPECT = 1.6;
@@ -117,7 +139,7 @@ function countCrossings(
  * по сторонам рамки). Возвращает пустой словарь для пустой архитектуры.
  */
 export function computeAutoLayout(
-  architecture: Pick<Architecture, 'blocks' | 'edges'>,
+  architecture: Pick<Architecture, 'blocks' | 'edges' | 'groups'>,
   options?: AutoLayoutOptions,
 ): Map<string, LayoutPosition> {
   const positions = new Map<string, LayoutPosition>();
@@ -150,6 +172,19 @@ export function computeAutoLayout(
     if (succ && internalIds.has(edge.to)) succ.push(edge.to);
   }
   const sortedIds = internal.map((b) => b.id).sort();
+
+  // Ключ «юнита» раскладки (v0.03.01k): верхняя ЛГ цепочки предков или сам
+  // домен (несгруппированный). Члены одного юнита держатся вместе в колонках
+  // — рамки ЛГ не перемешиваются с чужими доменами.
+  const groupsAll = architecture.groups ?? [];
+  const knownGroupIds = new Set(groupsAll.map((g) => g.id));
+  const rootGroupOfBlock = new Map<string, string>();
+  for (const block of internal) {
+    if (!block.groupId || !knownGroupIds.has(block.groupId)) continue;
+    const chain = groupAncestors(groupsAll, block.groupId);
+    rootGroupOfBlock.set(block.id, chain.length > 0 ? chain[chain.length - 1] : block.groupId);
+  }
+  const unitOf = (id: string): string => rootGroupOfBlock.get(id) ?? `blk:${id}`;
 
   // 1. Слой = длина самого длинного пути от источников; циклы разрываются
   //    детерминированно (как dot с обратными дугами): раз в волне нет
@@ -246,6 +281,44 @@ export function computeAutoLayout(
   for (const [layer, ids] of bestColumns) columns.set(layer, ids);
   setRows();
 
+  // 2б. ЛГ-смежность в колонке (v0.03.01k): члены одной ЛГ — всё поддерево
+  //     верхней группы — стоят в колонке подряд; иначе рамки ЛГ чередуются
+  //     с чужими доменами и накладываются друг на друга. Юниты упорядочиваются
+  //     по средней «строке» членов (барицентр юнита — продолжение проходов
+  //     барицентров), порядок внутри юнита сохраняется; при равенстве — юнит,
+  //     начавшийся выше, затем ключ (детерминизм).
+  if (rootGroupOfBlock.size > 0) {
+    for (const layer of layers) {
+      const ids = columns.get(layer) ?? [];
+      if (ids.length <= 1) continue;
+      const stats = new Map<string, { sum: number; count: number; first: number }>();
+      ids.forEach((id, row) => {
+        const unit = unitOf(id);
+        const entry = stats.get(unit);
+        if (entry) {
+          entry.sum += row;
+          entry.count += 1;
+        } else {
+          stats.set(unit, { sum: row, count: 1, first: row });
+        }
+      });
+      const units = [...stats.keys()].sort((a, b) => {
+        const ua = stats.get(a)!;
+        const ub = stats.get(b)!;
+        const diff = ua.sum / ua.count - ub.sum / ub.count;
+        return diff !== 0 ? diff : ua.first - ub.first || a.localeCompare(b);
+      });
+      const ordered: string[] = [];
+      for (const unit of units) {
+        for (const id of ids) {
+          if (unitOf(id) === unit) ordered.push(id);
+        }
+      }
+      columns.set(layer, ordered);
+    }
+    setRows();
+  }
+
   // 3. Поперечные координаты (v0.01.07, упрощённый метод Брандеса–Кёпфа):
   //    четыре варианта однократного выравнивания — к предшественникам слева
   //    направо и к преемникам справа налево, каждый с верхней/нижней медианой —
@@ -314,14 +387,20 @@ export function computeAutoLayout(
   }
   // Финальное разрешение наложений: медианы сохраняют порядок колонок
   // (каждый вариант сохраняет порядок — средние двух упорядоченных списков
-  // тоже), остаётся гарантировать минимальный зазор.
+  // тоже), остаётся гарантировать минимальный зазор. Члены одного юнита
+  // ставятся вплотную (v0.03.01k): тяга медиан соседних колонок не раздвигает
+  // члены ЛГ — площадь рамки минимальна при данной структуре потоков.
   for (const layer of layers) {
     let prevBottom = -Infinity;
+    let prevUnit: string | null = null;
     for (const id of columns.get(layer) ?? []) {
       const height = sizeOf(id).height;
-      const cross = Math.max(crossOf.get(id) ?? ORIGIN, prevBottom + ROW_GAP);
+      const unit = unitOf(id);
+      const desired = unit === prevUnit ? -Infinity : crossOf.get(id) ?? ORIGIN;
+      const cross = Math.max(desired, prevBottom + ROW_GAP);
       crossOf.set(id, cross);
       prevBottom = cross + height;
+      prevUnit = unit;
     }
   }
 
@@ -454,6 +533,12 @@ export function computeAutoLayout(
     }
   }
 
+  // 3в. Разрешение наложений рамок ЛГ (v0.03.01k): слоёная раскладка не
+  //     гарантирует непересечения охватывающих прямоугольников ЛГ (рамка
+  //     охватывает члены в нескольких колонках). Рамки разных ЛГ и чужие
+  //     ДБ разводятся сдвигом поддерева вниз; полная вложенность разрешена.
+  resolveGroupOverlaps(architecture, positions, sizeOf);
+
   // 4. Внешние системы по сторонам рамки: источники стрелок — слева,
   //    приёмники — справа; при равенстве доверенная — слева.
   const bounds = frameRect(positions, internalIds, sizeOf);
@@ -532,4 +617,232 @@ function frameRect(
     maxRight = ORIGIN + NODE_ESTIMATED_WIDTH;
   }
   return { minX, maxRight };
+}
+
+/** Элемент прохода разрешения наложений: рамка ЛГ или несгруппированный ДБ. */
+interface ResolveItem {
+  id: string;
+  /** id ЛГ; null — несгруппированный ДБ (двигается сам). */
+  group: string | null;
+  /** Корневая ЛГ двигает всё поддерево; вложенная — только своё. */
+  root: boolean;
+  /** С непустым поддеревом двигается; пустая ЛГ — статичный якорь. */
+  movable: boolean;
+}
+
+/**
+ * Разрешение наложений рамок ЛГ после слоёной раскладки (v0.03.01k).
+ *
+ * Охватывающий прямоугольник ЛГ строится по членам в нескольких колонках,
+ * поэтому рамки разных ЛГ (и рамка поверх чужого ДБ) могут пересекаться,
+ * хотя сами домены пересечений не имеют. Размещение — сверху вниз по
+ * текущим позициям: уже размещённый элемент — препятствие для следующих,
+ * ещё не размещённый уступит сам при своём размещении (пуш против позиций,
+ * которые ещё изменятся в этом же проходе, даёт взаимные «догонялки» семей
+ * и расходимость). Подвижные единицы:
+ *
+ * 1. рамка-КОРЕНЬ («семья») — переезжает со всем поддеревом (вложенные
+ *    рамки и члены едут вместе с корнем — жёсткая вложенность, как при
+ *    переносе родителя, Ф-78); соперничает с другими корнями,
+ *    несгруппированными ДБ и статичными якорями;
+ * 2. рамка вложенной ЛГ — соперничает только с рамками соседей и членами
+ *    своей семьи вне своего поддерева (конфликт с чужой семьёй —
+ *    ответственность её корня; выросший от сдвига потомка охват предка
+ *    гасится на следующем проходе — семья переедет целиком);
+ * 3. несгруппированный ДБ — двигается сам.
+ *
+ * Каждый элемент сдвигается вниз на минимальную величину, уводящую его
+ * прямоугольник из всех наложений по вертикали (с зазором LG_LAYOUT_GAP);
+ * полная вложенность (рамки предков и потомков, члены своего поддерева)
+ * наложением не считается. Пустые ЛГ (нет членов — двигать нечего) —
+ * статичные якоря-препятствия. Раскладка считается для развёрнутого
+ * состояния всех ЛГ: свёрнутая плашка встаёт в угол охвата членов и при
+ * последующем разворачивании соседей не перекрывает. Сдвиги только вниз,
+ * координаты растут монотонно — проходы сходятся; предохранительный
+ * предел — LG_RESOLVE_PASSES. Позиции изменяются на месте (positions —
+ * внутренний словарь computeAutoLayout). Экспортируется для тестов
+ * (tests/unit/layout.test.ts).
+ */
+export function resolveGroupOverlaps(
+  architecture: Pick<Architecture, 'blocks' | 'edges' | 'groups'>,
+  positions: Map<string, LayoutPosition>,
+  sizeOf: (id: string) => LayoutSize,
+): void {
+  const groups = architecture.groups ?? [];
+  if (groups.length === 0) return;
+
+  // Видимость и геометрия для развёрнутого состояния всех ЛГ.
+  const expandedArch: Pick<Architecture, 'blocks' | 'groups'> = {
+    ...architecture,
+    groups: groups.map((g) => ({ ...g, collapsed: false })),
+  };
+  const visibility = computeGroupVisibility(expandedArch);
+  const liveRects = new Map<string, LgRect>();
+  for (const [id, position] of positions) {
+    const size = sizeOf(id);
+    liveRects.set(id, { x: position.x, y: position.y, width: size.width, height: size.height });
+  }
+
+  // Поддеревья каждой ЛГ: блоки (сдвиг, исключения) и группы (исключения),
+  // цепочка предков (рамки предков — не препятствие для потомка).
+  const subtreeBlocksOf = new Map<string, Set<string>>();
+  const subtreeGroupsOf = new Map<string, Set<string>>();
+  const ancestorsOf = new Map<string, Set<string>>();
+  for (const group of groups) {
+    subtreeBlocksOf.set(group.id, new Set(subtreeBlockIds(expandedArch, group.id)));
+    subtreeGroupsOf.set(group.id, new Set(groupSubtree(groups, group.id)));
+    ancestorsOf.set(group.id, new Set(groupAncestors(groups, group.id)));
+  }
+  const knownGroupIds = new Set(groups.map((g) => g.id));
+  const groupedBlocks = new Set(
+    architecture.blocks
+      .filter((b) => b.groupId && knownGroupIds.has(b.groupId))
+      .map((b) => b.id),
+  );
+
+  // Корень семьи для каждой ЛГ и каждого сгруппированного ДБ (чужие семьи
+  // друг с другом не соперничают на уровне вложенных рамок — накрываются
+  // конфликтом корней, см. правила препятствий ниже).
+  const familyRootOfGroup = new Map<string, string>();
+  for (const group of groups) {
+    const chain = groupAncestors(groups, group.id);
+    familyRootOfGroup.set(group.id, chain.length > 0 ? chain[chain.length - 1] : group.id);
+  }
+  const familyRootOfBlock = new Map<string, string>();
+  for (const block of architecture.blocks) {
+    if (!block.groupId || !knownGroupIds.has(block.groupId)) continue;
+    familyRootOfBlock.set(block.id, familyRootOfGroup.get(block.groupId)!);
+  }
+
+  // Сдвиг блоков вниз на dy (позиции + живые рамки).
+  const shiftDown = (ids: Iterable<string>, dy: number): void => {
+    for (const id of ids) {
+      const position = positions.get(id);
+      if (position) positions.set(id, { x: position.x, y: position.y + dy });
+      const rect = liveRects.get(id);
+      if (rect) liveRects.set(id, { ...rect, y: rect.y + dy });
+    }
+  };
+
+  for (let pass = 0; pass < LG_RESOLVE_PASSES; pass += 1) {
+    let geometry = computeGroupGeometry(expandedArch, liveRects, visibility);
+    const rectOf = (item: ResolveItem): LgRect =>
+      item.group ? geometry.get(item.id)!.rect : liveRects.get(item.id)!;
+
+    // Элементы: рамки ЛГ (корневые и вложенные; пустые — статичные якоря)
+    // и все внутренние ДБ (несгруппированные двигаются, сгруппированные —
+    // статичные препятствия внутри своих семей). Порядок: сверху вниз,
+    // затем слева направо, затем id (детерминизм).
+    const items: ResolveItem[] = [];
+    for (const group of groups) {
+      items.push({
+        id: group.id,
+        group: group.id,
+        root: !group.parentId,
+        movable: subtreeBlocksOf.get(group.id)!.size > 0,
+      });
+    }
+    for (const block of architecture.blocks) {
+      if (block.external) continue;
+      if (!liveRects.has(block.id)) continue;
+      const grouped = groupedBlocks.has(block.id);
+      items.push({ id: block.id, group: null, root: false, movable: !grouped });
+    }
+    items.sort((a, b) => {
+      const ra = rectOf(a);
+      const rb = rectOf(b);
+      return ra.y - rb.y || ra.x - rb.x || a.id.localeCompare(b.id);
+    });
+
+    let pushed = false;
+    // Размещение сверху вниз: уже размещённые элементы — препятствия,
+    // ещё не размещённые уступят сами, когда до них дойдёт очередь.
+    // Пуш против позиций, которые ещё изменятся в этом же проходе,
+    // даёт взаимные догонялки семей — расходимость.
+    const placed = new Set<ResolveItem>();
+    for (const item of items) {
+      if (!item.movable) continue;
+      const itemRect = rectOf(item);
+      const ownBlocks = item.group ? subtreeBlocksOf.get(item.group)! : null;
+      const ownGroups = item.group ? subtreeGroupsOf.get(item.group)! : null;
+      const itemAncestors = item.group ? ancestorsOf.get(item.group)! : null;
+      let required = 0;
+      const myRoot = item.group ? familyRootOfGroup.get(item.id) : undefined;
+      for (const other of items) {
+        if (other === item) continue;
+        // Ещё не размещённый подвижный элемент — не препятствие: при своём
+        // размещении он уступит всем уже размещённым. Исключение —
+        // несгруппированный ДБ для рамки-корня: рамка уступает чужому ДБ
+        // (он стоит в своём слоте потока, охват ЛГ — искусственный), а не
+        // наоборот; циклов это не создаёт — ДБ не двигает семьи.
+        if (
+          other.movable &&
+          !placed.has(other) &&
+          !(item.root && other.group === null)
+        ) {
+          continue;
+        }
+        /* Правила препятствий.
+         *
+         * Рамка-КОРЕНЬ отвечает за внешний контур семьи: соперничает
+         * с рамками других КОРНЕЙ, несгруппированными ДБ и якорями;
+         * свои члены и свои вложенные рамки — своя вложенность, чужие
+         * вложенные рамки сидят внутри своих корней (накрываются
+         * конфликтом корней).
+         *
+         * Вложенная рамка соперничает только с элементами СВОЕЙ семьи
+         * (рамки соседей и чужие ДБ вне своего поддерева): конфликт
+         * с чужой семьей — ответственность её корня; иначе вырастающий
+         * охват предка запускает встречные пуши семей — расходимся.
+         *
+         * Несгруппированный ДБ соперничает с корневыми рамками
+         * (вложенные сидят внутри своих корней) и другими ДБ.
+         */
+        if (item.group) {
+          if (other.group === null) {
+            // ДБ: корень отвечает за внешний контур (несгруппированные и
+            // чужие члены накрываются конфликтом корней); вложенная рамка
+            // соперничает только с членами своей семьи вне своего поддерева.
+            const otherRoot = familyRootOfBlock.get(other.id);
+            if (item.root) {
+              if (otherRoot === myRoot) continue; // свой член — своя вложенность
+            } else {
+              if (otherRoot !== myRoot) continue; // чужие ДБ — не соперники
+              if (ownBlocks!.has(other.id)) continue; // свои члены
+            }
+          } else {
+            if (familyRootOfGroup.get(other.id) !== myRoot) {
+              if (!item.root || !other.root) continue; // только корень с корнем
+            }
+            if (ownGroups!.has(other.id) || itemAncestors!.has(other.id)) continue;
+          }
+        } else {
+          // Несгруппированный ДБ: чужие/свои вложенные рамки и сгруппированные
+          // ДБ накрываются рамкой их корня.
+          if (other.group !== null && !other.root) continue;
+          if (other.group === null && familyRootOfBlock.has(other.id)) continue;
+        }
+        const rect = rectOf(other);
+        const overlapsY =
+          itemRect.y < rect.y + rect.height + LG_LAYOUT_GAP &&
+          itemRect.y + itemRect.height + LG_LAYOUT_GAP > rect.y;
+        const overlapsX =
+          itemRect.x < rect.x + rect.width && itemRect.x + itemRect.width > rect.x;
+        if (overlapsY && overlapsX) {
+          required = Math.max(required, rect.y + rect.height + LG_LAYOUT_GAP - itemRect.y);
+        }
+      }
+      if (required > 0) {
+        // Корневая ЛГ переезжает со всем поддеревом (семья жёстко), вложенная
+        // — только со своим; ДБ — сам.
+        shiftDown(ownBlocks ?? [item.id], required);
+        pushed = true;
+        // Рамки предков выросшего охвата пересчитываются до проверки
+        // следующих элементов прохода.
+        geometry = computeGroupGeometry(expandedArch, liveRects, visibility);
+      }
+      placed.add(item);
+    }
+    if (!pushed) break;
+  }
 }

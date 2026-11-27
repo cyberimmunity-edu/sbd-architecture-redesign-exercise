@@ -1395,8 +1395,6 @@ export interface RoutingOutput {
  * Чистая и детерминированная: одинаковые входы — одинаковые формы.
  */
 export function routeEdges(layout: RoutingLayout): RoutingOutput {
-  (globalThis as unknown as { __re?: { count: number; ms: number } }).__re = { count: ((globalThis as unknown as { __re?: { count: number; ms: number } }).__re?.count ?? 0) + 1, ms: ((globalThis as unknown as { __re?: { count: number; ms: number } }).__re?.ms ?? 0) };
-  const __t0 = performance.now();
   const paths = new Map<string, RoutePoint[]>();
   const sides = new Map<string, RouteSide>();
   const { rects } = layout;
@@ -1550,6 +1548,5 @@ export function routeEdges(layout: RoutingLayout): RoutingOutput {
     paths.set(edge.id, points);
     accumulateRoutePenalty(penalty, points);
   }
-  (globalThis as unknown as { __re?: { count: number; ms: number } }).__re = { count: (globalThis as unknown as { __re: { count: number; ms: number } }).__re.count, ms: (globalThis as unknown as { __re: { count: number; ms: number } }).__re.ms + (performance.now() - __t0) };
   return { paths, sides };
 }

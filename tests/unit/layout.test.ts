@@ -4,13 +4,34 @@
  * выравнивание вертикалей по связям (метод Брандеса–Кёпфа), внешние системы
  * по сторонам рамки (источники слева, приёмники справа) и нормировка границ;
  * v0.03.01i: серпантинная упаковка слоёв в полосы — ширина длинной ленты
- * становится сопоставима с высотой, нечётные полосы зеркальны.
+ * становится сопоставима с высотой, нечётные полосы зеркальны;
+ * v0.03.01k: геометрия логических групп — ЛГ-смежность в колонках,
+ * уплотнение членов ЛГ, отсутствие пересечений рамок (кроме полной
+ * вложенности) и наездов рамок на несгруппированные ДБ.
  */
 
 import { describe, expect, it } from 'vitest';
-import { computeAutoLayout } from '../../src/engine/layout';
+import {
+  computeAutoLayout,
+  resolveGroupOverlaps,
+  ROW_GAP,
+  type LayoutPosition,
+} from '../../src/engine/layout';
 import { NODE_ESTIMATED_HEIGHT, NODE_ESTIMATED_WIDTH } from '../../src/engine/trust';
-import type { Architecture, Block, Edge } from '../../src/engine/types';
+import {
+  computeGroupGeometry,
+  computeGroupVisibility,
+  groupSubtree,
+  LG_FRAME_PADDING,
+  type LgRect,
+} from '../../src/engine/groups';
+import type { Architecture, Block, DomainGroup, Edge } from '../../src/engine/types';
+import {
+  buildLargeProject,
+  PERF_EXTERNAL_COUNT,
+  PERF_GROUP_COUNT,
+  PERF_INTERNAL_COUNT,
+} from '../../tests/perf/largeModel';
 
 function block(id: string, external = false): Block {
   return { id, name: id, cost: external ? 0 : 1, ...(external ? { external: true } : {}) };
@@ -289,5 +310,304 @@ describe('Серпантинная упаковка слоёв в полосы (
     // Диаграмма не выходит из области раскладки.
     const minX = Math.min(...[...result.values()].map((p) => p.x));
     expect(minX).toBeGreaterThanOrEqual(80);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Геометрия логических групп (v0.03.01k)                              */
+/* ------------------------------------------------------------------ */
+
+/** Проверка и возврат прямоугольника рамки ЛГ. */
+function expectRect(rect: LgRect, label: string): LgRect {
+  expect(rect.width, label).toBeGreaterThan(0);
+  expect(rect.height, label).toBeGreaterThan(0);
+  expect(Number.isFinite(rect.x), `${label}: x`).toBe(true);
+  expect(Number.isFinite(rect.y), `${label}: y`).toBe(true);
+  return rect;
+}
+
+/** Наложение прямоугольников (касание — не наложение). */
+function overlap(a: LgRect, b: LgRect, gap = 0): boolean {
+  return (
+    a.x - gap < b.x + b.width &&
+    a.x + a.width + gap > b.x &&
+    a.y - gap < b.y + b.height &&
+    a.y + a.height + gap > b.y
+  );
+}
+
+describe('Геометрия ЛГ в автараскладке (v0.03.01k)', () => {
+  /** Архитектура с ЛГ. */
+  function groupedArch(
+    blocks: Block[],
+    edges: Edge[],
+    groups: Array<Pick<DomainGroup, 'id'> & Partial<DomainGroup>>,
+  ): Architecture {
+    return {
+      blocks,
+      edges,
+      groups: groups.map((g) => ({ name: g.id, color: '#607D8B', ...g }) as DomainGroup),
+    };
+  }
+
+  /** Рамки ЛГ по результату раскладки (развёрнутое состояние, оценочные габариты). */
+  function expandedFrames(
+    architecture: Pick<Architecture, 'blocks' | 'groups'>,
+    positions: Map<string, LayoutPosition>,
+  ): Map<string, LgRect> {
+    const positioned: Pick<Architecture, 'blocks' | 'groups'> = {
+      ...architecture,
+      blocks: architecture.blocks.map((b) => {
+        const p = positions.get(b.id);
+        return p ? { ...b, position: p } : b;
+      }),
+    };
+    const visibility = computeGroupVisibility(positioned);
+    const geometry = computeGroupGeometry(positioned, null, visibility);
+    const rects = new Map<string, LgRect>();
+    for (const [id, geo] of geometry) rects.set(id, expectRect(geo.rect, id));
+    return rects;
+  }
+
+  it('ЛГ-смежность: члены одной ЛГ стоят в колонке подряд, чужие ДБ — вне прогона', () => {
+    const blocks = [
+      { ...block('m1'), groupId: 'lg-m' },
+      { ...block('m2'), groupId: 'lg-m' },
+      block('u1'),
+      block('u2'),
+    ];
+    const result = computeAutoLayout(groupedArch(blocks, [], [{ id: 'lg-m' }]));
+    // Одна колонка (нет связей — один слой): одинаковый x у всех.
+    const xs = [...result.values()].map((p) => p.x);
+    expect(new Set(xs).size).toBe(1);
+    // Члены ЛГ — соседние строки, между ними нет чужих ДБ.
+    const byY = [...result.entries()].sort((a, b) => a[1].y - b[1].y).map(([id]) => id);
+    expect(Math.abs(byY.indexOf('m1') - byY.indexOf('m2'))).toBe(1);
+    // Уплотнение: зазор между членами — ровно ROW_GAP (медианы не растягивают рамку).
+    const gap = result.get('m2')!.y - (result.get('m1')!.y + NODE_ESTIMATED_HEIGHT);
+    expect(Math.abs(gap)).toBe(ROW_GAP);
+    // Рамка ЛГ минимальна: охват двух членов с отступом.
+    const frames = expandedFrames(groupedArch(blocks, [], [{ id: 'lg-m' }]), result);
+    const frame = frames.get('lg-m')!;
+    expect(frame.height).toBe(2 * NODE_ESTIMATED_HEIGHT + ROW_GAP + 2 * LG_FRAME_PADDING);
+    // Несгруппированные ДБ вне рамки.
+    for (const id of ['u1', 'u2']) {
+      expect(overlap(frame, expectRect({
+        x: result.get(id)!.x,
+        y: result.get(id)!.y,
+        width: NODE_ESTIMATED_WIDTH,
+        height: NODE_ESTIMATED_HEIGHT,
+      }, id))).toBe(false);
+    }
+  });
+
+  it('уплотнение: тяга медиан соседних колонок не раздвигает члены ЛГ', () => {
+    // m2 имеет четырёх преемников в следующей колонке — медианы тянут его
+    // вниз; члены lg-m обязаны остаться вплотную (зазор ROW_GAP).
+    const blocks = [
+      { ...block('m1'), groupId: 'lg-m' },
+      { ...block('m2'), groupId: 'lg-m' },
+      block('s1'),
+      block('s2'),
+      block('s3'),
+      block('s4'),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'm2', to: 's1' },
+      { id: 'e2', from: 'm2', to: 's2' },
+      { id: 'e3', from: 'm2', to: 's3' },
+      { id: 'e4', from: 'm2', to: 's4' },
+    ];
+    const result = computeAutoLayout(groupedArch(blocks, edges, [{ id: 'lg-m' }]));
+    expect(result.get('m1')!.x).toBe(result.get('m2')!.x);
+    const gap = result.get('m2')!.y - (result.get('m1')!.y + NODE_ESTIMATED_HEIGHT);
+    expect(gap).toBe(ROW_GAP);
+    // Площадь рамки — минимальная для двух членов одной колонки.
+    const frames = expandedFrames(groupedArch(blocks, edges, [{ id: 'lg-m' }]), result);
+    expect(frames.get('lg-m')!.height).toBe(
+      2 * NODE_ESTIMATED_HEIGHT + ROW_GAP + 2 * LG_FRAME_PADDING,
+    );
+  });
+
+  it('рамки двух ЛГ не пересекаются; члены внутри своих рамок', () => {
+    const blocks = [
+      { ...block('a1'), groupId: 'lg-a' },
+      { ...block('a2'), groupId: 'lg-a' },
+      { ...block('b1'), groupId: 'lg-b' },
+      { ...block('b2'), groupId: 'lg-b' },
+      block('f1'),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'a1', to: 'a2' },
+      { id: 'e2', from: 'b1', to: 'b2' },
+      { id: 'e3', from: 'a1', to: 'b2' },
+      { id: 'e4', from: 'b1', to: 'a2' },
+      { id: 'e5', from: 'f1', to: 'a1' },
+    ];
+    const model = groupedArch(blocks, edges, [{ id: 'lg-a' }, { id: 'lg-b' }]);
+    const result = computeAutoLayout(model);
+    const frames = expandedFrames(model, result);
+    const fa = frames.get('lg-a')!;
+    const fb = frames.get('lg-b')!;
+    expect(overlap(fa, fb)).toBe(false);
+    // Члены внутри своих рамок.
+    const rectOf = (id: string): LgRect => ({
+      x: result.get(id)!.x,
+      y: result.get(id)!.y,
+      width: NODE_ESTIMATED_WIDTH,
+      height: NODE_ESTIMATED_HEIGHT,
+    });
+    for (const id of ['a1', 'a2']) expect(overlap(fa, rectOf(id))).toBe(true);
+    for (const id of ['b1', 'b2']) expect(overlap(fb, rectOf(id))).toBe(true);
+  });
+
+  it('рамка ЛГ не накрывает несгруппированный ДБ; поддерево сдвигается целиком', () => {
+    const blocks = [
+      { ...block('a1'), groupId: 'lg-a' },
+      { ...block('a2'), groupId: 'lg-a' },
+      block('u'),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'a1', to: 'u' },
+      { id: 'e2', from: 'u', to: 'a2' },
+    ];
+    const model = groupedArch(blocks, edges, [{ id: 'lg-a' }]);
+    const result = computeAutoLayout(model);
+    // Слои: a1 → u → a2 (колонки 0, 1, 2); до разрешения рамка охватывала u.
+    const frames = expandedFrames(model, result);
+    const frame = frames.get('lg-a')!;
+    const uRect: LgRect = {
+      x: result.get('u')!.x,
+      y: result.get('u')!.y,
+      width: NODE_ESTIMATED_WIDTH,
+      height: NODE_ESTIMATED_HEIGHT,
+    };
+    expect(overlap(frame, uRect)).toBe(false);
+    // Поддерево сдвинуто одним жёстким сдвигом: члены на одной вертикали,
+    // внутри рамки.
+    expect(result.get('a1')!.y).toBe(result.get('a2')!.y);
+    expect(result.get('a1')!.y).toBeGreaterThan(uRect.y);
+    expect(overlap(frame, {
+      x: result.get('a1')!.x,
+      y: result.get('a1')!.y,
+      width: NODE_ESTIMATED_WIDTH,
+      height: NODE_ESTIMATED_HEIGHT,
+    })).toBe(true);
+  });
+
+  it('полная вложенность разрешена: рамка потомка внутри рамки предка', () => {
+    const blocks = [
+      { ...block('p1'), groupId: 'lg-p' },
+      { ...block('p2'), groupId: 'lg-p' },
+      { ...block('c1'), groupId: 'lg-c' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'p1', to: 'c1' },
+      { id: 'e2', from: 'c1', to: 'p2' },
+    ];
+    const model = groupedArch(blocks, edges, [
+      { id: 'lg-p' },
+      { id: 'lg-c', parentId: 'lg-p' },
+    ]);
+    const result = computeAutoLayout(model);
+    const frames = expandedFrames(model, result);
+    const parent = frames.get('lg-p')!;
+    const child = frames.get('lg-c')!;
+    expect(parent.x).toBeLessThanOrEqual(child.x);
+    expect(parent.y).toBeLessThanOrEqual(child.y);
+    expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.x + child.width);
+    expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.y + child.height);
+  });
+
+  it('resolveGroupOverlaps: пересекающиеся рамки разводятся сдвигом вниз с зазором', () => {
+    const blocks = [
+      { ...block('a1'), groupId: 'lg-a' },
+      { ...block('a2'), groupId: 'lg-a' },
+      { ...block('b1'), groupId: 'lg-b' },
+      { ...block('b2'), groupId: 'lg-b' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'a1', to: 'a2' },
+      { id: 'e2', from: 'b1', to: 'b2' },
+    ];
+    const model = groupedArch(blocks, edges, [{ id: 'lg-a' }, { id: 'lg-b' }]);
+    // Искусственно перемешанные позиции: рамки обеих ЛГ пересекаются.
+    const positions = new Map<string, LayoutPosition>([
+      ['a1', { x: 80, y: 80 }],
+      ['a2', { x: 500, y: 334 }],
+      ['b1', { x: 500, y: 80 }],
+      ['b2', { x: 80, y: 334 }],
+    ]);
+    resolveGroupOverlaps(model, positions, () => ({
+      width: NODE_ESTIMATED_WIDTH,
+      height: NODE_ESTIMATED_HEIGHT,
+    }));
+    const frames = expandedFrames(model, positions);
+    const fa = frames.get('lg-a')!;
+    const fb = frames.get('lg-b')!;
+    expect(overlap(fa, fb)).toBe(false);
+    // Зазор не меньше ROW_GAP/2: развод не впритык к наложению «до пикселя».
+    const verticalGap = fb.y >= fa.y
+      ? fb.y - (fa.y + fa.height)
+      : fa.y - (fb.y + fb.height);
+    expect(verticalGap).toBeGreaterThanOrEqual(0);
+    // Поддеревья не разорваны: члены каждой ЛГ — на своих исходных x.
+    expect(positions.get('a1')!.x).toBe(80);
+    expect(positions.get('a2')!.x).toBe(500);
+    expect(positions.get('b1')!.x).toBe(500);
+    expect(positions.get('b2')!.x).toBe(80);
+  });
+
+  it('большая модель (50 ДБ, 20 ЛГ): ни одна рамка не пересекается с чужой', () => {
+    const project = buildLargeProject();
+    const result = computeAutoLayout(project.architecture);
+    expect(result.size).toBe(PERF_INTERNAL_COUNT + PERF_EXTERNAL_COUNT);
+    const frames = expandedFrames(project.architecture, result);
+    expect(frames.size).toBe(PERF_GROUP_COUNT);
+    const ids = [...frames.keys()];
+    const subtreeOf = (id: string): Set<string> =>
+      new Set(groupSubtree(project.architecture.groups ?? [], id));
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = frames.get(ids[i])!;
+        const b = frames.get(ids[j])!;
+        const nested =
+          subtreeOf(ids[i]).has(ids[j]) || subtreeOf(ids[j]).has(ids[i]);
+        if (nested) continue; // полная вложенность разрешена
+        expect(overlap(a, b), `${ids[i]} × ${ids[j]}`).toBe(false);
+      }
+    }
+    // Несгруппированные ДБ не накрыты рамками.
+    for (const id of ['blk-17', 'blk-33', 'blk-49']) {
+      const loose: LgRect = {
+        x: result.get(id)!.x,
+        y: result.get(id)!.y,
+        width: NODE_ESTIMATED_WIDTH,
+        height: NODE_ESTIMATED_HEIGHT,
+      };
+      for (const [groupId, frame] of frames) {
+        expect(overlap(frame, loose), `${groupId} накрывает ${id}`).toBe(false);
+      }
+    }
+  });
+
+  it('детерминизм: раскладка с ЛГ не зависит от порядка блоков', () => {
+    const blocks = [
+      { ...block('a1'), groupId: 'lg-a' },
+      { ...block('a2'), groupId: 'lg-a' },
+      { ...block('b1'), groupId: 'lg-b' },
+      { ...block('b2'), groupId: 'lg-b' },
+      block('u'),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'a1', to: 'a2' },
+      { id: 'e2', from: 'b1', to: 'b2' },
+      { id: 'e3', from: 'u', to: 'b1' },
+    ];
+    const first = computeAutoLayout(groupedArch(blocks, edges, [{ id: 'lg-a' }, { id: 'lg-b' }]));
+    const second = computeAutoLayout(
+      groupedArch([...blocks].reverse(), edges, [{ id: 'lg-a' }, { id: 'lg-b' }]),
+    );
+    expect([...first.entries()]).toEqual([...second.entries()]);
   });
 });
