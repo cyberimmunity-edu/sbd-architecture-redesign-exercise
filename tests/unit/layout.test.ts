@@ -11,6 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   computeAutoLayout,
   resolveGroupOverlaps,
@@ -26,6 +28,7 @@ import {
   type LgRect,
 } from '../../src/engine/groups';
 import type { Architecture, Block, DomainGroup, Edge } from '../../src/engine/types';
+import { parseStateYaml } from '../../src/io/stateFile';
 import {
   buildLargeProject,
   PERF_EXTERNAL_COUNT,
@@ -336,6 +339,16 @@ function overlap(a: LgRect, b: LgRect, gap = 0): boolean {
   );
 }
 
+/** Прямоугольник ДБ по позиции раскладки (оценочные габариты узла). */
+function rectOf(positions: Map<string, LayoutPosition>, id: string): LgRect {
+  return {
+    x: positions.get(id)!.x,
+    y: positions.get(id)!.y,
+    width: NODE_ESTIMATED_WIDTH,
+    height: NODE_ESTIMATED_HEIGHT,
+  };
+}
+
 describe('Геометрия ЛГ в автараскладке (v0.03.01k)', () => {
   /** Архитектура с ЛГ. */
   function groupedArch(
@@ -588,6 +601,64 @@ describe('Геометрия ЛГ в автараскладке (v0.03.01k)', ()
       for (const [groupId, frame] of frames) {
         expect(overlap(frame, loose), `${groupId} накрывает ${id}`).toBe(false);
       }
+    }
+  });
+
+  it('файл пользователя (state_reg_00.yaml, регламент): рамки без пересечений и наездов', () => {
+    // Проверка ЛГ-раскладки на реальном файле (v0.03.01l): 14 внутренних ДБ,
+    // 8 внешних систем, 6 ЛГ — lg-key ⊂ lg-decide, lg-exec ⊂ lg-tests
+    // (полная вложенность), несгруппированный blk-journal.
+    const text = readFileSync(
+      resolve(__dirname, '../fixtures/seq-colors/state_reg_00.yaml'),
+      'utf8',
+    );
+    const parsed = parseStateYaml(text);
+    expect(parsed.errors).toEqual([]);
+    const model = parsed.model!.architecture;
+    expect(model.groups).toHaveLength(6);
+    const result = computeAutoLayout(model);
+    expect(result.size).toBe(22); // 14 внутренних + 8 внешних систем
+
+    const frames = expandedFrames(model, result);
+    expect(frames.size).toBe(6);
+    const ids = [...frames.keys()].sort();
+    const groups = model.groups ?? [];
+    // ДБ поддерева ЛГ (прямые члены + члены вложенных потомков).
+    const subtreeBlocksOf = (id: string): Set<string> => {
+      const tree = new Set(groupSubtree(groups, id));
+      tree.add(id);
+      return new Set(
+        model.blocks.filter((b) => b.groupId && tree.has(b.groupId)).map((b) => b.id),
+      );
+    };
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = frames.get(ids[i])!;
+        const b = frames.get(ids[j])!;
+        // Полная вложенность: одна ЛГ в поддереве групп другой.
+        const nested =
+          new Set(groupSubtree(groups, ids[i])).has(ids[j]) ||
+          new Set(groupSubtree(groups, ids[j])).has(ids[i]);
+        if (nested) continue;
+        expect(overlap(a, b), `${ids[i]} × ${ids[j]}`).toBe(false);
+      }
+    }
+    // Уплотнение: рамка накрывает только членов своего поддерева.
+    for (const [groupId, frame] of frames) {
+      const own = subtreeBlocksOf(groupId);
+      for (const b of model.blocks) {
+        if (b.external || !result.has(b.id) || own.has(b.id)) continue;
+        expect(
+          overlap(frame, expectRect(rectOf(result, b.id), `${groupId} × ${b.id}`)),
+          `${groupId} накрывает ${b.id} (${b.groupId ?? 'несгруппированный'})`,
+        ).toBe(false);
+      }
+    }
+    // Несгруппированный blk-journal вне всех рамок.
+    for (const [groupId, frame] of frames) {
+      expect(overlap(frame, rectOf(result, 'blk-journal')), `${groupId} × blk-journal`).toBe(
+        false,
+      );
     }
   });
 
