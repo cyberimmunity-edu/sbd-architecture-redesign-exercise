@@ -5,7 +5,7 @@
 
 DOCKER ?= docker
 IMAGE  ?= skib-lab
-TAG    ?= 0.03.01i
+TAG    ?= 0.03.01j
 PORT   ?= 8080
 BASE_PATH ?= /
 # Базовый образ этапа сборки Dockerfile (запасной вариант — node:22-slim).
@@ -14,7 +14,7 @@ NODE_IMAGE ?= node:22-alpine
 SKIB_ZIP ?= skib-lab-$(TAG)-src.zip
 
 .PHONY: help install dev build preview lint test-unit test-unit-coverage \
-        test-e2e test-cli test check check-makefile cli zip docker-build docker-run docker-start docker-stop \
+        test-e2e test-perf test-cli test check check-makefile cli zip docker-build docker-run docker-start docker-stop \
         docker-logs docker-shell clean distclean
 
 help: ## список целей (по умолчанию)
@@ -45,18 +45,23 @@ test-unit-coverage: ## unit-тесты с отчётом покрытия и п�
 test-e2e: ## E2E-тесты Playwright (webServer использует dev-сервер, порт PORT, по умолчанию 3000)
 	npm run test:e2e
 
+test-perf: ## E2E-тест производительности против ПРОИЗВОДСТВЕННОЙ сборки (next build, затем serve out, порт PORT, по умолчанию 3100)
+	npm run build
+	npx playwright test --config=playwright.perf.config.ts
+
 test-cli: ## интеграционные CLI-тесты «skib» без vitest (processes/stdout/коды возврата)
 	node tests/cli/run.mjs
 
 test: ## test-unit затем test-e2e
 	npm test
 
-check: ## проверка Makefile, затем lint, CLI-смоук, CLI-тесты и test — полная проверка перед сдачей
+check: ## проверка Makefile, затем lint, CLI-смоук, CLI-тесты, test и test-perf — полная проверка перед сдачей
 	$(MAKE) check-makefile
 	$(MAKE) lint
 	$(MAKE) cli
 	$(MAKE) test-cli
 	$(MAKE) test
+	$(MAKE) test-perf
 
 check-makefile: ## синтаксическая проверка Makefile — сухой прогон всех целей (правило проекта)
 	$(MAKE) --no-print-directory -n help install dev build preview lint test-unit test-unit-coverage test-e2e test-cli test cli zip docker-build docker-run docker-start docker-stop docker-logs docker-shell clean distclean > /dev/null
@@ -76,7 +81,7 @@ zip: ## упаковать исходники, документацию и от�
                 .dockerignore .gitignore .nvmrc AGENTS.md CHANGELOG.md Caddyfile Dockerfile LICENSE \
                 Makefile README.md components.json docker-compose.yml eslint.config.mjs \
                 next.config.ts package.json package-lock.json playwright.config.ts \
-                playwright.firefox.config.ts postcss.config.mjs tsconfig.json vitest.config.ts
+                playwright.firefox.config.ts playwright.perf.config.ts postcss.config.mjs tsconfig.json vitest.config.ts
 	@echo "Архив собран: $(SKIB_ZIP) (отчёты — в docs/ в формате Markdown)"
 
 docker-build: ## сборка образа $(IMAGE):$(TAG) с аргументами BASE_PATH, NODE_IMAGE

@@ -55,7 +55,8 @@ describe('Makefile (правило проекта: проверки запуск
       .filter((line) => line.startsWith('\t'))
       .map((line) => line.trim().replace('$(MAKE) ', '').trim())
       .filter(Boolean);
-    expect(steps).toEqual(['check-makefile', 'lint', 'cli', 'test-cli', 'test']);
+    // v0.03.01j: замыкается тестом производительности против прод-сборки.
+    expect(steps).toEqual(['check-makefile', 'lint', 'cli', 'test-cli', 'test', 'test-perf']);
   });
 
   it('состав .PHONY соответствует объявленным целям', () => {

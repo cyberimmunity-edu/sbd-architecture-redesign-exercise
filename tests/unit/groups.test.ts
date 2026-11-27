@@ -17,6 +17,7 @@ import {
   isAllowedGroupColor,
   normalizeGroupColor,
   normalizeGroups,
+  planExpandShift,
   remapEdgesForDisplay,
   subtreeBlockIds,
   uniqueGroupName,
@@ -352,5 +353,129 @@ describe('Перемещение ЛГ целиком и ограничение �
       x: 10,
       y: 20,
     });
+  });
+});
+
+describe('Охват вложенных ЛГ и автораздвижение (v0.03.01j)', () => {
+  const R = (x: number, y: number): { x: number; y: number; width: number; height: number } => ({
+    x,
+    y,
+    width: 300,
+    height: 170,
+  });
+
+  it('рамка родителя охватывает рамку развёрнутой вложенной ЛГ (иначе — баг «двигаются вместе, но не сгруппированы»)', () => {
+    const model = arch(
+      [
+        { ...B('p1', { x: 1000, y: 1000 }), groupId: 'lg-1' },
+        { ...B('c1', { x: 100, y: 100 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1'), G('lg-2', { parentId: 'lg-1' })],
+    );
+    const rects = new Map([
+      ['p1', R(1000, 1000)],
+      ['c1', R(100, 100)],
+    ]);
+    const geo = computeGroupGeometry(model, rects, computeGroupVisibility(model));
+    const parent = geo.get('lg-1')!.rect;
+    const child = geo.get('lg-2')!.rect;
+    expect(parent.x).toBeLessThanOrEqual(child.x);
+    expect(parent.y).toBeLessThanOrEqual(child.y);
+    expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.x + child.width);
+    expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.y + child.height);
+    // Перенос родителя двигает поддерево — теперь это видно геометрически:
+    // ребёнок целиком внутри рамки родителя (проверено выше).
+  });
+
+  it('рамка родителя охватывает и свёрнутый блок вложенной ЛГ', () => {
+    const model = arch(
+      [
+        { ...B('p1', { x: 1000, y: 1000 }), groupId: 'lg-1' },
+        { ...B('c1', { x: 100, y: 100 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1'), G('lg-2', { parentId: 'lg-1', collapsed: true })],
+    );
+    const rects = new Map([['p1', R(1000, 1000)]]);
+    const geo = computeGroupGeometry(model, rects, computeGroupVisibility(model));
+    const parent = geo.get('lg-1')!.rect;
+    const child = geo.get('lg-2')!;
+    expect(child.collapsed).toBe(true);
+    expect(parent.x).toBeLessThanOrEqual(child.rect.x);
+    expect(parent.y).toBeLessThanOrEqual(child.rect.y);
+    expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.rect.x + child.rect.width);
+    expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.rect.y + child.rect.height);
+  });
+
+  it('planExpandShift: без наложений план не строится (позиции не трогаются)', () => {
+    const model = arch(
+      [
+        { ...B('a', { x: 0, y: 0 }), groupId: 'lg-1' },
+        { ...B('b', { x: 1200, y: 0 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1'), G('lg-2')],
+    );
+    expect(planExpandShift(model, 'lg-1', null)).toBeNull();
+    // Разворачиваемая ЛГ уже развёрнута — флаг не меняет план.
+    const collapsed = arch(
+      [
+        { ...B('a', { x: 0, y: 0 }), groupId: 'lg-1' },
+        { ...B('b', { x: 1200, y: 0 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1', { collapsed: true }), G('lg-2')],
+    );
+    expect(planExpandShift(collapsed, 'lg-1', null)).toBeNull();
+  });
+
+  it('planExpandShift: наложение на соседа сдвигает поддерево в свободную сторону (минимальный сдвиг)', () => {
+    // Рамки lg-1 и lg-2 перекрываются; свободнее влево (64 px) — сдвиг влево.
+    const model = arch(
+      [
+        { ...B('a', { x: 0, y: 0 }), groupId: 'lg-1' },
+        { ...B('b', { x: 300, y: 0 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1', { collapsed: true }), G('lg-2')],
+    );
+    const plan = planExpandShift(model, 'lg-1', null);
+    expect(plan).not.toBeNull();
+    expect(plan!.dx).toBe(-64);
+    expect(plan!.dy).toBe(0);
+    expect(plan!.positions['a']).toEqual({ x: -64, y: 0 });
+    // После применения сдвига рамки не накладываются.
+    const shifted = arch(
+      [
+        { ...B('a', plan!.positions['a']), groupId: 'lg-1' },
+        { ...B('b', { x: 300, y: 0 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1'), G('lg-2')],
+    );
+    const geo = computeGroupGeometry(shifted, null, computeGroupVisibility(shifted));
+    const left = geo.get('lg-1')!.rect;
+    const right = geo.get('lg-2')!.rect;
+    expect(left.x + left.width).toBeLessThanOrEqual(right.x);
+  });
+
+  it('planExpandShift: рамка предка — не препятствие (охватывает развёрнутую ЛГ по построению)', () => {
+    const model = arch(
+      [
+        { ...B('p', { x: 0, y: 0 }), groupId: 'lg-1' },
+        { ...B('c', { x: 500, y: 0 }), groupId: 'lg-2' },
+      ],
+      [],
+      [G('lg-1'), G('lg-2', { parentId: 'lg-1', collapsed: true })],
+    );
+    // Разворачивание вложенной ЛГ под развёрнутым родителем: рамка родителя
+    // всегда «накладывается» на неё — без исключения предков сдвиг был бы всегда.
+    expect(planExpandShift(model, 'lg-2', null)).toBeNull();
+  });
+
+  it('planExpandShift: неизвестная ЛГ — null', () => {
+    const model = arch([B('a')], [], []);
+    expect(planExpandShift(model, 'lg-x', null)).toBeNull();
   });
 });

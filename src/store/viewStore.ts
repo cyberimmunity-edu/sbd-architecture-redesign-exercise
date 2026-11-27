@@ -35,7 +35,9 @@
  */
 
 import { create } from 'zustand';
+import type { Edge } from '@xyflow/react';
 import type { SizeMode } from '../engine/sizing';
+import type { RoutePoint, RouteRect, RouteSide } from '../engine/edgeRouting';
 import { useSkibStore } from './projectStore';
 
 /** Выбор объекта в режиме ДП (П-10): ДП, линия жизни, стрелка или блок. */
@@ -124,10 +126,33 @@ export interface ViewState {
   setSizeMode: (mode: SizeMode) => void;
 }
 
+/** Кэш трассировки канвы (v0.03.01j): прямоугольники, концы стрелок и
+ *  готовые ломаные последнего прохода — для частичной перетрассировки
+ *  (пересчитываются только затронутые стрелки). */
+export interface RoutingCacheData {
+  rects: Map<string, RouteRect>;
+  specs: Map<string, { from: string; to: string }>;
+  paths: Map<string, RoutePoint[]>;
+  sides: Map<string, RouteSide>;
+}
+
+/** Кэши производительности ДАП (v0.03.01j): трассировка, измеренные
+ *  габариты доменов (переживают скрытие внутри свёрнутых ЛГ), прежние
+ *  объекты стрелок (точечное обновление). Не входят в модель проекта,
+ *  не сохраняются — служебные данные рендера. */
+export interface CanvasPerfState {
+  routingCache: RoutingCacheData | null;
+  setRoutingCache: (cache: RoutingCacheData | null) => void;
+  measuredSizes: Map<string, { width: number; height: number }>;
+  trackMeasuredSizes: (sizes: Map<string, { width: number; height: number }>) => void;
+  prevEdges: Map<string, Edge> | null;
+  setPrevEdges: (edges: Map<string, Edge> | null) => void;
+}
+
 /** Таймер гашения краткой подсветки (v0.01.09) — вне состояния zustand. */
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
-export const useViewStore = create<ViewState>((set, get) => ({
+export const useViewStore = create<ViewState & CanvasPerfState>((set, get) => ({
   showEdges: true,
   focusInternal: false,
   collapsedPorts: {},
@@ -192,4 +217,10 @@ export const useViewStore = create<ViewState>((set, get) => ({
     set({ sizeMode: next });
   },
   setSizeMode: (mode) => set({ sizeMode: mode }),
+  routingCache: null,
+  setRoutingCache: (cache) => set({ routingCache: cache }),
+  measuredSizes: new Map(),
+  trackMeasuredSizes: (sizes) => set({ measuredSizes: sizes }),
+  prevEdges: null,
+  setPrevEdges: (edges) => set({ prevEdges: edges }),
 }));

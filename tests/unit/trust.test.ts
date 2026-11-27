@@ -223,6 +223,38 @@ describe('Модель доверия (раздел 3.5 v0.01.01)', () => {
     // Внутренние домены не изменились.
     expect(snapped.architecture.blocks.find((b) => b.id === 'a')!.position).toEqual({ x: 100, y: 100 });
   });
+
+  it('видимый периметр (v0.03.01j): скрытые ДБ не растягивают рамку, свёрнутые блоки ЛГ охватываются', () => {
+    const project = build({
+      architecture: {
+        blocks: [
+          block('a', { position: { x: 100, y: 100 } }),
+          block('b', { position: { x: 100, y: 600 } }),
+          block('far', { position: { x: 3000, y: 600 } }),
+        ],
+        edges: [],
+      },
+    });
+    // Полный (модельный) периметр охватывает и far.
+    const full = frameBounds(project.architecture)!;
+    expect(full.x + full.width).toBeGreaterThanOrEqual(3000 + 300);
+    // Видимый: far скрыт внутри свёрнутой ЛГ; свёрнутый блок ЛГ в (100, 600).
+    const visible = frameBounds(project.architecture, {
+      excludeBlockIds: new Set(['far']),
+      extraRects: [{ x: 100, y: 600, width: 230, height: 46 }],
+    })!;
+    expect(visible.x).toBe(full.x);
+    expect(visible.y).toBe(full.y);
+    expect(visible.x + visible.width).toBeLessThan(full.x + full.width);
+    // Охватывает свёрнутый блок ЛГ и видимые ДБ.
+    expect(visible.x + visible.width).toBeGreaterThanOrEqual(100 + 230);
+    expect(visible.y + visible.height).toBeGreaterThanOrEqual(600 + 46);
+    // Все внутренние домены скрыты, свёрнутых блоков нет — рамки нет.
+    const empty = frameBounds(project.architecture, {
+      excludeBlockIds: new Set(['a', 'b', 'far']),
+    });
+    expect(empty).toBeNull();
+  });
 });
 
 describe('Принудительный ввод в ДВБ — forceTrusted (v0.01.06)', () => {

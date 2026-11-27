@@ -112,6 +112,7 @@ import {
   type RouteRect,
 } from '../engine/edgeRouting';
 import { domainSizeFactors, sizeForFactor } from '../engine/sizing';
+import type { RoutingCacheData } from '../store/viewStore';
 import { depthAllowed } from '../engine/groups';
 import { LG_COLORS, MAX_DOMAIN_GROUPS, MAX_LG_DEPTH } from '../engine/types';
 import {
@@ -306,6 +307,8 @@ interface DragGesture {
 
 let activeDragGesture: DragGesture | null = null;
 
+
+
 /** Стартовые прямоугольники внутренних ДБ (живые или оценочные). */
 function internalStartRects(blocks: Block[], liveRects: Map<string, LgRect>): Map<string, LgRect> {
   const rects = new Map<string, LgRect>();
@@ -353,6 +356,59 @@ function PerimeterNode({ data }: NodeProps<PerimeterFlowNode>) {
   );
 }
 
+/**
+ * Сигнатура отображаемых данных домен-узла (v0.03.01j): всё, что рендерит
+ * DomainNode. Колбэки не входят — они пересоздаются на каждую сборку memo,
+ * но ведут себя одинаково (замыкаются на те же хранилища). Выделение и
+ * измеренные габариты не входят — это живое состояние React Flow,
+ * сохраняемое отдельно.
+ */
+function domainNodeSignature(node: CanvasNode): string {
+  const data = node.data as DomainNodeData;
+  // Узел периметра: данные — label/width/height, стоимости нет. Размер —
+  // в сигнатуре обязательно: рамка периметра сжимается при свёртывании ЛГ.
+  if (!data.cost) {
+    return [
+      node.id,
+      node.position.x,
+      node.position.y,
+      data.label ?? '-',
+      data.width ?? '-',
+      data.height ?? '-',
+    ].join('|');
+  }
+  const cost = data.cost;
+  // Статусы целей карточек — из goalStatusOf: индикаторы «светофора» на
+  // карточках меняются вместе с покрытием целей (recalcCoverage).
+  const functions = data.functions
+    .map((fn) => `${fn.id}:${data.goalStatusOf(fn).join('')}`)
+    .join(',');
+  const size = data.size;
+  return [
+    node.id,
+    node.position.x,
+    node.position.y,
+    data.name,
+    data.blockCost,
+    cost.blockCost,
+    cost.functionsCost,
+    cost.edgeCount,
+    cost.multiplier,
+    cost.trustCoefficient,
+    cost.domainCost,
+    data.status,
+    data.trustClass,
+    data.external ? 1 : 0,
+    data.externalTrusted ? 1 : 0,
+    data.forceTrusted ? 1 : 0,
+    functions,
+    data.portCounts.in,
+    data.portCounts.out,
+    size ? `${size.width}x${size.height}` : '-',
+    data.selectedCardId ?? '-',
+  ].join('|');
+}
+
 function CanvasInner() {
   const project = useSkibStore((s) => s.project);
   const selection = useSkibStore((s) => s.selection);
@@ -368,6 +424,8 @@ function CanvasInner() {
   const updateGroup = useSkibStore((s) => s.updateGroup);
   const deleteGroup = useSkibStore((s) => s.deleteGroup);
   const setDomainsGroup = useSkibStore((s) => s.setDomainsGroup);
+  // Свёртывание/развёртывание с автораздвижением (v0.03.01j, Ф-72).
+  const setGroupCollapsed = useSkibStore((s) => s.setGroupCollapsed);
   // Мультивыбор доменов ДАП (v0.02.03, Ф-74): Ctrl-клик и рамка выбора.
   const domainSelection = useViewStore((s) => s.domainSelection);
   const setDomainSelection = useViewStore((s) => s.setDomainSelection);
@@ -454,13 +512,36 @@ function CanvasInner() {
     return map;
   }, [project.architecture]);
 
-  // Рамка периметра строится по внутренним доменам; внешние — вне рамки.
-  const frame = useMemo(() => frameBounds(project.architecture), [project.architecture]);
-
   // Логические группы (v0.02.03): видимость ЛГ и ДБ (Ф-72) и геометрия рамок.
   const visibility = useMemo(
     () => computeGroupVisibility(project.architecture),
     [project.architecture],
+  );
+
+  // ВИДИМАЯ рамка периметра (v0.03.01j): скрытые внутри свёрнутых ЛГ ДБ
+  // не растягивают рамку, но свёрнутые блоки ЛГ охватываются — при
+  // схлопывании ЛГ периметр сжимается вслед за содержимым канвы. Свёрнутые
+  // и пустые рамки вычисляются по модели (их геометрия не зависит от живых
+  // прямоугольников канвы), поэтому рамка доступна до узлов канвы.
+  const collapsedRects = useMemo<LgRect[]>(() => {
+    const rects: LgRect[] = [];
+    if (visibility.visibleCollapsed.size === 0 && visibility.visibleExpanded.size === 0) {
+      return rects;
+    }
+    const geometry = computeGroupGeometry(project.architecture, null, visibility);
+    for (const item of geometry.values()) {
+      if (item.collapsed || item.empty) rects.push(item.rect);
+    }
+    return rects;
+  }, [project.architecture, visibility]);
+
+  const frame = useMemo(
+    () =>
+      frameBounds(project.architecture, {
+        excludeBlockIds: visibility.hiddenBlocks,
+        ...(collapsedRects.length > 0 ? { extraRects: collapsedRects } : {}),
+      }),
+    [project.architecture, visibility, collapsedRects],
   );
 
   // Фокус на внутреннем периметре (v0.01.02): внешние системы скрыты.
@@ -572,18 +653,42 @@ function CanvasInner() {
   /* Логические группы (v0.02.03, Ф-70…Ф-74): рамки — узлы «lgframe» в том же
      состоянии канвы (иначе React Flow держит их видимостью «hidden» до
      измерения, которое невозможно применить). */
+  // Запомненные измеренные габариты (v0.03.01j): переживают скрытие ДБ —
+  // повторно развёрнутые домены сразу получают прежние размеры: без дрожи
+  // геометрии рамок и без повторной трассировки после измерений. Пишутся
+  // эффектом, читаются при вычислении liveRects/трассировки.
   const liveRects = useMemo(() => {
     const map = new Map<string, LgRect>();
     for (const node of rfNodes) {
       if (node.type !== 'domain') continue;
+      const remembered = useViewStore.getState().measuredSizes.get(node.id);
       map.set(node.id, {
         x: node.position.x,
         y: node.position.y,
-        width: node.measured?.width ?? NODE_ESTIMATED_WIDTH,
-        height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
+        width: node.measured?.width ?? remembered?.width ?? NODE_ESTIMATED_WIDTH,
+        height: node.measured?.height ?? remembered?.height ?? NODE_ESTIMATED_HEIGHT,
       });
     }
     return map;
+  }, [rfNodes]);
+
+  // Запоминание измеренных габаритов (v0.03.01j): переживает скрытие ДБ —
+  // повторно развёрнутые домены сразу получают прежние размеры: без дрожи
+  // геометрии рамок и без повторной трассировки после измерений.
+  useEffect(() => {
+    const store = useViewStore.getState();
+    let changed = false;
+    const next = new Map(store.measuredSizes);
+    for (const node of rfNodes) {
+      if (node.type !== 'domain' || !node.measured) continue;
+      const { width, height } = node.measured;
+      if (width === undefined || height === undefined) continue;
+      const known = next.get(node.id);
+      if (known && known.width === width && known.height === height) continue;
+      next.set(node.id, { width, height });
+      changed = true;
+    }
+    if (changed) store.trackMeasuredSizes(next);
   }, [rfNodes]);
 
   const frameGeometry = useMemo(
@@ -618,7 +723,9 @@ function CanvasInner() {
           const current = useSkibStore
             .getState()
             .project.architecture.groups?.find((g) => g.id === groupId);
-          updateGroup(groupId, { collapsed: !(current?.collapsed ?? false) });
+          // Свёртывание/развёртывание с автораздвижением (v0.03.01j): план
+          // сдвига строится по живым габаритам канвы; одна операция истории.
+          setGroupCollapsed(groupId, !(current?.collapsed ?? false), liveRects);
         },
         onOpenMenu: (groupId: string, x: number, y: number) => {
           setCtxMenu({ kind: 'group', groupId, x, y });
@@ -654,7 +761,8 @@ function CanvasInner() {
     frameGeometry,
     selection,
     dropGroup,
-    updateGroup,
+    liveRects,
+    setGroupCollapsed,
   ]);
 
   // Полный список узлов канвы: узлы состояния (включая рамки ЛГ).
@@ -713,39 +821,189 @@ function CanvasInner() {
   // стороны портов, веера, скользящие якоря, родственные группы штрафов
   // и формы стрелок; направление стрелки задаётся жестом соединения
   // (см. handleConnectStart/End).
-  const routing = useMemo<{
-    paths: Map<string, RoutePoint[]>;
-    sides: Map<string, { source: 'left' | 'right'; target: 'left' | 'right' }>;
-  }>(() => {
+  //
+  // Кэш трассировки (v0.03.01j): полный проход (A* на каждую стрелку) —
+  // сотни миллисекунд на 200 связей, поэтому пересчитываются только
+  // ЗАТРОНУТЫЕ стрелки: с изменёнными концами, концами в изменившихся
+  // прямоугольниках или чей прежний путь проходит через изменившийся
+  // прямоугольник (с запасом). Кэш живёт в ref: memo может вычисляться
+  // при отменённых рендерах, повторный расчёт по тем же входам даёт тот
+  // же результат (детерминизм движка).
+  const routing = useMemo<RoutingCacheData>(() => {
     if (!showEdges || routedEdges.length === 0) {
-      return { paths: new Map(), sides: new Map() };
+      return { paths: new Map(), sides: new Map(), rects: new Map(), specs: new Map() };
     }
+    // Живой перенос ЛГ/ДБ (v0.03.01j): в кадрах жеста пересчитываются только
+    // стрелки с перенесёнными концами; пути, проходящие через сдвигаемые
+    // прямоугольники, пересчитываются один раз на завершении жеста — иначе
+    // каждый кадр перетрассирует десятки стрелок и перенос становится
+    // дёрганным. Признак жеста — draggingGroupId (для одиночного ДБ строгая
+    // перетрассировка не критична: затронутых стрелок мало).
     // Прямоугольники доменов — по узлам канвы (актуальны во время drag);
     // рамки свёрнутых ЛГ — как обычные препятствия (Ф-72): к ним крепятся
     // перенесённые стрелки. Развёрнутые рамки — не препятствия: связи идут
-    // сквозь границу ЛГ.
+    // сквозь границу ЛГ. Скрытые ДБ исключаются по модели (v0.03.01j):
+    // после смены видимости состояние канвы обновляется эффектом — без
+    // фильтра первый проход считал бы устаревшие прямоугольники и проход
+    // повторялся бы дважды (модель и канва сходятся за два рендера).
     const rects = new Map<string, RouteRect>();
     for (const node of rfNodes) {
       if (node.type !== 'domain') continue;
+      if (visibility.hiddenBlocks.has(node.id)) continue;
+      const remembered = useViewStore.getState().measuredSizes.get(node.id);
       rects.set(node.id, {
         x: node.position.x,
         y: node.position.y,
-        width: node.measured?.width ?? NODE_ESTIMATED_WIDTH,
-        height: node.measured?.height ?? NODE_ESTIMATED_HEIGHT,
+        width: node.measured?.width ?? remembered?.width ?? NODE_ESTIMATED_WIDTH,
+        height: node.measured?.height ?? remembered?.height ?? NODE_ESTIMATED_HEIGHT,
       });
     }
     for (const [groupId, geometry] of frameGeometry) {
       if (geometry.collapsed) rects.set(groupId, geometry.rect);
     }
-    return routeEdges({
-      rects,
-      edges: routedEdges.map((edge) => ({ id: edge.id, from: edge.from, to: edge.to })),
-    });
-  }, [rfNodes, routedEdges, showEdges, frameGeometry]);
+    const specs = new Map<string, { from: string; to: string }>();
+    for (const edge of routedEdges) {
+      if (!rects.has(edge.from) || !rects.has(edge.to)) continue;
+      specs.set(edge.id, { from: edge.from, to: edge.to });
+    }
 
+    const cache = useViewStore.getState().routingCache;
+    let cachedPaths: Map<string, RoutePoint[]> | undefined;
+    let rerouteIds: Set<string> | undefined;
+    if (cache) {
+      // Изменившиеся прямоугольники (перенос, свёртывание, измерение габаритов).
+      const changedIds = new Set<string>();
+      for (const [id, rect] of rects) {
+        const prev = cache.rects.get(id);
+        if (
+          !prev ||
+          prev.x !== rect.x ||
+          prev.y !== rect.y ||
+          prev.width !== rect.width ||
+          prev.height !== rect.height
+        ) {
+          changedIds.add(id);
+        }
+      }
+      for (const id of cache.rects.keys()) {
+        if (!rects.has(id)) changedIds.add(id);
+      }
+      // Перенесённые концы (свёртывание/развёртывание ЛГ) и новые стрелки —
+      // тоже затронуты; набор считается тем же, если состав id совпадает.
+      const sameSet =
+        cache.specs.size === specs.size &&
+        [...specs.keys()].every((id) => cache.specs.has(id));
+      rerouteIds = new Set<string>();
+      if (!sameSet) {
+        for (const [id, spec] of specs) {
+          const prev = cache.specs.get(id);
+          if (!prev || prev.from !== spec.from || prev.to !== spec.to) rerouteIds.add(id);
+        }
+      }
+      if (changedIds.size === 0 && rerouteIds.size === 0) {
+        // Прямоугольники и концы те же — трассировка не требуется вовсе
+        // (выделение, наведение и прочие пересчёты без геометрии).
+        return { paths: cache.paths, sides: cache.sides, rects: cache.rects, specs: cache.specs };
+      }
+      for (const [id, spec] of specs) {
+        if (rerouteIds.has(id)) continue;
+        if (changedIds.has(spec.from) || changedIds.has(spec.to)) rerouteIds.add(id);
+      }
+      // Стрелки, прежний путь которых проходит через ДОБАВЛЕННЫЙ или
+      // СДВИНУТЫЙ прямоугольник (запас 24 px — трасса уходит от контура).
+      // Пути через ИСЧЕЗНУВШИЕ прямоугольники остаются валидными: обход
+      // исчезнувшего домена ничему не пересекает — экономим на свёртывании
+      // ЛГ, где скрытых ДБ много (v0.03.01j). Во время живого переноса
+      // этот список не строится — см. комментарий выше.
+      const changedRects: RouteRect[] = [];
+      if (!draggingGroupId) {
+        for (const id of changedIds) {
+          const rect = rects.get(id);
+          if (!rect) continue; // исчезнувший — пересечений не создаёт
+          changedRects.push({
+            x: rect.x - 24,
+            y: rect.y - 24,
+            width: rect.width + 48,
+            height: rect.height + 48,
+          });
+        }
+      }
+      for (const [id, path] of cache.paths) {
+        if (rerouteIds.has(id) || draggingGroupId) continue;
+        for (let i = 0; i < path.length - 1; i += 1) {
+          const a = path[i];
+          const b = path[i + 1];
+          const minX = Math.min(a.x, b.x);
+          const maxX = Math.max(a.x, b.x);
+          const minY = Math.min(a.y, b.y);
+          const maxY = Math.max(a.y, b.y);
+          if (
+            changedRects.some(
+              (rect) =>
+                minX <= rect.x + rect.width &&
+                maxX >= rect.x &&
+                minY <= rect.y + rect.height &&
+                maxY >= rect.y,
+            )
+          ) {
+            rerouteIds.add(id);
+            break;
+          }
+        }
+      }
+      cachedPaths = cache.paths;
+    }
+
+    const output = routeEdges({
+      rects,
+      edges: routedEdges
+        .filter((edge) => rects.has(edge.from) && rects.has(edge.to))
+        .map((edge) => ({ id: edge.id, from: edge.from, to: edge.to })),
+      ...(cachedPaths ? { cachedPaths } : {}),
+      ...(rerouteIds ? { rerouteIds } : {}),
+    });
+    return { paths: output.paths, sides: output.sides, rects, specs };
+  }, [rfNodes, routedEdges, showEdges, frameGeometry, visibility, draggingGroupId]);
+
+  // Кэш трассировки хранится в viewStore и обновляется после фиксации:
+  // следующий пересчёт memo сравнивается с зафиксированным предыдущим
+  // проходом (полный diff-подход частичной перетрассировки).
+  useEffect(() => {
+    const store = useViewStore.getState();
+    if (!showEdges || routedEdges.length === 0) {
+      if (store.routingCache !== null) store.setRoutingCache(null);
+      return;
+    }
+    const prev = store.routingCache;
+    if (
+      prev &&
+      prev.rects === routing.rects &&
+      prev.specs === routing.specs &&
+      prev.paths === routing.paths &&
+      prev.sides === routing.sides
+    ) {
+      return;
+    }
+    store.setRoutingCache({
+      rects: routing.rects,
+      specs: routing.specs,
+      paths: routing.paths,
+      sides: routing.sides,
+    });
+  }, [routing, showEdges, routedEdges.length]);
+
+  // Кэш объектов стрелок (v0.03.01j): каждая пересборка edges создаёт новые
+  // объекты — React Flow перерисовывал ВСЕ стрелки при каждом изменении
+  // (проход трассировки, наведение, свёртывание ЛГ). Если все отображаемые
+  // поля совпали с прежним объектом (ломаная — по ССЫЛКЕ: у устойчивых
+  // стрелок кэш возвращает тот же массив), возвращается прежний объект —
+  // React Flow пропускает её ре-рендер; обновляются только затронутые.
   const edges = useMemo<Edge[]>(() => {
-    if (!showEdges) return [];
-    return routedEdges.map((edge) => {
+    if (!showEdges) {
+      return [];
+    }
+    const prevEdges = useViewStore.getState().prevEdges;
+    const list = routedEdges.map((edge) => {
       // Цвет стрелки — целостность потока: зелёная из доверенного источника,
       // красная — низкоцелостный поток (3.5 v0.01.01).
       const color = trust.edges.get(edge.id) === 'green' ? TRUST_COLORS.green.border : TRUST_COLORS.red.border;
@@ -753,6 +1011,29 @@ function CanvasInner() {
       const dimmed = focusedEdgeIds !== null && !isFocused;
       const label = edge.label ?? '';
       const side = routing.sides.get(edge.id);
+      const points = routing.paths.get(edge.id);
+      const displayLabel = isFocused || label.length <= EDGE_LABEL_LIMIT ? label || undefined : truncateLabel(label);
+      const labelColor = edgeLabelColor(theme);
+      const sourceHandle = side?.source === 'left' ? 'left' : undefined;
+      const targetHandle = side?.target === 'right' ? 'right' : undefined;
+      const prevEdge = prevEdges?.get(edge.id);
+      if (prevEdge && prevEdge.data) {
+        const prevData = prevEdge.data as RoutingEdgeData;
+        if (
+          prevEdge.source === edge.from &&
+          prevEdge.target === edge.to &&
+          prevEdge.sourceHandle === sourceHandle &&
+          prevEdge.targetHandle === targetHandle &&
+          prevData.points === points &&
+          prevData.focused === isFocused &&
+          prevData.dimmed === dimmed &&
+          prevData.label === displayLabel &&
+          prevData.color === color &&
+          prevData.labelColor === labelColor
+        ) {
+          return prevEdge;
+        }
+      }
       return {
         id: edge.id,
         source: edge.from,
@@ -760,15 +1041,15 @@ function CanvasInner() {
         type: 'routing' as const,
         // Стороны портов от трассировки (v0.01.07): встречные стрелки
         // подключаются к левому выходу источника и правому входу приёмника.
-        sourceHandle: side?.source === 'left' ? 'left' : undefined,
-        targetHandle: side?.target === 'right' ? 'right' : undefined,
+        sourceHandle,
+        targetHandle,
         data: {
-          label: isFocused || label.length <= EDGE_LABEL_LIMIT ? label || undefined : truncateLabel(label),
+          label: displayLabel,
           color,
-          labelColor: edgeLabelColor(theme),
+          labelColor,
           focused: isFocused,
           dimmed,
-          points: routing.paths.get(edge.id),
+          points,
         } satisfies RoutingEdgeData,
         animated: false,
         style: { stroke: color, strokeWidth: isFocused ? 3 : 2 },
@@ -784,7 +1065,21 @@ function CanvasInner() {
         className: dimmed ? 'skib-edge skib-edge--dim' : 'skib-edge',
       } as Edge;
     });
+    return list;
   }, [routedEdges, routing, showEdges, trust, theme, focusedEdgeIds]);
+
+  useEffect(() => {
+    const store = useViewStore.getState();
+    if (!showEdges) {
+      if (store.prevEdges !== null) store.setPrevEdges(null);
+      return;
+    }
+    const prev = store.prevEdges;
+    if (prev && prev.size === edges.length && edges.every((item) => prev.get(item.id) === item)) {
+      return;
+    }
+    store.setPrevEdges(new Map(edges.map((item) => [item.id, item])));
+  }, [edges, showEdges]);
 
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<Edge>(edges);
 
@@ -793,23 +1088,45 @@ function CanvasInner() {
   // габариты) сохраняется: React Flow при adoptUserNodes берёт selected
   // из НОВОГО объекта узла, поэтому замена объектов с устаревшим флагом
   // сбрасывала бы выделение и зацикливала RF↔store (React #185).
+  //
+  // Сигнатуры данных узлов (v0.03.01j): memo nodes строит новые объекты на
+  // каждое изменение проекта, и React Flow перерисовывал все 76 узлов на
+  // каждый кадр переноса. Если отображаемые данные узла не изменились,
+  // возвращается ПРЕЖНИЙ объект — React Flow пропускает его ре-рендер;
+  // обновляются только действительно изменившиеся узлы (позиции — по
+  // значению, ломаные стрелок не зависят от узлов).
+  // Сигнатуры данных узлов — ref, читаемый и пишемый ТОЛЬКО в этом эффекте
+  // (доступ к ref внутри эффектов разрешён).
+  const nodeSignaturesRef = useRef<Map<string, string>>(new Map());
+
   useEffect(() => {
     setRfNodes((prev) => {
       const prevById = new Map(prev.map((node) => [node.id, node]));
-      return nodes.map((node) => {
+      const sigs = nodeSignaturesRef.current;
+      const nextSigs = new Map<string, string>();
+      const result = nodes.map((node) => {
         const old = prevById.get(node.id);
-        if (!old) return node;
+        if (!old) {
+          nextSigs.set(node.id, domainNodeSignature(node));
+          return node;
+        }
         const selected = old.selected ?? false;
         const measured = old.measured;
-        if (
+        const merged =
           (node.selected ?? false) === selected &&
           node.measured?.width === measured?.width &&
           node.measured?.height === measured?.height
-        ) {
-          return node;
-        }
-        return { ...node, selected, ...(measured ? { measured } : {}) };
+            ? node
+            : { ...node, selected, ...(measured ? { measured } : {}) };
+        const sig = domainNodeSignature(merged);
+        nextSigs.set(node.id, sig);
+        if (sigs.get(node.id) === sig) return old;
+        return merged;
       });
+      // Сигнатуры исчезнувших узлов убираются, чтобы повторное добавление
+      // (развёртывание ЛГ) гарантированно обновило узел.
+      nodeSignaturesRef.current = nextSigs;
+      return result;
     });
   }, [nodes, setRfNodes]);
   useEffect(() => {
@@ -1074,7 +1391,7 @@ function CanvasInner() {
   const dropGeometryFor = useCallback(
     (excludeIds: ReadonlySet<string>) => {
       if (excludeIds.size === 0) return frameGeometry;
-      const rects = new Map(liveRects);
+      const rects = new Map<string, LgRect>(liveRects);
       for (const id of excludeIds) rects.delete(id);
       return computeGroupGeometry(project.architecture, rects, visibility);
     },

@@ -337,7 +337,10 @@ export interface GroupGeometry {
 
 /**
  * Прямоугольники видимых ЛГ. Развёрнутая рамка охватывает прямые ДБ-члены
- * и рамки вложенных ЛГ с отступом LG_FRAME_PADDING; свёрнутая ЛГ — блок
+ * и РАМКИ ПРЯМЫХ ВЛОЖЕННЫХ ЛГ (развёрнутые — их рамки, свёрнутые — их блоки)
+ * с отступом LG_FRAME_PADDING (v0.03.01j: раньше рамки вложенных ЛГ не
+ * включались в охват родителя — вложенная ЛГ визуально выглядела отдельной,
+ * но двигалась вместе с родителем; см. Ф-78); свёрнутая ЛГ — блок
  * LG_COLLAPSED_* в левом верхнем углу охватывающего прямоугольника членов;
  * пустая ЛГ — блок в якоре group.position. ЛГ под свёрнутым предком не
  * вычисляются (они скрыты). Члены берутся из переданных прямоугольников
@@ -351,12 +354,21 @@ export function computeGroupGeometry(
   const groups = arch.groups ?? [];
   const depths = groupDepths(groups);
   const blockMembers = groupBlockMembers(arch);
-  // От корня к листьям: рамки детей готовы к моменту расчёта родителя.
+  // Прямые дети каждой ЛГ (parentId → id детей): рамки детей входят в охват
+  // родителя (v0.03.01j — см. выше).
+  const childrenOf = new Map<string, string[]>();
+  for (const group of groups) {
+    if (!group.parentId) continue;
+    const list = childrenOf.get(group.parentId);
+    if (list) list.push(group.id);
+    else childrenOf.set(group.parentId, [group.id]);
+  }
+  // От листьев к корню: рамки детей готовы к моменту расчёта родителя.
   const ordered = [...groups]
     .filter((g) => visibility.visibleExpanded.has(g.id) || visibility.visibleCollapsed.has(g.id))
     .sort((a, b) => (depths.get(b.id) ?? 0) - (depths.get(a.id) ?? 0));
 
-  const childRects = new Map<string, LgRect[]>();
+  const rectsByGroup = new Map<string, LgRect>();
   const result = new Map<string, GroupGeometry>();
   for (const group of ordered) {
     const collapsed = visibility.visibleCollapsed.has(group.id);
@@ -370,16 +382,14 @@ export function computeGroupGeometry(
         return block ? [blockRect(block, null)] : [];
       });
       const cover = unionRects(memberRects);
-      result.set(group.id, {
-        rect: {
-          x: cover ? cover.x : group.position?.x ?? 80,
-          y: cover ? cover.y : group.position?.y ?? 80,
-          width: LG_COLLAPSED_WIDTH,
-          height: LG_COLLAPSED_HEIGHT,
-        },
-        collapsed: true,
-        empty: cover === null,
-      });
+      const rect: LgRect = {
+        x: cover ? cover.x : group.position?.x ?? 80,
+        y: cover ? cover.y : group.position?.y ?? 80,
+        width: LG_COLLAPSED_WIDTH,
+        height: LG_COLLAPSED_HEIGHT,
+      };
+      result.set(group.id, { rect, collapsed: true, empty: cover === null });
+      rectsByGroup.set(group.id, rect);
       continue;
     }
     const memberRects = [
@@ -389,7 +399,12 @@ export function computeGroupGeometry(
         const block = arch.blocks.find((b) => b.id === id);
         return block ? [blockRect(block, null)] : [];
       }),
-      ...(childRects.get(group.id) ?? []),
+      // Рамки прямых вложенных ЛГ (v0.03.01j): развёрнутые — их рамки,
+      // свёрнутые — их блоки; вложенные обрабатываются раньше родителя.
+      ...(childrenOf.get(group.id) ?? []).flatMap((childId) => {
+        const rect = rectsByGroup.get(childId);
+        return rect ? [rect] : [];
+      }),
     ];
     const cover = unionRects(memberRects);
     if (!cover) {
@@ -401,7 +416,7 @@ export function computeGroupGeometry(
         height: LG_COLLAPSED_HEIGHT,
       };
       result.set(group.id, { rect, collapsed: false, empty: true });
-      childRects.set(group.id, [rect]);
+      rectsByGroup.set(group.id, rect);
       continue;
     }
     const rect = {
@@ -411,9 +426,180 @@ export function computeGroupGeometry(
       height: cover.height + LG_FRAME_PADDING * 2,
     };
     result.set(group.id, { rect, collapsed: false, empty: false });
-    childRects.set(group.id, [rect]);
+    rectsByGroup.set(group.id, rect);
   }
   return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Автораздвижение при разворачивании ЛГ (v0.03.01j)                    */
+/* ------------------------------------------------------------------ */
+
+/** Зазор между рамкой разворачиваемой ЛГ и соседями при автораздвижении, px. */
+export const LG_EXPAND_GAP = 16;
+
+/** План автораздвижения разворачиваемой ЛГ: жёсткий сдвиг поддерева. */
+export interface ExpandShiftPlan {
+  /** Смещение поддерева ЛГ (px). */
+  dx: number;
+  dy: number;
+  /** Новые позиции видимых ДБ поддерева (id → позиция). */
+  positions: Record<string, { x: number; y: number }>;
+}
+
+/**
+ * Наложение прямоугольников с зазором (строгая проверка: касание — не наложение).
+ */
+function rectsOverlap(a: LgRect, b: LgRect, gap: number): boolean {
+  return (
+    a.x - gap < b.x + b.width &&
+    a.x + a.width + gap > b.x &&
+    a.y - gap < b.y + b.height &&
+    a.y + a.height + gap > b.y
+  );
+}
+
+/**
+ * План автораздвижения при разворачивании ЛГ (v0.03.01j): если развёрнутая
+ * рамка накладывается на соседей — видимые развёрнутые рамки других ЛГ,
+ * свёрнутые блоки ЛГ, видимые ДБ вне поддерева — поддерево ЛГ целиком
+ * (видимые ДБ + вложенные рамки следуют за своими членами) смещается
+ * в сторону свободного места. Сдвиг — минимальный из четырёх направлений
+ * (вправо, вниз, влево, вверх), полностью уводящий рамку из всех наложений
+ * по своей оси; единственное жёсткое ограничение — сдвиг не накладывает
+ * поддерево на внешние системы. Без наложений — null (позиции не меняются).
+ * Чистая функция: модель не изменяется. liveRects — живые габариты канвы
+ * (null — оценочные по позициям модели).
+ */
+export function planExpandShift(
+  arch: Pick<Architecture, 'blocks' | 'groups'>,
+  groupId: string,
+  liveRects: Map<string, LgRect> | null,
+): ExpandShiftPlan | null {
+  const groups = arch.groups ?? [];
+  const target = groups.find((g) => g.id === groupId);
+  if (!target) return null;
+  // Развёрнутое состояние ЛГ: видимость и геометрия считаются так, как их
+  // покажет канва после разворачивания (флаг свёрнутости подменяется локально).
+  const expandedGroups = groups.map((g) => (g.id === groupId ? { ...g, collapsed: false } : g));
+  const expandedArch = { ...arch, groups: expandedGroups };
+  const visibility = computeGroupVisibility(expandedArch);
+  const geometry = computeGroupGeometry(expandedArch, liveRects, visibility);
+  const frame = geometry.get(groupId);
+  if (!frame || frame.collapsed) return null;
+  const subtree = new Set(groupSubtree(groups, groupId));
+  // Рамки предков — не препятствия: они охватывают развёрнутую ЛГ по
+  // построению (computeGroupGeometry) и всегда «накладываются» на неё.
+  const ancestors = new Set(groupAncestors(groups, groupId));
+  // ДБ поддерева ЛГ (для препятствий — один проход по группам).
+  const subtreeBlockSet = new Set<string>();
+  for (const id of subtree) {
+    for (const blockId of subtreeBlockIds(arch, id)) subtreeBlockSet.add(blockId);
+  }
+
+  // Прямоугольники видимых ДБ поддерева: сдвигаются вместе с рамкой
+  // (модельные позиции — у только что скрытых ДБ живых прямоугольников нет).
+  const movedIds = subtreeBlockIds(expandedArch, groupId).filter(
+    (id) => !visibility.hiddenBlocks.has(id),
+  );
+  const blockById = new Map(arch.blocks.map((b) => [b.id, b]));
+  const movedRects = new Map<string, LgRect>();
+  for (const id of movedIds) {
+    const live = liveRects?.get(id);
+    const block = blockById.get(id);
+    if (live) movedRects.set(id, live);
+    else if (block) movedRects.set(id, blockRect(block, null));
+  }
+
+  // Препятствия: развёрнутые рамки и свёрнутые блоки других ЛГ (кроме
+  // рамок предков и рамок поддерева), видимые ДБ вне поддерева
+  // (внешние системы — вне периметра, не препятствие).
+  const obstacles: LgRect[] = [];
+  for (const [otherId, other] of geometry) {
+    if (subtree.has(otherId) || ancestors.has(otherId)) continue;
+    obstacles.push(other.rect);
+  }
+  for (const block of arch.blocks) {
+    if (block.external || visibility.hiddenBlocks.has(block.id)) continue;
+    if (block.groupId && subtreeBlockSet.has(block.id)) continue;
+    const live = liveRects?.get(block.id);
+    obstacles.push(live ?? blockRect(block, null));
+  }
+
+  const gap = LG_EXPAND_GAP;
+  const overlapped = obstacles.filter((rect) => rectsOverlap(frame.rect, rect, gap));
+  if (overlapped.length === 0) return null;
+
+  // Перекрытие по перпендикулярной оси: для горизонтального сдвига —
+  // пересечение диапазонов Y (с зазором).
+  const yOverlap = (rect: LgRect): boolean =>
+    frame.rect.y - gap < rect.y + rect.height &&
+    frame.rect.y + frame.rect.height + gap > rect.y;
+  const xOverlap = (rect: LgRect): boolean =>
+    frame.rect.x - gap < rect.x + rect.width &&
+    frame.rect.x + frame.rect.width + gap > rect.x;
+
+  // Минимальный сдвиг по каждой из четырёх сторон: рамка полностью выходит
+  // из зоны каждого наложения по своей оси.
+  let right = 0;
+  let left = 0;
+  let down = 0;
+  let up = 0;
+  for (const rect of overlapped) {
+    if (yOverlap(rect)) {
+      right = Math.max(right, rect.x + rect.width + gap - frame.rect.x);
+      left = Math.min(left, rect.x - gap - (frame.rect.x + frame.rect.width));
+    }
+    if (xOverlap(rect)) {
+      down = Math.max(down, rect.y + rect.height + gap - frame.rect.y);
+      up = Math.min(up, rect.y - gap - (frame.rect.y + frame.rect.height));
+    }
+  }
+  const candidates: Array<{ dx: number; dy: number; distance: number; order: number }> = [
+    { dx: right, dy: 0, distance: right, order: 0 },
+    { dx: 0, dy: down, distance: down, order: 1 },
+    { dx: left, dy: 0, distance: -left, order: 2 },
+    { dx: 0, dy: up, distance: -up, order: 3 },
+  ].filter((candidate) => candidate.distance > 0);
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.distance - b.distance || a.order - b.order);
+
+  // Единственное жёсткое ограничение — внешние системы: сдвинутое поддерево
+  // не накладывается на них (периметр сам охватывает внутренние ДБ, поэтому
+  // «выход за периметр» — не ограничение, а его штатный рост). Если
+  // минимальный сдвиг приводит к наложению на внешнюю систему, берётся
+  // следующий по величине; если такого нет — минимальный (крайний случай).
+  const externalRects: LgRect[] = [];
+  for (const block of arch.blocks) {
+    if (!block.external) continue;
+    const live = liveRects?.get(block.id);
+    externalRects.push(live ?? blockRect(block, null));
+  }
+  const hitsExternal = (candidate: { dx: number; dy: number }): boolean =>
+    externalRects.some((rect) =>
+      [...movedRects.values()].some((moved) =>
+        rectsOverlap(
+          {
+            x: moved.x + candidate.dx,
+            y: moved.y + candidate.dy,
+            width: moved.width,
+            height: moved.height,
+          },
+          rect,
+          gap,
+        ),
+      ),
+    );
+  const chosen = candidates.find((candidate) => !hitsExternal(candidate)) ?? candidates[0];
+  const dx = chosen.dx;
+  const dy = chosen.dy;
+  if (dx === 0 && dy === 0) return null;
+
+  const positions: Record<string, { x: number; y: number }> = {};
+  for (const [id, rect] of movedRects) {
+    positions[id] = { x: rect.x + dx, y: rect.y + dy };
+  }
+  return { dx, dy, positions };
 }
 
 /* ------------------------------------------------------------------ */

@@ -188,6 +188,37 @@ describe('Операции ЛГ (v0.02.03)', () => {
     expect(useSkibStore.getState().past).toHaveLength(0);
   });
 
+  it('свёртывание через setGroupCollapsed не двигает ДБ; одна операция истории', () => {
+    const store = useSkibStore.getState();
+    const id = store.createGroup({ memberIds: ['dom-a', 'dom-b'] })!;
+    useSkibStore.setState({ past: [], future: [] });
+    useSkibStore.getState().setGroupCollapsed(id, true);
+    expect((project().architecture.groups ?? []).find((g) => g.id === id)?.collapsed).toBe(true);
+    expect(project().architecture.blocks.find((b) => b.id === 'dom-a')?.position).toEqual({ x: 60, y: 60 });
+    expect(useSkibStore.getState().past).toHaveLength(1);
+    useSkibStore.getState().undo();
+    expect((project().architecture.groups ?? []).find((g) => g.id === id)?.collapsed).toBe(false);
+  });
+
+  it('развёртывание с автораздвижением (v0.03.01j): сдвиг поддерева в той же операции истории', () => {
+    const store = useSkibStore.getState();
+    const lg1 = store.createGroup({ name: 'ЛГ 1', memberIds: ['dom-a'] })!;
+    store.createGroup({ name: 'ЛГ 2', memberIds: ['dom-b'] })!;
+    // Рамки ЛГ 1 (36..384) и ЛГ 2 (376..724) накладываются на 8 px:
+    // разворачивание обязано раздвинуть поддерево без ручного переноса.
+    useSkibStore.getState().setGroupCollapsed(lg1, true);
+    useSkibStore.setState({ past: [], future: [] });
+    useSkibStore.getState().setGroupCollapsed(lg1, false);
+    expect((project().architecture.groups ?? []).find((g) => g.id === lg1)?.collapsed).toBe(false);
+    // Свободнее влево (24 px): рамка ЛГ 1 отходит от рамки ЛГ 2.
+    expect(project().architecture.blocks.find((b) => b.id === 'dom-a')?.position).toEqual({ x: 36, y: 60 });
+    // Одна операция истории: Ctrl+Z возвращает и флаг, и прежнюю позицию.
+    expect(useSkibStore.getState().past).toHaveLength(1);
+    useSkibStore.getState().undo();
+    expect((project().architecture.groups ?? []).find((g) => g.id === lg1)?.collapsed).toBe(true);
+    expect(project().architecture.blocks.find((b) => b.id === 'dom-a')?.position).toEqual({ x: 60, y: 60 });
+  });
+
   it('декомпозиция: потомки наследуют ЛГ, группы сохраняются', () => {
     const store = useSkibStore.getState();
     const id = store.createGroup({ memberIds: ['dom-a'] })!;

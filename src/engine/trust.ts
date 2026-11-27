@@ -158,24 +158,51 @@ export interface FrameBounds {
 }
 
 /**
- * Рамка периметра охватывает только внутренние домены (внешние системы
- * находятся вне периметра). При отсутствии внутренних доменов рамка не
- * строится — возвращается null.
+ * Опции рамки периметра (v0.03.01j): видимый периметр ДАП не учитывает ДБ,
+ * скрытые внутри свёрнутых ЛГ, но охватывает их свёрнутые блоки — при
+ * схлопывании ЛГ периметр сжимается вслед за содержимым канвы.
  */
-export function frameBounds(architecture: Pick<Architecture, 'blocks'>): FrameBounds | null {
-  const internal = architecture.blocks.filter((b) => !b.external);
-  if (internal.length === 0) return null;
+export interface FrameBoundsOptions {
+  /** ДБ, не учитываемые в охвате (скрытые внутри свёрнутых ЛГ). */
+  excludeBlockIds?: ReadonlySet<string>;
+  /** Дополнительные прямоугольники внутри периметра (свёрнутые блоки ЛГ). */
+  extraRects?: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
+}
+
+/**
+ * Рамка периметра охватывает только внутренние домены (внешние системы
+ * находятся вне периметра). Без опций — охват по всем внутренним ДБ (модельный
+ * периметр: используется при импорте и вытеснении внешних систем); с опциями
+ * — видимый периметр канвы. При отсутствии внутренних доменов и дополнительных
+ * прямоугольников рамка не строится — возвращается null.
+ */
+export function frameBounds(
+  architecture: Pick<Architecture, 'blocks'>,
+  options?: FrameBoundsOptions,
+): FrameBounds | null {
+  const exclude = options?.excludeBlockIds;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const block of internal) {
+  let any = false;
+  for (const block of architecture.blocks) {
+    if (block.external || exclude?.has(block.id)) continue;
     const position = block.position ?? { x: 0, y: 0 };
     minX = Math.min(minX, position.x);
     minY = Math.min(minY, position.y);
     maxX = Math.max(maxX, position.x + NODE_ESTIMATED_WIDTH);
     maxY = Math.max(maxY, position.y + NODE_ESTIMATED_HEIGHT);
+    any = true;
   }
+  for (const rect of options?.extraRects ?? []) {
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.width);
+    maxY = Math.max(maxY, rect.y + rect.height);
+    any = true;
+  }
+  if (!any) return null;
   return {
     x: minX - FRAME_PADDING,
     y: minY - FRAME_PADDING,

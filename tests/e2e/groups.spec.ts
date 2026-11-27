@@ -306,3 +306,120 @@ test('v0.03.01h: без ЛГ кнопки канвы «Свернуть ЛГ»/�
   await expect(page.getByTestId('lg-collapse-all-canvas')).toBeDisabled();
   await expect(page.getByTestId('lg-expand-all-canvas')).toBeDisabled();
 });
+
+test('v0.03.01j: рамка родителя охватывает вложенную ЛГ — «двигаются вместе» видно геометрически', async ({
+  page,
+}) => {
+  // Вложенная ЛГ lg-2 (план + привод) внутри lg-1.
+  await selectPair(page, 'blk-plan', 'blk-drive');
+  await page.getByTestId('lg-chip-lg-1').click({ button: 'right' });
+  await page.getByTestId('lg-ctx-create-nested').click();
+  await page.getByTestId('lg-apply').click();
+  await expect(page.locator('[data-lg-id="lg-2"]')).toHaveCount(1);
+
+  const box = async (selector: string) => {
+    const b = (await page.locator(selector).boundingBox())!;
+    return { x: b.x, y: b.y, width: b.width, height: b.height };
+  };
+  const parent = await box('[data-lg-id="lg-1"]');
+  const child = await box('[data-lg-id="lg-2"]');
+  // Рамка ребёнка целиком внутри рамки родителя: перенос родителя двигает
+  // поддерево, и это видно по геометрии (раньше рамки были «отдельными»).
+  expect(parent.x).toBeLessThanOrEqual(child.x);
+  expect(parent.y).toBeLessThanOrEqual(child.y);
+  expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.x + child.width);
+  expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.y + child.height);
+});
+
+test('v0.03.01j: периметр сжимается при свёртывании ЛГ и растёт при развёртывании', async ({ page }) => {
+  const perimSize = () =>
+    page.evaluate(() => {
+      const el = document.querySelector(
+        '.react-flow__node[data-id="__perimeter"]',
+      ) as HTMLElement | null;
+      return el ? { width: el.offsetWidth, height: el.offsetHeight } : null;
+    });
+  const before = (await perimSize())!;
+  // Свёртывание lg-1: план и привод скрыты — периметр сжимается по ширине
+  // (правая граница периметра держалась на приводе, x до 1670).
+  await page.getByTestId('lg-toggle-lg-1').click();
+  await expect(page.locator('[data-lg-id="lg-1"][data-lg-collapsed="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(0);
+  const after = (await perimSize())!;
+  expect(after.width).toBeLessThan(before.width);
+  // Развёртывание возвращает периметр.
+  await page.getByTestId('lg-toggle-lg-1').click();
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+  const restored = (await perimSize())!;
+  expect(restored.width).toBeCloseTo(before.width, 0);
+});
+
+test('v0.03.01j: развёртывание ЛГ с автораздвижением — без наложения на соседей', async ({ page }) => {
+  const box = async (selector: string) => (await page.locator(selector).boundingBox())!;
+  const overlap = (
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ) =>
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y;
+
+  // 1. Свёртывание lg-1; свёрнутый блок тащится под blk-perc и правее —
+  //    развёрнутая рамка (охват членов с отступом 24) обязана наложиться
+  //    на blk-perc. Плашка остаётся на свободном месте (ниже blk-perc) —
+  //    её тумблер доступен (рамки ЛГ рисуются под доменами).
+  await page.getByTestId('lg-toggle-lg-1').click();
+  await expect(page.locator('[data-lg-id="lg-1"][data-lg-collapsed="true"]')).toHaveCount(1);
+  const percBefore = await box('[data-block-id="blk-perc"]');
+  // Масштаб канвы: экранные пиксели = модельные × zoom.
+  const zoom = await page.evaluate(() => {
+    const vp = document.querySelector('.react-flow__viewport') as HTMLElement | null;
+    const m = vp?.style.transform.match(/scale\(([\d.]+)\)/);
+    return m ? parseFloat(m[1]) : 1;
+  });
+  const chip = page.getByTestId('lg-chip-lg-1');
+  const chipBox = (await chip.boundingBox())!;
+  await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    chipBox.x + chipBox.width / 2 - 320 * zoom,
+    chipBox.y + chipBox.height / 2 + 410 * zoom,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+
+  // 2. Развёртывание: рамка lg-1 раздвигает поддерево сама — ручной перенос
+  //    не требуется; члены видны, наложения на blk-perc нет. Тумблер
+  //    нажимается DOM-кликом: свёрнутая плашка может оказаться под доменом
+  //    (рамки ЛГ ниже доменов по z-порядку), проверяется логика раздвижения.
+  await page.evaluate(() => {
+    (document.querySelector('[data-testid="lg-toggle-lg-1"]') as HTMLElement | null)?.click();
+  });
+  await expect(page.locator('[data-block-id="blk-plan"]')).toHaveCount(1);
+  await expect(page.locator('[data-block-id="blk-drive"]')).toHaveCount(1);
+  const frame = (await box('[data-lg-id="lg-1"]')) as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  const perc = (await box('[data-block-id="blk-perc"]')) as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  expect(overlap(frame, perc)).toBe(false);
+  // На link тоже не накладывается.
+  const link = (await box('[data-block-id="blk-link"]')) as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  expect(overlap(frame, link)).toBe(false);
+  // Одна операция истории: Ctrl+Z возвращает свёрнутость и прежние позиции.
+  await page.getByTestId('undo').click();
+  await expect(page.locator('[data-lg-id="lg-1"][data-lg-collapsed="true"]')).toHaveCount(1);
+});

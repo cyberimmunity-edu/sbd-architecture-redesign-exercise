@@ -23,7 +23,13 @@ docs/ai-integration.md (справочник ИИ-агента), docs/testing-gu
 
 - Полный гейт перед сдачей: `make check` = проверка Makefile (сухой прогон)
   → lint (tsc + eslint) → смоук CLI (`make cli`) → интеграционные CLI-тесты
-  (`make test-cli`, `tests/cli/run.mjs`) → unit (vitest) + E2E (Playwright).
+  (`make test-cli`, `tests/cli/run.mjs`) → unit (vitest) + E2E (Playwright)
+  → perf-E2E против прод-сборки (`make test-perf`: `next build`, затем
+  serve out и Playwright с `playwright.perf.config.ts`; бюджеты большой
+  модели — импорт ≤ 2 с, свёртывание/развёртывание/перемещение ЛГ ≤ 1 с,
+  экспорт ≤ 1 с). Perf-тест исключён из dev-прогона (`testIgnore`) —
+  бюджеты справедливы для прод-сборки, dev-сервер меряет свои накладные
+  расходы.
 - В чистой среде перед E2E: `npx playwright install chromium`.
 - Рецепты Makefile — только с табуляцией; при текстовых правках запускать
   `python3 scripts/fix_makefile_tabs.py` и `make check-makefile`.

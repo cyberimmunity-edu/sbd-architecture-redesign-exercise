@@ -446,51 +446,117 @@ function buildGrid(
 
 /**
  * Минимальная двоичная куча по приоритету (f, затем h — для детерминизма).
+ * Параллельные типизированные массивы вместо объектов (v0.03.01j): трассировка
+ * сотен стрелок за кадр не создаёт миллионы временных объектов — A* сотен
+ * стрелок укладывается в кадр без давления на сборщик мусора.
  */
 class MinHeap {
-  private readonly items: Array<{ f: number; h: number; index: number }> = [];
+  private f: Float64Array = new Float64Array(1024);
+  private h: Float64Array = new Float64Array(1024);
+  private index: Int32Array = new Int32Array(1024);
+  private length = 0;
 
   get size(): number {
-    return this.items.length;
+    return this.length;
+  }
+
+  /** Очистка без сброса ёмкости: кучи переиспользуются между стрелками. */
+  clear(): void {
+    this.length = 0;
   }
 
   push(f: number, h: number, index: number): void {
-    this.items.push({ f, h, index });
-    let i = this.items.length - 1;
+    if (this.length === this.f.length) this.grow();
+    let i = this.length;
+    this.length += 1;
+    this.f[i] = f;
+    this.h[i] = h;
+    this.index[i] = index;
     while (i > 0) {
       const parent = (i - 1) >> 1;
       if (this.less(i, parent)) {
-        [this.items[i], this.items[parent]] = [this.items[parent], this.items[i]];
+        this.swap(i, parent);
         i = parent;
       } else break;
     }
   }
 
   pop(): number {
-    const top = this.items[0];
-    const last = this.items.pop()!;
-    if (this.items.length > 0) {
-      this.items[0] = last;
+    const top = this.index[0];
+    this.length -= 1;
+    if (this.length > 0) {
+      this.f[0] = this.f[this.length];
+      this.h[0] = this.h[this.length];
+      this.index[0] = this.index[this.length];
       let i = 0;
       for (;;) {
         const left = 2 * i + 1;
         const right = left + 1;
         let smallest = i;
-        if (left < this.items.length && this.less(left, smallest)) smallest = left;
-        if (right < this.items.length && this.less(right, smallest)) smallest = right;
+        if (left < this.length && this.less(left, smallest)) smallest = left;
+        if (right < this.length && this.less(right, smallest)) smallest = right;
         if (smallest === i) break;
-        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
+        this.swap(i, smallest);
         i = smallest;
       }
     }
-    return top.index;
+    return top;
+  }
+
+  private grow(): void {
+    const capacity = this.f.length * 2;
+    const f = new Float64Array(capacity);
+    f.set(this.f);
+    const h = new Float64Array(capacity);
+    h.set(this.h);
+    const index = new Int32Array(capacity);
+    index.set(this.index);
+    this.f = f;
+    this.h = h;
+    this.index = index;
+  }
+
+  private swap(a: number, b: number): void {
+    const f = this.f[a];
+    this.f[a] = this.f[b];
+    this.f[b] = f;
+    const h = this.h[a];
+    this.h[a] = this.h[b];
+    this.h[b] = h;
+    const index = this.index[a];
+    this.index[a] = this.index[b];
+    this.index[b] = index;
   }
 
   private less(a: number, b: number): boolean {
-    const x = this.items[a];
-    const y = this.items[b];
-    return x.f < y.f || (x.f === y.f && x.h < y.h);
+    const fa = this.f[a];
+    const fb = this.f[b];
+    return fa < fb || (fa === fb && this.h[a] < this.h[b]);
   }
+}
+
+/**
+ * Переиспользуемые буферы A* (v0.03.01j): gScore/cameFrom/closed выделяются
+ * один раз и растут при необходимости; заполнение — быстрый memset вместо
+ * аллокаций на каждую стрелку. Поиск не реентерабелен (плоский цикл),
+ * детерминизм не меняется: значения те же, что и при свежих буферах.
+ */
+const aStarScratch = {
+  gScore: new Float64Array(0),
+  cameFrom: new Int32Array(0),
+  closed: new Uint8Array(0),
+  cellPenalty: new Float32Array(0),
+};
+
+const aStarHeap = new MinHeap();
+
+function ensureAStarBuffers(size: number): void {
+  if (aStarScratch.gScore.length >= size) return;
+  const capacity = Math.max(size, aStarScratch.gScore.length * 2);
+  aStarScratch.gScore = new Float64Array(capacity);
+  aStarScratch.cameFrom = new Int32Array(capacity);
+  aStarScratch.closed = new Uint8Array(capacity);
+  aStarScratch.cellPenalty = new Float32Array(Math.max(1, Math.ceil(capacity / 4)));
 }
 
 /**
@@ -513,19 +579,33 @@ function findGridPath(
   const size = cols * rows;
   const goalCol = goal % cols;
   const goalRow = Math.floor(goal / cols);
-  const gScore = new Float64Array(size * dirCount).fill(Infinity);
-  const cameFrom = new Int32Array(size * dirCount).fill(-1);
-  const closed = new Uint8Array(size * dirCount);
-  const heap = new MinHeap();
+  ensureAStarBuffers(size * dirCount);
+  const gScore = aStarScratch.gScore;
+  const cameFrom = aStarScratch.cameFrom;
+  const closed = aStarScratch.closed;
+  gScore.fill(Infinity, 0, size * dirCount);
+  cameFrom.fill(-1, 0, size * dirCount);
+  closed.fill(0, 0, size * dirCount);
+  const heap = aStarHeap;
+  heap.clear();
+  // Штраф клетки кэшируется при первом визите (v0.03.01j): клетку рассматривают
+  // до четырёх соседей — один расчёт вместо четырёх. Сентинел −1 — «ещё не считался».
+  const cellPenaltyCache = aStarScratch.cellPenalty;
+  cellPenaltyCache.fill(-1, 0, size);
+  const hasPenalty = penalty !== undefined && penalty.values.length > 0;
   const cellPenalty = (index: number): number => {
-    if (!penalty || penalty.values.length === 0) return 0;
+    if (!hasPenalty) return 0;
+    const cached = cellPenaltyCache[index];
+    if (cached >= 0) return cached;
     const col = index % cols;
     const row = Math.floor(index / cols);
-    return penaltyValueAt(
+    const value = penaltyValueAt(
       penalty,
       grid.x0 + (col + 0.5) * grid.cell,
       grid.y0 + (row + 0.5) * grid.cell,
     );
+    cellPenaltyCache[index] = value;
+    return value;
   };
   const startCol = start % cols;
   const startRow = Math.floor(start / cols);
@@ -1291,6 +1371,13 @@ export interface RoutingLayout {
   rects: Map<string, RouteRect>;
   /** Видимые стрелки; концы без габаритов пропускаются. */
   edges: RouteEdgeSpec[];
+  /** Кэш ломаных прошлого прохода (v0.03.01j); используется вместе с rerouteIds. */
+  cachedPaths?: Map<string, RoutePoint[]>;
+  /** Стрелки, требующие полной трассировки (v0.03.01j): у остальных берётся
+   *  кэш — пересчёт только затронутых стрелок при перемещении/свёртывании ЛГ
+   *  и изменении измеренных габаритов. Без rerouteIds — полный проход.
+   *  Детерминизм: одинаковые входы (включая кэш) — одинаковые ломаные. */
+  rerouteIds?: Set<string>;
 }
 
 /** Результат трассировки: ломаные и стороны портов. */
@@ -1308,6 +1395,8 @@ export interface RoutingOutput {
  * Чистая и детерминированная: одинаковые входы — одинаковые формы.
  */
 export function routeEdges(layout: RoutingLayout): RoutingOutput {
+  (globalThis as unknown as { __re?: { count: number; ms: number } }).__re = { count: ((globalThis as unknown as { __re?: { count: number; ms: number } }).__re?.count ?? 0) + 1, ms: ((globalThis as unknown as { __re?: { count: number; ms: number } }).__re?.ms ?? 0) };
+  const __t0 = performance.now();
   const paths = new Map<string, RoutePoint[]>();
   const sides = new Map<string, RouteSide>();
   const { rects } = layout;
@@ -1357,6 +1446,19 @@ export function routeEdges(layout: RoutingLayout): RoutingOutput {
     }
     return grid;
   };
+
+  // Частичная перетрассировка (v0.03.01j): ломаные стрелок вне rerouteIds
+  // берутся из кэша и всё равно накапливают штрафы — коридоры устойчивых
+  // стрелок влияют на формы пересчитываемых так же, как при полном проходе.
+  const reroute = layout.rerouteIds;
+  const cached = layout.cachedPaths;
+  const cachedPathOf = (edgeId: string): RoutePoint[] | null => {
+    if (!reroute?.has(edgeId)) {
+      const path = cached?.get(edgeId);
+      if (path && path.length >= 2) return path;
+    }
+    return null;
+  };
   // Параллельные стрелки одной пары узлов разводятся перпендикулярным
   // сдвигом ±8 px вокруг оси пары.
   const pairIndex = new Map<string, number>();
@@ -1369,6 +1471,18 @@ export function routeEdges(layout: RoutingLayout): RoutingOutput {
   for (const edge of ordered) {
     const side = sides.get(edge.id);
     if (!side) continue;
+    // Частичная перетрассировка (v0.03.01j): устойчивая стрелка берёт ломаную
+    // из кэша; счётчик пары всё равно растёт — пересчитываемая параллельная
+    // стрелка встаёт на свою дорожку, как при полном проходе.
+    const cachedPath = cachedPathOf(edge.id);
+    if (cachedPath) {
+      const pairKeyCached = [edge.from, edge.to].sort().join('~');
+      const nthCached = pairIndex.get(pairKeyCached) ?? 0;
+      pairIndex.set(pairKeyCached, nthCached + 1);
+      paths.set(edge.id, cachedPath);
+      accumulateRoutePenalty(penaltyFor(groupOf.get(edge.id) ?? 0), cachedPath);
+      continue;
+    }
     const fan = fans.get(edge.id) ?? { sourceFan: 0, targetFan: 0 };
     const sourceRect = rects.get(edge.from)!;
     const targetRect = rects.get(edge.to)!;
@@ -1436,5 +1550,6 @@ export function routeEdges(layout: RoutingLayout): RoutingOutput {
     paths.set(edge.id, points);
     accumulateRoutePenalty(penalty, points);
   }
+  (globalThis as unknown as { __re?: { count: number; ms: number } }).__re = { count: (globalThis as unknown as { __re: { count: number; ms: number } }).__re.count, ms: (globalThis as unknown as { __re: { count: number; ms: number } }).__re.ms + (performance.now() - __t0) };
   return { paths, sides };
 }

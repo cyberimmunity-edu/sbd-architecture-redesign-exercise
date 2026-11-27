@@ -45,7 +45,9 @@ import {
   groupAncestors,
   groupSubtree,
   normalizeGroupColor,
+  planExpandShift,
   uniqueGroupName,
+  type LgRect,
 } from '../engine/groups';
 import {
   canonicalInternalName,
@@ -132,12 +134,22 @@ interface SkibStore {
     memberIds?: string[];
     parentId?: string | null;
   }) => string | null;
-  /** Правка имени/цвета ЛГ (Ф-70), свёртывание/развёртывание (Ф-72) и
-   *  якоря пустой ЛГ (v0.02.03b: перетаскивание пустой рамки).
-   *  Имя уникализируется, цвет приводится к палитре. Одна операция истории. */
+  /** Правка имени/цвета ЛГ (Ф-70) и якоря пустой ЛГ (v0.02.03b:
+   *  перетаскивание пустой рамки). Имя уникализируется, цвет приводится
+   *  к палитре. Одна операция истории. */
   updateGroup: (
     id: string,
     patch: Partial<Pick<DomainGroup, 'name' | 'color' | 'collapsed' | 'position'>>,
+  ) => void;
+  /** Свёртывание/развёртывание одной ЛГ с автораздвижением (Ф-72,
+   *  v0.03.01j): при разворачивании план сдвига поддерева (planExpandShift)
+   *  применяется в той же операции истории — рамка не накладывается
+   *  на соседей, ручное перемещение не требуется. liveRects — живые
+   *  прямоугольники канвы (точные габариты; null — оценочные). */
+  setGroupCollapsed: (
+    id: string,
+    collapsed: boolean,
+    liveRects?: Map<string, LgRect> | null,
   ) => void;
   /** Удаление ЛГ (Ф-73): ДБ остаются, становятся несгруппированными;
    *  вложенные ЛГ удаляются тоже, их ДБ — несгруппированными.
@@ -865,6 +877,37 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     return id;
   },
 
+  /** Свёртывание/развёртывание одной ЛГ с автораздвижением (v0.03.01j).
+   *  Разворачивание: рамка ЛГ не должна накладываться на соседей — план
+   *  сдвига поддерева (planExpandShift) применяется в той же операции
+   *  истории; свёртывание — только флаг. Одна операция истории. */
+  setGroupCollapsed: (id, collapsed, liveRects = null) => {
+    const { project, past } = get();
+    const groups = project.architecture.groups ?? [];
+    const current = groups.find((g) => g.id === id);
+    if (!current) return;
+    if ((current.collapsed ?? false) === collapsed) return;
+    // План автораздвижения — по развёрнутому состоянию (флаг подменяется
+    // внутри planExpandShift); позиции видимых ДБ поддерева — новые.
+    const plan = collapsed ? null : planExpandShift(project.architecture, id, liveRects);
+    const nextGroups = groups.map((g) => (g.id === id ? { ...g, collapsed } : g));
+    const positions = plan?.positions;
+    const blocks = positions
+      ? project.architecture.blocks.map((b) =>
+          positions[b.id] ? { ...b, position: positions[b.id] } : b,
+        )
+      : project.architecture.blocks;
+    set({
+      past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
+      future: [],
+      project: {
+        ...project,
+        architecture: { ...project.architecture, groups: nextGroups, blocks },
+      },
+    });
+    scheduleSave(get().project);
+  },
+
   /** Правка имени/цвета/свёрнутости ЛГ (Ф-70, Ф-72). Одна операция истории. */
   updateGroup: (id, patch) => {
     const { project, past } = get();
@@ -956,17 +999,53 @@ export const useSkibStore = create<SkibStore>((set, get) => ({
     scheduleSave(get().project);
   },
 
-  /** Свернуть/развернуть все ЛГ (Ф-72) — одна операция истории. */
+  /** Свернуть/развернуть все ЛГ (Ф-72) — одна операция истории.
+   *  Разворачивание (v0.03.01j): после снятия флагов рамки могут накладываться
+   *  друг на друга — план сдвига применяется последовательно по ЛГ (в порядке
+   *  массива — верхний уровень раньше вложенных), всё в той же операции. */
   setAllGroupsCollapsed: (collapsed) => {
     const { project, past } = get();
     const groups = project.architecture.groups ?? [];
     if (groups.length === 0) return;
     if (groups.every((g) => (g.collapsed ?? false) === collapsed)) return;
-    const nextGroups = groups.map((g) => ({ ...g, collapsed }));
+    let architecture = project.architecture;
+    let positions: Record<string, { x: number; y: number }> | null = null;
+    if (!collapsed) {
+      // 1. Все флаги сняты — геометрия каждой ЛГ считается развёрнутой.
+      architecture = {
+        ...architecture,
+        groups: groups.map((g) => ({ ...g, collapsed: false })),
+      };
+      // 2. Последовательное раздвижение: план каждой ЛГ учитывает уже
+      // применённые сдвиги предыдущих; предки исключены из препятствий
+      // внутри planExpandShift, порядок массива детерминирован.
+      const merged: Record<string, { x: number; y: number }> = {};
+      for (const group of architecture.groups ?? []) {
+        const plan = planExpandShift(architecture, group.id, null);
+        if (!plan) continue;
+        architecture = {
+          ...architecture,
+          blocks: architecture.blocks.map((b) =>
+            plan.positions[b.id] ? { ...b, position: plan.positions[b.id] } : b,
+          ),
+        };
+        Object.assign(merged, plan.positions);
+      }
+      if (Object.keys(merged).length > 0) positions = merged;
+    }
+    const nextGroups = (architecture.groups ?? []).map((g) =>
+      g.id && g.collapsed === collapsed ? g : { ...g, collapsed },
+    );
+    const blocks = positions
+      ? architecture.blocks.map((b) => (positions![b.id] ? { ...b, position: positions![b.id] } : b))
+      : architecture.blocks;
     set({
       past: [...past.slice(-HISTORY_LIMIT + 1), snapshot(project)],
       future: [],
-      project: { ...project, architecture: { ...project.architecture, groups: nextGroups } },
+      project: {
+        ...project,
+        architecture: { ...architecture, groups: nextGroups, blocks },
+      },
     });
     scheduleSave(get().project);
   },

@@ -8,7 +8,7 @@
 # Версия инструмента, отображаемая в интерфейсе (NEXT_PUBLIC_APP_VERSION).
 # Дефолт держится в согласии с APP_VERSION (src/engine/types.ts) и TAG Makefile;
 # make docker-build всегда передаёт актуальный TAG через --build-arg.
-ARG APP_VERSION=0.03.01i
+ARG APP_VERSION=0.03.01j
 # Базовый путь публикации для вариантов В1 и В4 (раздел 10.1).
 ARG BASE_PATH=/
 # Базовый образ этапа сборки; по умолчанию Alpine, запасной вариант — Debian slim.

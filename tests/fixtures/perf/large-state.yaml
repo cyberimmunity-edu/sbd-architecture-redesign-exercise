@@ -1,0 +1,1289 @@
+version: 1
+architecture:
+  blocks:
+    - id: blk-01
+      name: Домен 01 (производительность)
+      cost: 2
+      group: lg-01
+      position:
+        x: 100
+        'y': 100
+    - id: blk-02
+      name: Домен 02 (производительность)
+      cost: 3
+      group: lg-02
+      position:
+        x: 560
+        'y': 100
+    - id: blk-03
+      name: Домен 03 (производительность)
+      cost: 4
+      group: lg-03
+      position:
+        x: 1020
+        'y': 100
+    - id: blk-04
+      name: Домен 04 (производительность)
+      cost: 5
+      group: lg-04
+      position:
+        x: 1480
+        'y': 100
+    - id: blk-05
+      name: Домен 05 (производительность)
+      cost: 1
+      group: lg-05
+      position:
+        x: 1940
+        'y': 100
+    - id: blk-06
+      name: Домен 06 (производительность)
+      cost: 2
+      group: lg-06
+      position:
+        x: 2400
+        'y': 100
+    - id: blk-07
+      name: Домен 07 (производительность)
+      cost: 3
+      group: lg-07
+      position:
+        x: 2860
+        'y': 100
+    - id: blk-08
+      name: Домен 08 (производительность)
+      cost: 4
+      group: lg-08
+      position:
+        x: 100
+        'y': 380
+    - id: blk-09
+      name: Домен 09 (производительность)
+      cost: 5
+      group: lg-09
+      position:
+        x: 560
+        'y': 380
+    - id: blk-10
+      name: Домен 10 (производительность)
+      cost: 1
+      group: lg-10
+      position:
+        x: 1020
+        'y': 380
+    - id: blk-11
+      name: Домен 11 (производительность)
+      cost: 2
+      group: lg-11
+      position:
+        x: 1480
+        'y': 380
+    - id: blk-12
+      name: Домен 12 (производительность)
+      cost: 3
+      group: lg-12
+      position:
+        x: 1940
+        'y': 380
+    - id: blk-13
+      name: Домен 13 (производительность)
+      cost: 4
+      group: lg-13
+      position:
+        x: 2400
+        'y': 380
+    - id: blk-14
+      name: Домен 14 (производительность)
+      cost: 5
+      group: lg-14
+      position:
+        x: 2860
+        'y': 380
+    - id: blk-15
+      name: Домен 15 (производительность)
+      cost: 1
+      group: lg-15
+      position:
+        x: 100
+        'y': 660
+    - id: blk-16
+      name: Домен 16 (производительность)
+      cost: 2
+      group: lg-16
+      position:
+        x: 560
+        'y': 660
+    - id: blk-17
+      name: Домен 17 (производительность)
+      cost: 3
+      position:
+        x: 1020
+        'y': 660
+    - id: blk-18
+      name: Домен 18 (производительность)
+      cost: 4
+      group: lg-17
+      position:
+        x: 1480
+        'y': 660
+    - id: blk-19
+      name: Домен 19 (производительность)
+      cost: 5
+      group: lg-18
+      position:
+        x: 1940
+        'y': 660
+    - id: blk-20
+      name: Домен 20 (производительность)
+      cost: 1
+      group: lg-19
+      position:
+        x: 2400
+        'y': 660
+    - id: blk-21
+      name: Домен 21 (производительность)
+      cost: 2
+      group: lg-20
+      position:
+        x: 2860
+        'y': 660
+    - id: blk-22
+      name: Домен 22 (производительность)
+      cost: 3
+      group: lg-01
+      position:
+        x: 100
+        'y': 940
+    - id: blk-23
+      name: Домен 23 (производительность)
+      cost: 4
+      group: lg-02
+      position:
+        x: 560
+        'y': 940
+    - id: blk-24
+      name: Домен 24 (производительность)
+      cost: 5
+      group: lg-03
+      position:
+        x: 1020
+        'y': 940
+    - id: blk-25
+      name: Домен 25 (производительность)
+      cost: 1
+      group: lg-04
+      position:
+        x: 1480
+        'y': 940
+    - id: blk-26
+      name: Домен 26 (производительность)
+      cost: 2
+      group: lg-05
+      position:
+        x: 1940
+        'y': 940
+    - id: blk-27
+      name: Домен 27 (производительность)
+      cost: 3
+      group: lg-06
+      position:
+        x: 2400
+        'y': 940
+    - id: blk-28
+      name: Домен 28 (производительность)
+      cost: 4
+      group: lg-07
+      position:
+        x: 2860
+        'y': 940
+    - id: blk-29
+      name: Домен 29 (производительность)
+      cost: 5
+      group: lg-08
+      position:
+        x: 100
+        'y': 1220
+    - id: blk-30
+      name: Домен 30 (производительность)
+      cost: 1
+      group: lg-09
+      position:
+        x: 560
+        'y': 1220
+    - id: blk-31
+      name: Домен 31 (производительность)
+      cost: 2
+      group: lg-10
+      position:
+        x: 1020
+        'y': 1220
+    - id: blk-32
+      name: Домен 32 (производительность)
+      cost: 3
+      group: lg-11
+      position:
+        x: 1480
+        'y': 1220
+    - id: blk-33
+      name: Домен 33 (производительность)
+      cost: 4
+      position:
+        x: 1940
+        'y': 1220
+    - id: blk-34
+      name: Домен 34 (производительность)
+      cost: 5
+      group: lg-12
+      position:
+        x: 2400
+        'y': 1220
+    - id: blk-35
+      name: Домен 35 (производительность)
+      cost: 1
+      group: lg-13
+      position:
+        x: 2860
+        'y': 1220
+    - id: blk-36
+      name: Домен 36 (производительность)
+      cost: 2
+      group: lg-14
+      position:
+        x: 100
+        'y': 1500
+    - id: blk-37
+      name: Домен 37 (производительность)
+      cost: 3
+      group: lg-15
+      position:
+        x: 560
+        'y': 1500
+    - id: blk-38
+      name: Домен 38 (производительность)
+      cost: 4
+      group: lg-16
+      position:
+        x: 1020
+        'y': 1500
+    - id: blk-39
+      name: Домен 39 (производительность)
+      cost: 5
+      group: lg-17
+      position:
+        x: 1480
+        'y': 1500
+    - id: blk-40
+      name: Домен 40 (производительность)
+      cost: 1
+      group: lg-18
+      position:
+        x: 1940
+        'y': 1500
+    - id: blk-41
+      name: Домен 41 (производительность)
+      cost: 2
+      group: lg-19
+      position:
+        x: 2400
+        'y': 1500
+    - id: blk-42
+      name: Домен 42 (производительность)
+      cost: 3
+      group: lg-20
+      position:
+        x: 2860
+        'y': 1500
+    - id: blk-43
+      name: Домен 43 (производительность)
+      cost: 4
+      group: lg-01
+      position:
+        x: 100
+        'y': 1780
+    - id: blk-44
+      name: Домен 44 (производительность)
+      cost: 5
+      group: lg-02
+      position:
+        x: 560
+        'y': 1780
+    - id: blk-45
+      name: Домен 45 (производительность)
+      cost: 1
+      group: lg-03
+      position:
+        x: 1020
+        'y': 1780
+    - id: blk-46
+      name: Домен 46 (производительность)
+      cost: 2
+      group: lg-04
+      position:
+        x: 1480
+        'y': 1780
+    - id: blk-47
+      name: Домен 47 (производительность)
+      cost: 3
+      group: lg-05
+      position:
+        x: 1940
+        'y': 1780
+    - id: blk-48
+      name: Домен 48 (производительность)
+      cost: 4
+      group: lg-06
+      position:
+        x: 2400
+        'y': 1780
+    - id: blk-49
+      name: Домен 49 (производительность)
+      cost: 5
+      position:
+        x: 2860
+        'y': 1780
+    - id: blk-50
+      name: Домен 50 (производительность)
+      cost: 1
+      group: lg-07
+      position:
+        x: 100
+        'y': 2060
+    - id: ext-01
+      name: Внешняя 01
+      cost: 0
+      external: true
+      position:
+        x: 3580
+        'y': 100
+    - id: ext-02
+      name: Внешняя 02
+      cost: 0
+      external: true
+      position:
+        x: 3580
+        'y': 410
+    - id: ext-03
+      name: Внешняя 03
+      cost: 0
+      external: true
+      position:
+        x: 3580
+        'y': 720
+    - id: ext-04
+      name: Внешняя 04
+      cost: 0
+      external: true
+      position:
+        x: 3580
+        'y': 1030
+    - id: ext-05
+      name: Внешняя 05
+      cost: 0
+      external: true
+      position:
+        x: 3580
+        'y': 1340
+  edges:
+    - id: e-int-001
+      from: blk-01
+      to: blk-04
+      label: поток данных (замер)
+    - id: e-int-002
+      from: blk-01
+      to: blk-08
+      label: управляющий поток (замер)
+    - id: e-int-003
+      from: blk-02
+      to: blk-05
+      label: поток данных (замер)
+    - id: e-int-004
+      from: blk-02
+      to: blk-09
+      label: управляющий поток (замер)
+    - id: e-int-005
+      from: blk-03
+      to: blk-06
+      label: поток данных (замер)
+    - id: e-int-006
+      from: blk-03
+      to: blk-10
+      label: управляющий поток (замер)
+    - id: e-int-007
+      from: blk-04
+      to: blk-07
+      label: поток данных (замер)
+    - id: e-int-008
+      from: blk-04
+      to: blk-11
+      label: управляющий поток (замер)
+    - id: e-int-009
+      from: blk-05
+      to: blk-08
+      label: поток данных (замер)
+    - id: e-int-010
+      from: blk-05
+      to: blk-12
+      label: управляющий поток (замер)
+    - id: e-int-011
+      from: blk-06
+      to: blk-09
+      label: поток данных (замер)
+    - id: e-int-012
+      from: blk-06
+      to: blk-13
+      label: управляющий поток (замер)
+    - id: e-int-013
+      from: blk-07
+      to: blk-10
+      label: поток данных (замер)
+    - id: e-int-014
+      from: blk-07
+      to: blk-14
+      label: управляющий поток (замер)
+    - id: e-int-015
+      from: blk-08
+      to: blk-11
+      label: поток данных (замер)
+    - id: e-int-016
+      from: blk-08
+      to: blk-15
+      label: управляющий поток (замер)
+    - id: e-int-017
+      from: blk-09
+      to: blk-12
+      label: поток данных (замер)
+    - id: e-int-018
+      from: blk-09
+      to: blk-16
+      label: управляющий поток (замер)
+    - id: e-int-019
+      from: blk-10
+      to: blk-13
+      label: поток данных (замер)
+    - id: e-int-020
+      from: blk-10
+      to: blk-17
+      label: управляющий поток (замер)
+    - id: e-int-021
+      from: blk-11
+      to: blk-14
+      label: поток данных (замер)
+    - id: e-int-022
+      from: blk-11
+      to: blk-18
+      label: управляющий поток (замер)
+    - id: e-int-023
+      from: blk-12
+      to: blk-15
+      label: поток данных (замер)
+    - id: e-int-024
+      from: blk-12
+      to: blk-19
+      label: управляющий поток (замер)
+    - id: e-int-025
+      from: blk-13
+      to: blk-16
+      label: поток данных (замер)
+    - id: e-int-026
+      from: blk-13
+      to: blk-20
+      label: управляющий поток (замер)
+    - id: e-int-027
+      from: blk-14
+      to: blk-17
+      label: поток данных (замер)
+    - id: e-int-028
+      from: blk-14
+      to: blk-21
+      label: управляющий поток (замер)
+    - id: e-int-029
+      from: blk-15
+      to: blk-18
+      label: поток данных (замер)
+    - id: e-int-030
+      from: blk-15
+      to: blk-22
+      label: управляющий поток (замер)
+    - id: e-int-031
+      from: blk-16
+      to: blk-19
+      label: поток данных (замер)
+    - id: e-int-032
+      from: blk-16
+      to: blk-23
+      label: управляющий поток (замер)
+    - id: e-int-033
+      from: blk-17
+      to: blk-20
+      label: поток данных (замер)
+    - id: e-int-034
+      from: blk-17
+      to: blk-24
+      label: управляющий поток (замер)
+    - id: e-int-035
+      from: blk-18
+      to: blk-21
+      label: поток данных (замер)
+    - id: e-int-036
+      from: blk-18
+      to: blk-25
+      label: управляющий поток (замер)
+    - id: e-int-037
+      from: blk-19
+      to: blk-22
+      label: поток данных (замер)
+    - id: e-int-038
+      from: blk-19
+      to: blk-26
+      label: управляющий поток (замер)
+    - id: e-int-039
+      from: blk-20
+      to: blk-23
+      label: поток данных (замер)
+    - id: e-int-040
+      from: blk-20
+      to: blk-27
+      label: управляющий поток (замер)
+    - id: e-int-041
+      from: blk-21
+      to: blk-24
+      label: поток данных (замер)
+    - id: e-int-042
+      from: blk-21
+      to: blk-28
+      label: управляющий поток (замер)
+    - id: e-int-043
+      from: blk-22
+      to: blk-25
+      label: поток данных (замер)
+    - id: e-int-044
+      from: blk-22
+      to: blk-29
+      label: управляющий поток (замер)
+    - id: e-int-045
+      from: blk-23
+      to: blk-26
+      label: поток данных (замер)
+    - id: e-int-046
+      from: blk-23
+      to: blk-30
+      label: управляющий поток (замер)
+    - id: e-int-047
+      from: blk-24
+      to: blk-27
+      label: поток данных (замер)
+    - id: e-int-048
+      from: blk-24
+      to: blk-31
+      label: управляющий поток (замер)
+    - id: e-int-049
+      from: blk-25
+      to: blk-28
+      label: поток данных (замер)
+    - id: e-int-050
+      from: blk-25
+      to: blk-32
+      label: управляющий поток (замер)
+    - id: e-int-051
+      from: blk-26
+      to: blk-29
+      label: поток данных (замер)
+    - id: e-int-052
+      from: blk-26
+      to: blk-33
+      label: управляющий поток (замер)
+    - id: e-int-053
+      from: blk-27
+      to: blk-30
+      label: поток данных (замер)
+    - id: e-int-054
+      from: blk-27
+      to: blk-34
+      label: управляющий поток (замер)
+    - id: e-int-055
+      from: blk-28
+      to: blk-31
+      label: поток данных (замер)
+    - id: e-int-056
+      from: blk-28
+      to: blk-35
+      label: управляющий поток (замер)
+    - id: e-int-057
+      from: blk-29
+      to: blk-32
+      label: поток данных (замер)
+    - id: e-int-058
+      from: blk-29
+      to: blk-36
+      label: управляющий поток (замер)
+    - id: e-int-059
+      from: blk-30
+      to: blk-33
+      label: поток данных (замер)
+    - id: e-int-060
+      from: blk-30
+      to: blk-37
+      label: управляющий поток (замер)
+    - id: e-int-061
+      from: blk-31
+      to: blk-34
+      label: поток данных (замер)
+    - id: e-int-062
+      from: blk-31
+      to: blk-38
+      label: управляющий поток (замер)
+    - id: e-int-063
+      from: blk-32
+      to: blk-35
+      label: поток данных (замер)
+    - id: e-int-064
+      from: blk-32
+      to: blk-39
+      label: управляющий поток (замер)
+    - id: e-int-065
+      from: blk-33
+      to: blk-36
+      label: поток данных (замер)
+    - id: e-int-066
+      from: blk-33
+      to: blk-40
+      label: управляющий поток (замер)
+    - id: e-int-067
+      from: blk-34
+      to: blk-37
+      label: поток данных (замер)
+    - id: e-int-068
+      from: blk-34
+      to: blk-41
+      label: управляющий поток (замер)
+    - id: e-int-069
+      from: blk-35
+      to: blk-38
+      label: поток данных (замер)
+    - id: e-int-070
+      from: blk-35
+      to: blk-42
+      label: управляющий поток (замер)
+    - id: e-int-071
+      from: blk-36
+      to: blk-39
+      label: поток данных (замер)
+    - id: e-int-072
+      from: blk-36
+      to: blk-43
+      label: управляющий поток (замер)
+    - id: e-int-073
+      from: blk-37
+      to: blk-40
+      label: поток данных (замер)
+    - id: e-int-074
+      from: blk-37
+      to: blk-44
+      label: управляющий поток (замер)
+    - id: e-int-075
+      from: blk-38
+      to: blk-41
+      label: поток данных (замер)
+    - id: e-int-076
+      from: blk-38
+      to: blk-45
+      label: управляющий поток (замер)
+    - id: e-int-077
+      from: blk-39
+      to: blk-42
+      label: поток данных (замер)
+    - id: e-int-078
+      from: blk-39
+      to: blk-46
+      label: управляющий поток (замер)
+    - id: e-int-079
+      from: blk-40
+      to: blk-43
+      label: поток данных (замер)
+    - id: e-int-080
+      from: blk-40
+      to: blk-47
+      label: управляющий поток (замер)
+    - id: e-int-081
+      from: blk-41
+      to: blk-44
+      label: поток данных (замер)
+    - id: e-int-082
+      from: blk-41
+      to: blk-48
+      label: управляющий поток (замер)
+    - id: e-int-083
+      from: blk-42
+      to: blk-45
+      label: поток данных (замер)
+    - id: e-int-084
+      from: blk-42
+      to: blk-49
+      label: управляющий поток (замер)
+    - id: e-int-085
+      from: blk-43
+      to: blk-46
+      label: поток данных (замер)
+    - id: e-int-086
+      from: blk-43
+      to: blk-50
+      label: управляющий поток (замер)
+    - id: e-int-087
+      from: blk-44
+      to: blk-47
+      label: поток данных (замер)
+    - id: e-int-088
+      from: blk-44
+      to: blk-01
+      label: управляющий поток (замер)
+    - id: e-int-089
+      from: blk-45
+      to: blk-48
+      label: поток данных (замер)
+    - id: e-int-090
+      from: blk-45
+      to: blk-02
+      label: управляющий поток (замер)
+    - id: e-int-091
+      from: blk-46
+      to: blk-49
+      label: поток данных (замер)
+    - id: e-int-092
+      from: blk-46
+      to: blk-03
+      label: управляющий поток (замер)
+    - id: e-int-093
+      from: blk-47
+      to: blk-50
+      label: поток данных (замер)
+    - id: e-int-094
+      from: blk-47
+      to: blk-04
+      label: управляющий поток (замер)
+    - id: e-int-095
+      from: blk-48
+      to: blk-01
+      label: поток данных (замер)
+    - id: e-int-096
+      from: blk-48
+      to: blk-05
+      label: управляющий поток (замер)
+    - id: e-int-097
+      from: blk-49
+      to: blk-02
+      label: поток данных (замер)
+    - id: e-int-098
+      from: blk-49
+      to: blk-06
+      label: управляющий поток (замер)
+    - id: e-int-099
+      from: blk-50
+      to: blk-03
+      label: поток данных (замер)
+    - id: e-int-100
+      from: blk-50
+      to: blk-07
+      label: управляющий поток (замер)
+    - id: e-ext-101
+      from: ext-01
+      to: blk-01
+      label: запрос сведений
+    - id: e-ext-102
+      from: blk-12
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-103
+      from: ext-03
+      to: blk-23
+      label: запрос сведений
+    - id: e-ext-104
+      from: blk-34
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-105
+      from: ext-05
+      to: blk-45
+      label: запрос сведений
+    - id: e-ext-106
+      from: blk-06
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-107
+      from: ext-02
+      to: blk-17
+      label: запрос сведений
+    - id: e-ext-108
+      from: blk-28
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-109
+      from: ext-04
+      to: blk-39
+      label: запрос сведений
+    - id: e-ext-110
+      from: blk-50
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-111
+      from: ext-01
+      to: blk-11
+      label: запрос сведений
+    - id: e-ext-112
+      from: blk-22
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-113
+      from: ext-03
+      to: blk-33
+      label: запрос сведений
+    - id: e-ext-114
+      from: blk-44
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-115
+      from: ext-05
+      to: blk-05
+      label: запрос сведений
+    - id: e-ext-116
+      from: blk-16
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-117
+      from: ext-02
+      to: blk-27
+      label: запрос сведений
+    - id: e-ext-118
+      from: blk-38
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-119
+      from: ext-04
+      to: blk-49
+      label: запрос сведений
+    - id: e-ext-120
+      from: blk-10
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-121
+      from: ext-01
+      to: blk-21
+      label: запрос сведений
+    - id: e-ext-122
+      from: blk-32
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-123
+      from: ext-03
+      to: blk-43
+      label: запрос сведений
+    - id: e-ext-124
+      from: blk-04
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-125
+      from: ext-05
+      to: blk-15
+      label: запрос сведений
+    - id: e-ext-126
+      from: blk-26
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-127
+      from: ext-02
+      to: blk-37
+      label: запрос сведений
+    - id: e-ext-128
+      from: blk-48
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-129
+      from: ext-04
+      to: blk-09
+      label: запрос сведений
+    - id: e-ext-130
+      from: blk-20
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-131
+      from: ext-01
+      to: blk-31
+      label: запрос сведений
+    - id: e-ext-132
+      from: blk-42
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-133
+      from: ext-03
+      to: blk-03
+      label: запрос сведений
+    - id: e-ext-134
+      from: blk-14
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-135
+      from: ext-05
+      to: blk-25
+      label: запрос сведений
+    - id: e-ext-136
+      from: blk-36
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-137
+      from: ext-02
+      to: blk-47
+      label: запрос сведений
+    - id: e-ext-138
+      from: blk-08
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-139
+      from: ext-04
+      to: blk-19
+      label: запрос сведений
+    - id: e-ext-140
+      from: blk-30
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-141
+      from: ext-01
+      to: blk-41
+      label: запрос сведений
+    - id: e-ext-142
+      from: blk-02
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-143
+      from: ext-03
+      to: blk-13
+      label: запрос сведений
+    - id: e-ext-144
+      from: blk-24
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-145
+      from: ext-05
+      to: blk-35
+      label: запрос сведений
+    - id: e-ext-146
+      from: blk-46
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-147
+      from: ext-02
+      to: blk-07
+      label: запрос сведений
+    - id: e-ext-148
+      from: blk-18
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-149
+      from: ext-04
+      to: blk-29
+      label: запрос сведений
+    - id: e-ext-150
+      from: blk-40
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-151
+      from: ext-01
+      to: blk-01
+      label: запрос сведений
+    - id: e-ext-152
+      from: blk-12
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-153
+      from: ext-03
+      to: blk-23
+      label: запрос сведений
+    - id: e-ext-154
+      from: blk-34
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-155
+      from: ext-05
+      to: blk-45
+      label: запрос сведений
+    - id: e-ext-156
+      from: blk-06
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-157
+      from: ext-02
+      to: blk-17
+      label: запрос сведений
+    - id: e-ext-158
+      from: blk-28
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-159
+      from: ext-04
+      to: blk-39
+      label: запрос сведений
+    - id: e-ext-160
+      from: blk-50
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-161
+      from: ext-01
+      to: blk-11
+      label: запрос сведений
+    - id: e-ext-162
+      from: blk-22
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-163
+      from: ext-03
+      to: blk-33
+      label: запрос сведений
+    - id: e-ext-164
+      from: blk-44
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-165
+      from: ext-05
+      to: blk-05
+      label: запрос сведений
+    - id: e-ext-166
+      from: blk-16
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-167
+      from: ext-02
+      to: blk-27
+      label: запрос сведений
+    - id: e-ext-168
+      from: blk-38
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-169
+      from: ext-04
+      to: blk-49
+      label: запрос сведений
+    - id: e-ext-170
+      from: blk-10
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-171
+      from: ext-01
+      to: blk-21
+      label: запрос сведений
+    - id: e-ext-172
+      from: blk-32
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-173
+      from: ext-03
+      to: blk-43
+      label: запрос сведений
+    - id: e-ext-174
+      from: blk-04
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-175
+      from: ext-05
+      to: blk-15
+      label: запрос сведений
+    - id: e-ext-176
+      from: blk-26
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-177
+      from: ext-02
+      to: blk-37
+      label: запрос сведений
+    - id: e-ext-178
+      from: blk-48
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-179
+      from: ext-04
+      to: blk-09
+      label: запрос сведений
+    - id: e-ext-180
+      from: blk-20
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-181
+      from: ext-01
+      to: blk-31
+      label: запрос сведений
+    - id: e-ext-182
+      from: blk-42
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-183
+      from: ext-03
+      to: blk-03
+      label: запрос сведений
+    - id: e-ext-184
+      from: blk-14
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-185
+      from: ext-05
+      to: blk-25
+      label: запрос сведений
+    - id: e-ext-186
+      from: blk-36
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-187
+      from: ext-02
+      to: blk-47
+      label: запрос сведений
+    - id: e-ext-188
+      from: blk-08
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-189
+      from: ext-04
+      to: blk-19
+      label: запрос сведений
+    - id: e-ext-190
+      from: blk-30
+      to: ext-05
+      label: ответ о допуске
+    - id: e-ext-191
+      from: ext-01
+      to: blk-41
+      label: запрос сведений
+    - id: e-ext-192
+      from: blk-02
+      to: ext-02
+      label: ответ о допуске
+    - id: e-ext-193
+      from: ext-03
+      to: blk-13
+      label: запрос сведений
+    - id: e-ext-194
+      from: blk-24
+      to: ext-04
+      label: ответ о допуске
+    - id: e-ext-195
+      from: ext-05
+      to: blk-35
+      label: запрос сведений
+    - id: e-ext-196
+      from: blk-46
+      to: ext-01
+      label: ответ о допуске
+    - id: e-ext-197
+      from: ext-02
+      to: blk-07
+      label: запрос сведений
+    - id: e-ext-198
+      from: blk-18
+      to: ext-03
+      label: ответ о допуске
+    - id: e-ext-199
+      from: ext-04
+      to: blk-29
+      label: запрос сведений
+    - id: e-ext-200
+      from: blk-40
+      to: ext-05
+      label: ответ о допуске
+  groups:
+    - id: lg-01
+      name: ЛГ 01 (производительность)
+      color: '#1E88E5'
+    - id: lg-02
+      name: ЛГ 02 (производительность)
+      color: '#1E88E5'
+    - id: lg-03
+      name: ЛГ 03 (производительность)
+      color: '#1E88E5'
+    - id: lg-04
+      name: ЛГ 04 (производительность)
+      color: '#1E88E5'
+    - id: lg-05
+      name: ЛГ 05 (производительность)
+      color: '#1E88E5'
+    - id: lg-06
+      name: ЛГ 06 (производительность)
+      color: '#1E88E5'
+    - id: lg-07
+      name: ЛГ 07 (производительность)
+      color: '#1E88E5'
+    - id: lg-08
+      name: ЛГ 08 (производительность)
+      color: '#1E88E5'
+    - id: lg-09
+      name: ЛГ 09 (производительность)
+      color: '#1E88E5'
+    - id: lg-10
+      name: ЛГ 10 (производительность)
+      color: '#1E88E5'
+    - id: lg-11
+      name: ЛГ 11 (производительность)
+      color: '#1E88E5'
+    - id: lg-12
+      name: ЛГ 12 (производительность)
+      color: '#1E88E5'
+    - id: lg-13
+      name: ЛГ 13 (производительность)
+      color: '#1E88E5'
+    - id: lg-14
+      name: ЛГ 14 (производительность)
+      color: '#1E88E5'
+    - id: lg-15
+      name: ЛГ 15 (производительность)
+      color: '#1E88E5'
+      parent: lg-01
+    - id: lg-16
+      name: ЛГ 16 (производительность)
+      color: '#1E88E5'
+      parent: lg-04
+    - id: lg-17
+      name: ЛГ 17 (производительность)
+      color: '#1E88E5'
+      parent: lg-07
+    - id: lg-18
+      name: ЛГ 18 (производительность)
+      color: '#1E88E5'
+      parent: lg-10
+    - id: lg-19
+      name: ЛГ 19 (производительность)
+      color: '#1E88E5'
+      parent: lg-13
+    - id: lg-20
+      name: ЛГ 20 (производительность)
+      color: '#1E88E5'
+      parent: lg-01
+security:
+  assumptions:
+    - id: asm-1
+      text: Допущение для замера производительности
+  goals:
+    - id: g-1
+      name: Цель 1 (замер)
+      description: Цель для замера производительности
+      unconditional: true
+    - id: g-2
+      name: Цель 2 (замер)
+      description: Цель для замера производительности
+    - id: g-3
+      name: Цель 3 (замер)
+      description: Цель для замера производительности
+  functions:
+    - id: fn-1
+      name: Функция 1 (замер)
+      cost: 2
+      implements:
+        - goal: g-1
+          weight: mandatory
+    - id: fn-2
+      name: Функция 2 (замер)
+      cost: 3
+      implements:
+        - goal: g-2
+          weight: mandatory
+assignments:
+  - function: fn-1
+    block: blk-01
+  - function: fn-2
+    block: blk-12
+meta:
+  savedAt: '2026-11-26T00:00:00.000Z'
+  source: 'Замер производительности: 50 ДБ, 20 ЛГ, 200 связей, 5 внешних систем'

@@ -133,8 +133,13 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'flashDomains',
       'focusInternal',
       'highlightedDomainId',
+      // Кэши производительности ДАП (v0.03.01j): измеренные габариты,
+      // прежние объекты стрелок, трассировка — служебные данные рендера.
+      'measuredSizes',
       // Режим ДП (v0.02.01): режим, активная ДП, выбор, опция цветов — вид.
       'mode',
+      'prevEdges',
+      'routingCache',
       'seqColorsFromDap',
       'seqSelectedArrows',
       'seqSelection',
@@ -142,6 +147,8 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'setDomainSelection',
       'setHighlightedDomain',
       'setMode',
+      'setPrevEdges',
+      'setRoutingCache',
       'setSeqSelectedArrows',
       'setSeqSelection',
       'setSizeMode',
@@ -151,6 +158,7 @@ describe('Настройки вида канвы (v0.01.02–v0.01.09)', () => {
       'togglePort',
       'toggleSeqColors',
       'toggleShowEdges',
+      'trackMeasuredSizes',
     ]);
   });
 

@@ -62,6 +62,7 @@ export function InspectorPanel() {
   const placeFunction = useSkibStore((s) => s.placeFunction);
   // Логические группы (v0.02.03, Ф-70): правка и удаление ЛГ из инспектора.
   const updateGroup = useSkibStore((s) => s.updateGroup);
+  const setGroupCollapsed = useSkibStore((s) => s.setGroupCollapsed);
   const deleteGroup = useSkibStore((s) => s.deleteGroup);
   const setHighlightedDomain = useViewStore((s) => s.setHighlightedDomain);
   const clearFlash = useViewStore((s) => s.flashDomains);
@@ -361,7 +362,11 @@ export function InspectorPanel() {
               variant="outline"
               className="h-8"
               data-testid="inspector-lg-toggle"
-              onClick={() => updateGroup(group.id, { collapsed: !collapsed })}
+              onClick={() => {
+                // Автораздвижение при разворачивании (v0.03.01j): живые
+                // габариты недоступны из панели — план по оценочным.
+                setGroupCollapsed(group.id, !collapsed);
+              }}
             >
               {collapsed ? ru.lg.inspectorExpand : ru.lg.inspectorCollapse}
             </Button>

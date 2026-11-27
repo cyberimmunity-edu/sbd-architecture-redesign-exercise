@@ -15,6 +15,11 @@ const chromiumPath = process.env.SKIB_CHROMIUM_PATH;
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // Тест производительности (v0.03.01j) гоняется отдельным прогоном против
+  // ПРОИЗВОДСТВЕННОЙ сборки (playwright.perf.config.ts, make test-perf):
+  // бюджеты запроса справедливы для прод-сборки, dev-сервер меряет
+  // собственную накладную расходы React.
+  testIgnore: '**/perf.spec.ts',
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,
