@@ -273,4 +273,18 @@ test('автараскладка на файле пользователя (state
       expect(overlap(frame, rect), `${groupId} накрывает ${blockId}`).toBe(false);
     }
   }
+
+  // 4. Свёртка ЛГ в колонку (v0.03.01m): семья стоит одной колонкой —
+  //    ширина рамки сопоставима с шириной домена (лист: домен + 2 отступа
+  //    рамки, родитель вложенных: ещё + 2 отступа вложенной рамки), пустого
+  //    простора внутри нет, периметр не растягивается.
+  for (const [groupId, frame] of Object.entries(frames)) {
+    const widths = REG_SUBTREE_BLOCKS[groupId]
+      .map((id) => blocks[id]?.width ?? 0)
+      .filter((w) => w > 0);
+    expect(widths.length, `члены ${groupId} на канве`).toBeGreaterThan(0);
+    expect(frame.width, `ширина рамки ${groupId}`).toBeLessThan(
+      Math.min(...widths) * 1.6,
+    );
+  }
 });

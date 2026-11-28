@@ -474,7 +474,7 @@ describe('Геометрия ЛГ в автараскладке (v0.03.01k)', ()
     for (const id of ['b1', 'b2']) expect(overlap(fb, rectOf(id))).toBe(true);
   });
 
-  it('рамка ЛГ не накрывает несгруппированный ДБ; поддерево сдвигается целиком', () => {
+  it('рамка ЛГ не накрывает несгруппированный ДБ; семья стоит одной колонкой', () => {
     const blocks = [
       { ...block('a1'), groupId: 'lg-a' },
       { ...block('a2'), groupId: 'lg-a' },
@@ -486,7 +486,8 @@ describe('Геометрия ЛГ в автараскладке (v0.03.01k)', ()
     ];
     const model = groupedArch(blocks, edges, [{ id: 'lg-a' }]);
     const result = computeAutoLayout(model);
-    // Слои: a1 → u → a2 (колонки 0, 1, 2); до разрешения рамка охватывала u.
+    // Слои: a1 → u → a2 (колонки 0, 1, 2); свёртка ЛГ (1б) ставит семью
+    // на максимальный слой поддерева — обе члена в одной колонке.
     const frames = expandedFrames(model, result);
     const frame = frames.get('lg-a')!;
     const uRect: LgRect = {
@@ -496,16 +497,106 @@ describe('Геометрия ЛГ в автараскладке (v0.03.01k)', ()
       height: NODE_ESTIMATED_HEIGHT,
     };
     expect(overlap(frame, uRect)).toBe(false);
-    // Поддерево сдвинуто одним жёстким сдвигом: члены на одной вертикали,
-    // внутри рамки.
-    expect(result.get('a1')!.y).toBe(result.get('a2')!.y);
-    expect(result.get('a1')!.y).toBeGreaterThan(uRect.y);
-    expect(overlap(frame, {
-      x: result.get('a1')!.x,
-      y: result.get('a1')!.y,
-      width: NODE_ESTIMATED_WIDTH,
-      height: NODE_ESTIMATED_HEIGHT,
-    })).toBe(true);
+    // Семья — одна колонка: члены на одной вертикали, между ними зазор
+    // ROW_GAP (уплотнение), рамка минимальной ширины.
+    expect(result.get('a1')!.x).toBe(result.get('a2')!.x);
+    expect(result.get('a1')!.x).toBeGreaterThan(uRect.x);
+    const [top, bottom] = result.get('a1')!.y < result.get('a2')!.y
+      ? [result.get('a1')!, result.get('a2')!]
+      : [result.get('a2')!, result.get('a1')!];
+    expect(bottom.y - (top.y + NODE_ESTIMATED_HEIGHT)).toBe(ROW_GAP);
+    expect(frame.width).toBe(NODE_ESTIMATED_WIDTH + 2 * LG_FRAME_PADDING);
+    // Несгруппированный u остался в своём слое потока (между слоями членов).
+    expect(result.get('u')!.y).toBeLessThan(Math.max(top.y, bottom.y));
+    for (const id of ['a1', 'a2']) {
+      expect(overlap(frame, {
+        x: result.get(id)!.x,
+        y: result.get(id)!.y,
+        width: NODE_ESTIMATED_WIDTH,
+        height: NODE_ESTIMATED_HEIGHT,
+      })).toBe(true);
+    }
+  });
+
+  it('свёртка ЛГ в один слой: семья с потоком через внешние ДБ — одна колонка', () => {
+    // Цепочка m1 → x → m2 → y → m3 разводит членов по трём слоям; свёртка
+    // (стадия 1б) собирает семью lg-m на максимальном слое — рамка одной
+    // колонки, без пустого места внутри (проблема пользовательской картинки:
+    // рамки на несколько колонок с пустотой и растянутым периметром).
+    const blocks = [
+      { ...block('m1'), groupId: 'lg-m' },
+      { ...block('m2'), groupId: 'lg-m' },
+      { ...block('m3'), groupId: 'lg-m' },
+      block('x'),
+      block('y'),
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'm1', to: 'x' },
+      { id: 'e2', from: 'x', to: 'm2' },
+      { id: 'e3', from: 'm2', to: 'y' },
+      { id: 'e4', from: 'y', to: 'm3' },
+    ];
+    const model = groupedArch(blocks, edges, [{ id: 'lg-m' }]);
+    const result = computeAutoLayout(model);
+    for (const id of ['m1', 'm2', 'm3']) {
+      expect(result.get(id)!.x, `${id} в колонке семьи`).toBe(result.get('m1')!.x);
+    }
+    const ys = ['m1', 'm2', 'm3'].map((id) => result.get(id)!.y).sort((a, b) => a - b);
+    expect(ys[1] - (ys[0] + NODE_ESTIMATED_HEIGHT)).toBe(ROW_GAP);
+    expect(ys[2] - (ys[1] + NODE_ESTIMATED_HEIGHT)).toBe(ROW_GAP);
+    const frames = expandedFrames(model, result);
+    const frame = frames.get('lg-m')!;
+    expect(frame.width).toBe(NODE_ESTIMATED_WIDTH + 2 * LG_FRAME_PADDING);
+    expect(frame.height).toBe(
+      3 * NODE_ESTIMATED_HEIGHT + 2 * ROW_GAP + 2 * LG_FRAME_PADDING,
+    );
+    // Внешние ДБ цепочки остались вне рамки, x не заняты членами семьи.
+    for (const id of ['x', 'y']) {
+      expect(overlap(frame, rectOf(result, id)), `рамка × ${id}`).toBe(false);
+    }
+  });
+
+  it('вложенная ЛГ — сплошной прогон внутри родителя: без чужих членов в рамке', () => {
+    // Порядок барицентров перемешивал прогон семьи (член родителя между
+    // членами вложенной ЛГ), вложенная рамка накрывала чужой член, и
+    // разрешение наложений раздвигало семью — внутри рамок оставалась
+    // пустота (обследование state_reg_00.yaml, v0.03.01m).
+    const blocks = [
+      { ...block('c1'), groupId: 'lg-c' },
+      { ...block('c2'), groupId: 'lg-c' },
+      { ...block('p1'), groupId: 'lg-p' },
+      { ...block('p2'), groupId: 'lg-p' },
+    ];
+    const edges: Edge[] = [
+      { id: 'e1', from: 'p1', to: 'c2' },
+      { id: 'e2', from: 'c1', to: 'p2' },
+      { id: 'e3', from: 'c2', to: 'p1' },
+    ];
+    const model = groupedArch(blocks, edges, [
+      { id: 'lg-p' },
+      { id: 'lg-c', parentId: 'lg-p' },
+    ]);
+    const result = computeAutoLayout(model);
+    // Прогон семьи одной колонкой: все члены на одной вертикали.
+    for (const id of ['c1', 'c2', 'p1', 'p2']) {
+      expect(result.get(id)!.x, `${id} в колонке семьи`).toBe(result.get('p1')!.x);
+    }
+    // Рамки без раздуваний: потомок точно по своим членам, предок —
+    // минимальный охват (высота потомка < высоты предка). Прогон вложенной
+    // ЛГ замыкает колонку, её рамка выступает вниз на свой отступ — предок
+    // обязан охватить и его (+LG_FRAME_PADDING).
+    const frames = expandedFrames(model, result);
+    const child = frames.get('lg-c')!;
+    const parent = frames.get('lg-p')!;
+    expect(child.height).toBe(2 * NODE_ESTIMATED_HEIGHT + ROW_GAP + 2 * LG_FRAME_PADDING);
+    expect(parent.height).toBe(
+      4 * NODE_ESTIMATED_HEIGHT + 3 * ROW_GAP + 3 * LG_FRAME_PADDING,
+    );
+    // Полная вложенность сохранена.
+    expect(parent.x).toBeLessThanOrEqual(child.x);
+    expect(parent.y).toBeLessThanOrEqual(child.y);
+    expect(parent.x + parent.width).toBeGreaterThanOrEqual(child.x + child.width);
+    expect(parent.y + parent.height).toBeGreaterThanOrEqual(child.y + child.height);
   });
 
   it('полная вложенность разрешена: рамка потомка внутри рамки предка', () => {
@@ -623,6 +714,15 @@ describe('Геометрия ЛГ в автараскладке (v0.03.01k)', ()
     expect(frames.size).toBe(6);
     const ids = [...frames.keys()].sort();
     const groups = model.groups ?? [];
+    // Свёртка ЛГ (v0.03.01m): каждая семья — одна колонка, ширина рамки
+    // минимальна; у родителей вложенных ЛГ — на два отступа шире (рамка
+    // потомка выступает за членов на свой отступ с каждой стороны).
+    for (const [groupId, frame] of frames) {
+      const nested = new Set(groupSubtree(groups, groupId)).size > 1;
+      expect(frame.width, `ширина ${groupId}`).toBe(
+        NODE_ESTIMATED_WIDTH + (nested ? 4 : 2) * LG_FRAME_PADDING,
+      );
+    }
     // ДБ поддерева ЛГ (прямые члены + члены вложенных потомков).
     const subtreeBlocksOf = (id: string): Set<string> => {
       const tree = new Set(groupSubtree(groups, id));

@@ -76,6 +76,26 @@ function run(label: string): void {
   const isNestedPair = (a: string, b: string): boolean =>
     parentOf.get(a) === b || parentOf.get(b) === a;
 
+  // ДБ поддерева каждой ЛГ (прямые + вложенные потомки).
+  const subtreeOf = new Map(
+    groups.map((g) => {
+      const ids = new Set<string>();
+      for (const b of internal) {
+        let cur: string | undefined = b.groupId;
+        const seen = new Set<string>();
+        while (cur && !seen.has(cur)) {
+          seen.add(cur);
+          if (cur === g.id) {
+            ids.add(b.id);
+            break;
+          }
+          cur = groups.find((x) => x.id === cur)?.parentId;
+        }
+      }
+      return [g.id, ids] as const;
+    }),
+  );
+
   let violations = 0;
   const gids = groups.map((g) => g.id).sort();
   console.log('\n-- Рамки ЛГ --');
@@ -84,6 +104,12 @@ function run(label: string): void {
     console.log(
       `  ${id}: ${r ? `x=${r.x.toFixed(0)} y=${r.y.toFixed(0)} w=${r.width.toFixed(0)} h=${r.height.toFixed(0)}` : 'НЕТ ГЕОМЕТРИИ'}`,
     );
+    for (const b of internal) {
+      if (subtreeOf.get(id)?.has(b.id) && liveRects.has(b.id)) {
+        const q = liveRects.get(b.id)!;
+        console.log(`      ${b.id}: x=${q.x.toFixed(0)} y=${q.y.toFixed(0)}`);
+      }
+    }
   }
 
   console.log('\n1. Пересечения рамок ЛГ:');
@@ -124,24 +150,6 @@ function run(label: string): void {
   console.log('   (проверено)');
 
   console.log('3. Чужие ДБ в охвате рамки (уплотнение; члены поддерева — своя вложенность):');
-  const subtreeOf = new Map(
-    groups.map((g) => {
-      const ids = new Set<string>();
-      for (const b of internal) {
-        let cur: string | undefined = b.groupId;
-        const seen = new Set<string>();
-        while (cur && !seen.has(cur)) {
-          seen.add(cur);
-          if (cur === g.id) {
-            ids.add(b.id);
-            break;
-          }
-          cur = groups.find((x) => x.id === cur)?.parentId;
-        }
-      }
-      return [g.id, ids] as const;
-    }),
-  );
   for (const g of groups) {
     const frame = geometry.get(g.id)!.rect;
     const own = subtreeOf.get(g.id)!;
